@@ -2,11 +2,18 @@ from util import parse_args
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
 
 from sim4ad.data.data_loaders import DatasetDataLoader
 
 
 class FeatureExtraction:
+    """
+    features determined by the paper "Feature selection for driving style and skill clustering using naturalistic
+    driving data and driving behavior questionnaire"
+    """
 
     @staticmethod
     def get_root_mean_square(data):
@@ -50,6 +57,26 @@ class FeatureExtraction:
 
         return freq_centroid
 
+    @staticmethod
+    def get_max_value(data):
+        return np.max(data)
+
+
+class Clustering:
+    """
+    Various clustering methods can be defined here
+    """
+    @staticmethod
+    def kmeans(dataframe):
+        scaler = StandardScaler()
+        scaled_features = scaler.fit_transform(dataframe.iloc[:, 2:-1])
+        # replace 3 with your chosen number of clusters
+        kmeans = KMeans(init="random", n_init=10, n_clusters=3, max_iter=500)
+        kmeans.fit(scaled_features)
+        dataframe['cluster'] = kmeans.labels_
+
+        return dataframe
+
 
 def plot(freq, magnitude):
     # plt.figure()
@@ -66,23 +93,29 @@ def main():
     data_loader.load()
 
     feature_extractor = FeatureExtraction()
+    features = {'episode': [], 'id': [], 'long_acc_max': [], 'long_acc_fc': [], 'lat_acc_sf': [],
+                'lat_acc_rms': [], 'vel_std': [], 'cluster': None}
 
-    for episode in data_loader.scenario.episodes:
-        features = {}
+    for inx, episode in enumerate(data_loader.scenario.episodes):
         for agent_id, agent in episode.agents.items():
-
             long_acc = agent.ax_vec
             lat_acc = agent.ay_vec
             velocity = [np.sqrt(agent.vx_vec[i] ** 2 + agent.vy_vec[i] ** 2) for i in range(len(agent.vx_vec))]
 
-            long_acc_fc = feature_extractor.get_frequency_centroid(long_acc)
-            lat_acc_sf = feature_extractor.get_shape_factor(lat_acc)
-            lat_acc_rms = feature_extractor.get_root_mean_square(lat_acc)
-            velocity_std = feature_extractor.get_standard_devisation(velocity)
-            features[agent_id] = [long_acc, long_acc_fc, lat_acc_sf, lat_acc_rms, velocity_std]
+            # get feature values
+            features['episode'].append(inx)
+            features['id'].append(agent_id)
+            features['long_acc_max'].append(feature_extractor.get_max_value(long_acc))
+            features['long_acc_fc'].append(feature_extractor.get_frequency_centroid(long_acc))
+            features['lat_acc_sf'].append(feature_extractor.get_shape_factor(lat_acc))
+            features['lat_acc_rms'].append(feature_extractor.get_root_mean_square(lat_acc))
+            features['vel_std'].append(feature_extractor.get_standard_devisation(velocity))
+
+    df = pd.DataFrame(features)
+    df = Clustering.kmeans(df)
 
 
-            print('ok')
+    print('ok')
 
 
 if __name__ == '__main__':

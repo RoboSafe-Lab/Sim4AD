@@ -40,8 +40,9 @@ def plot_map(odr_map: Map, ax: plt.Axes = None, scenario_config=None, **kwargs) 
     if odr_map is None:
         return ax
 
-    ax.set_xlim([odr_map.west, odr_map.east])
-    ax.set_ylim([odr_map.south, odr_map.north])
+    if odr_map.west is not None:
+        ax.set_xlim([odr_map.west, odr_map.east])
+        ax.set_ylim([odr_map.south, odr_map.north])
     ax.set_facecolor("grey")
 
     if kwargs.get("plot_background", False):

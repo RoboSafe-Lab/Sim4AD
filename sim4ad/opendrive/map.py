@@ -37,11 +37,11 @@ class Map(object):
     def __process_header(self):
         self.__name = self.__opendrive.header.name
         self.__date = self.__opendrive.header.date
-        self.__north = float(self.__opendrive.header.north)
-        self.__west = float(self.__opendrive.header.west)
-        self.__south = float(self.__opendrive.header.south)
-        self.__east = float(self.__opendrive.header.east)
-        self.__geo_reference = self.__opendrive.header.geo_reference
+        self.__north = float(self.__opendrive.header.north) if self.__opendrive.header.north is not None else None
+        self.__west = float(self.__opendrive.header.west) if self.__opendrive.header.west is not None else None
+        self.__south = float(self.__opendrive.header.south) if self.__opendrive.header.south is not None else None
+        self.__east = float(self.__opendrive.header.east) if self.__opendrive.header.east is not None else None
+        self.__geo_reference = self.__opendrive.header.geo_reference if self.__opendrive.header.geo_reference is not None else None
 
     def __process_road_layout(self):
         roads = {}

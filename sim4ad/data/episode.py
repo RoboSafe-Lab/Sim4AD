@@ -111,11 +111,12 @@ class Frame:
 class Episode:
     """ An episode that is represented with a collection of Agents and their corresponding frames. """
 
-    def __init__(self, config: EpisodeConfig, agents, frames, statWorld):
+    def __init__(self, config: EpisodeConfig, agents, frames, statWorld, opendrive_map):
         self.config = config
         self.agents = agents
         self.frames = frames
-        self.map = statWorld
+        self.statWorld = statWorld
+        self.map_file = opendrive_map
 
     def __repr__(self):
         return f"Episode {self.config.recording_id}; {len(self.agents)} agents"
@@ -128,6 +129,7 @@ class Episode:
 class DatasetEpisodeLoader(EpisodeLoader):
     def load(self, config: EpisodeConfig, agent_types: List[str] = None, scale: float = None):
         path_to_dataset_folder = os.path.join(self.scenario_config.data_root, config.recording_id)
+        opendrive_map = path_to_dataset_folder + '/staticWorld.xodr'
 
         dataset = droneDataset(path_to_dataset_folder)
         dynWorld = dataset.dynWorld
@@ -154,7 +156,7 @@ class DatasetEpisodeLoader(EpisodeLoader):
                 closest_index = np.argmin(differences)
                 frames[closest_index].add_agent_state(agent_id, state)
 
-        return Episode(config, agents, frames, statWorld)
+        return Episode(config, agents, frames, statWorld, opendrive_map)
 
     @staticmethod
     def _state_from_tracks(dynObj, idx, metadata: AgentMetadata = None):

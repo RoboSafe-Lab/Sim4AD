@@ -4,8 +4,8 @@ from sim4ad.opendrive import Map, plot_map
 
 class Visualization:
 
-    def __init__(self, statWorld):
-        self.statWorld = statWorld
+    def __init__(self, static_world=None):
+        self.statWorld = static_world
         self.static_world_line_dict = None
 
     def create_static_world_line_dict(self):
@@ -48,11 +48,29 @@ class Visualization:
         plt.show()
 
     @staticmethod
-    def plot_opendrive_map(opendrive_map):
+    def plot_opendrive_map(opendrive_map) -> plt.Axes:
         """
         Plot the map using opendrive parser
         """
         scenario_map = Map.parse_from_opendrive(opendrive_map)
-        plot_map(scenario_map, markings=True, midline=False, drivable=True, plot_background=False)
+        ax = plot_map(scenario_map, markings=True, midline=False, drivable=True, plot_background=False)
 
+        return ax
+
+    def plot_trj_on_map(self, episode):
+        ax = self.plot_opendrive_map(episode.map_file)
+        for agent_id, agent in episode.agents.items():
+            ax.plot(agent.x_vec, agent.y_vec, 'r')
+
+        plt.show()
+
+    def plot_clustered_trj_on_map(self, episode, clustered_dataframe):
+        colors = ['b', 'g', 'r']
+        ax = self.plot_opendrive_map(episode.map_file)
+        for key, data in clustered_dataframe:
+            for idx in data['id']:
+                ax.plot(episode.agents[idx].x_vec, episode.agents[idx].y_vec, colors[key], linewidth=0.2)
+
+        ax.set_xlabel('Position x [m]')
+        ax.set_ylabel('Position y [m]')
         plt.show()

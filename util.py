@@ -327,6 +327,10 @@ def parse_args() -> argparse.Namespace:
                         default=None,
                         help="name of the map to be processed",
                         type=str)
+    parser.add_argument('--clustering', '-c',
+                        default=None,
+                        help="name of the clustering method",
+                        type=str)
 
     args = parser.parse_args()
 

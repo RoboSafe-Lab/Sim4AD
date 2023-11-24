@@ -1,12 +1,15 @@
 from util import parse_args
 import sys
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
+from sklearn.cluster import AgglomerativeClustering
+from scipy.cluster.hierarchy import dendrogram, linkage
 
 from sim4ad.data.data_loaders import DatasetDataLoader
+from visualization import Visualization
 
 
 class FeatureExtraction:
@@ -74,17 +77,29 @@ class Clustering:
         kmeans = KMeans(init="random", n_init=10, n_clusters=3, max_iter=500)
         kmeans.fit(scaled_features)
         dataframe['cluster'] = kmeans.labels_
+        clustered_dataframe = dataframe.groupby('cluster')
 
-        return dataframe
+        return clustered_dataframe
 
+    @staticmethod
+    def hierarchical(dataframe):
+        scaler = StandardScaler()
+        scaled_features = scaler.fit_transform(dataframe.iloc[:, 2:-1])
 
-def plot(freq, magnitude):
-    # plt.figure()
-    # plt.scatter(t, data, color='r')
+        # Hierarchical clustering
+        hc = AgglomerativeClustering(n_clusters=3, metric='euclidean', linkage='ward')
+        y_hc = hc.fit_predict(scaled_features)
 
-    plt.figure()
-    plt.stem(freq, magnitude)
-    plt.show()
+        # Plotting dendrogram
+        linked = linkage(scaled_features, method='ward')
+        plt.figure(figsize=(10, 7))
+        dendrogram(linked, orientation='top', distance_sort='descending', show_leaf_counts=True)
+        plt.title('Hierarchical Clustering Dendrogram')
+        plt.xlabel('Sample index')
+        plt.ylabel('Distance')
+        plt.show()
+
+        return y_hc
 
 
 def main():
@@ -112,10 +127,16 @@ def main():
             features['vel_std'].append(feature_extractor.get_standard_devisation(velocity))
 
     df = pd.DataFrame(features)
-    df = Clustering.kmeans(df)
 
-
-    print('ok')
+    if args.clustering == 'kmeans':
+        clustered_dataframe = Clustering.kmeans(df)
+        visual = Visualization()
+        # first episode, please change accordingly
+        visual.plot_clustered_trj_on_map(data_loader.scenario.episodes[0], clustered_dataframe)
+    elif args.clustering == 'hierarchical':
+        clustered_dataframe = Clustering.hierarchical(df)
+    else:
+        raise 'No clustering method is specified'
 
 
 if __name__ == '__main__':

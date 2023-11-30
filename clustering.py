@@ -7,6 +7,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
 from scipy.cluster.hierarchy import dendrogram, linkage
+from sklearn.mixture import GaussianMixture
 
 from sim4ad.data.data_loaders import DatasetDataLoader
 from visualization import Visualization
@@ -101,6 +102,21 @@ class Clustering:
 
         return y_hc
 
+    @staticmethod
+    def GMM(dataframe):
+        scaler = StandardScaler()
+        scaled_features = scaler.fit_transform(dataframe.iloc[:, 2:-1])
+
+        # Create a Gaussian Mixture Model
+        gmm = GaussianMixture(n_components=3, random_state=0)
+        # Fit the model
+        gmm.fit(scaled_features)
+        # Predict the cluster for each data point
+        dataframe['cluster'] = gmm.predict(scaled_features)
+        clustered_dataframe = dataframe.groupby('cluster')
+
+        return clustered_dataframe
+
 
 def main():
     args = parse_args()
@@ -135,6 +151,8 @@ def main():
         visual.plot_clustered_trj_on_map(data_loader.scenario.episodes[0], clustered_dataframe)
     elif args.clustering == 'hierarchical':
         clustered_dataframe = Clustering.hierarchical(df)
+    elif args.clustering == 'gmm':
+        clustered_dataframe = Clustering.GMM(df)
     else:
         raise 'No clustering method is specified'
 

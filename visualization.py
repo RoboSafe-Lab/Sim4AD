@@ -67,10 +67,11 @@ class Visualization:
     def plot_clustered_trj_on_map(self, episode, clustered_dataframe):
         colors = ['b', 'g', 'r']
         ax = self.plot_opendrive_map(episode.map_file)
+        clustered_dataframe = clustered_dataframe.groupby('cluster')
         for key, data in clustered_dataframe:
             for idx in data['id']:
                 ax.plot(episode.agents[idx].x_vec, episode.agents[idx].y_vec, colors[key], linewidth=0.2)
 
         ax.set_xlabel('Position x [m]')
         ax.set_ylabel('Position y [m]')
-        plt.show()
+

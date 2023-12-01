@@ -8,6 +8,7 @@ from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
 from scipy.cluster.hierarchy import dendrogram, linkage
 from sklearn.mixture import GaussianMixture
+import seaborn as sns
 
 from sim4ad.data.data_loaders import DatasetDataLoader
 from visualization import Visualization
@@ -70,6 +71,7 @@ class Clustering:
     """
     Various clustering methods can be defined here
     """
+
     @staticmethod
     def kmeans(dataframe):
         scaler = StandardScaler()
@@ -78,9 +80,8 @@ class Clustering:
         kmeans = KMeans(init="random", n_init=10, n_clusters=3, max_iter=500)
         kmeans.fit(scaled_features)
         dataframe['cluster'] = kmeans.labels_
-        clustered_dataframe = dataframe.groupby('cluster')
 
-        return clustered_dataframe
+        return dataframe
 
     @staticmethod
     def hierarchical(dataframe):
@@ -89,7 +90,7 @@ class Clustering:
 
         # Hierarchical clustering
         hc = AgglomerativeClustering(n_clusters=3, metric='euclidean', linkage='ward')
-        y_hc = hc.fit_predict(scaled_features)
+        dataframe['cluster'] = hc.fit_predict(scaled_features)
 
         # Plotting dendrogram
         linked = linkage(scaled_features, method='ward')
@@ -98,9 +99,8 @@ class Clustering:
         plt.title('Hierarchical Clustering Dendrogram')
         plt.xlabel('Sample index')
         plt.ylabel('Distance')
-        plt.show()
 
-        return y_hc
+        return dataframe
 
     @staticmethod
     def GMM(dataframe):
@@ -115,7 +115,17 @@ class Clustering:
         dataframe['cluster'] = gmm.predict(scaled_features)
         clustered_dataframe = dataframe.groupby('cluster')
 
-        return clustered_dataframe
+        return dataframe
+
+
+def plot_features(y_label, clustered_dataframe):
+    plt.figure(figsize=(8, 6))
+    # Create a boxplot
+    sns.boxplot(x='cluster', y=y_label, data=clustered_dataframe)
+    # Display the plot
+    plt.title('Boxplot Grouped by Cluster')
+    plt.xlabel('Cluster')
+    plt.ylabel(y_label)
 
 
 def main():
@@ -155,6 +165,15 @@ def main():
         clustered_dataframe = Clustering.GMM(df)
     else:
         raise 'No clustering method is specified'
+
+    # verify the results
+    plot_features('long_acc_fc', clustered_dataframe)
+    plot_features('long_acc_max', clustered_dataframe)
+    plot_features('lat_acc_sf', clustered_dataframe)
+    plot_features('lat_acc_rms', clustered_dataframe)
+    plot_features('vel_std', clustered_dataframe)
+
+    plt.show()
 
 
 if __name__ == '__main__':

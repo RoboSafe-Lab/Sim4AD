@@ -55,12 +55,16 @@ class FeatureExtraction:
     @staticmethod
     def get_frequency_centroid(data):
         N = len(data)
+        # sample frequency obtained from the dataset
+        sampling_rate = 30
         dft = np.fft.fft(data)
         magnitude = np.abs(dft)
-        freq = np.fft.fftfreq(N)
-        freq_centroid = sum([freq[i] * magnitude[i] for i in range(N)]) / N
+        freq = np.linspace(0, sampling_rate, N)
+        numerator = np.sum(magnitude * freq)
+        denominator = np.sum(magnitude)
+        frequency_centroid = numerator / denominator if denominator != 0 else 0
 
-        return freq_centroid
+        return frequency_centroid
 
     @staticmethod
     def get_max_value(data):

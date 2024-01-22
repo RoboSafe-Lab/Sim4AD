@@ -1,4 +1,4 @@
-from util import parse_args
+from sim4ad.util import parse_args
 import sys
 import numpy as np
 import pandas as pd
@@ -8,6 +8,7 @@ from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
 from scipy.cluster.hierarchy import dendrogram, linkage
 from sklearn.mixture import GaussianMixture
+from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
 import seaborn as sns
 
 from sim4ad.data.data_loaders import DatasetDataLoader
@@ -74,27 +75,29 @@ class FeatureExtraction:
 class Clustering:
     """
     Various clustering methods can be defined here
+    Normal, cautious, and aggressive drivers are defined here
     """
 
-    @staticmethod
-    def kmeans(dataframe):
+    def __init__(self):
+        self._n_cluster = 3
+
+    def kmeans(self, dataframe):
         scaler = StandardScaler()
         scaled_features = scaler.fit_transform(dataframe.iloc[:, 2:-1])
         # replace 3 with your chosen number of clusters
-        kmeans = KMeans(init="random", n_init=10, n_clusters=3, max_iter=500)
+        kmeans = KMeans(init="random", n_init=10, n_clusters=self._n_cluster, max_iter=500)
         kmeans.fit(scaled_features)
-        dataframe['cluster'] = kmeans.labels_
+        dataframe['label'] = kmeans.labels_
 
         return dataframe
 
-    @staticmethod
-    def hierarchical(dataframe):
+    def hierarchical(self, dataframe):
         scaler = StandardScaler()
         scaled_features = scaler.fit_transform(dataframe.iloc[:, 2:-1])
 
         # Hierarchical clustering
-        hc = AgglomerativeClustering(n_clusters=3, metric='euclidean', linkage='ward')
-        dataframe['cluster'] = hc.fit_predict(scaled_features)
+        hc = AgglomerativeClustering(n_clusters=self._n_cluster, metric='euclidean', linkage='ward')
+        dataframe['label'] = hc.fit_predict(scaled_features)
 
         # Plotting dendrogram
         linked = linkage(scaled_features, method='ward')
@@ -106,30 +109,53 @@ class Clustering:
 
         return dataframe
 
-    @staticmethod
-    def GMM(dataframe):
+    def GMM(self, dataframe):
         scaler = StandardScaler()
         scaled_features = scaler.fit_transform(dataframe.iloc[:, 2:-1])
 
         # Create a Gaussian Mixture Model
-        gmm = GaussianMixture(n_components=3, random_state=0)
+        gmm = GaussianMixture(n_components=self._n_cluster, random_state=0)
         # Fit the model
         gmm.fit(scaled_features)
         # Predict the cluster for each data point
-        dataframe['cluster'] = gmm.predict(scaled_features)
-        clustered_dataframe = dataframe.groupby('cluster')
+        dataframe['label'] = gmm.predict(scaled_features)
+        clustered_dataframe = dataframe.groupby('label')
 
         return dataframe
 
+    @staticmethod
+    def evaluation(clustered_dataframe):
+        """Evaluate the clustered trajectories using some metrics
+            Silhouette Score, Davies-Bouldin Index, Calinski-Harabasz Index
+        """
+        silhouette = silhouette_score(clustered_dataframe.iloc[:, 2:-1], clustered_dataframe.iloc[:, -1])
+        dbi = davies_bouldin_score(clustered_dataframe.iloc[:, 2:-1], clustered_dataframe.iloc[:, -1])
+        chi = calinski_harabasz_score(clustered_dataframe.iloc[:, 2:-1], clustered_dataframe.iloc[:, -1])
+
+        return silhouette, dbi, chi
+
 
 def plot_features(y_label, clustered_dataframe):
+    """Plot the feature value for clustered trajectories
+
+       Args:
+            y_label: the name of the feature
+            clustered_dataframe: The entire data after clustering
+    """
     plt.figure(figsize=(8, 6))
     # Create a boxplot
-    sns.boxplot(x='cluster', y=y_label, data=clustered_dataframe)
+    sns.boxplot(x='label', y=y_label, data=clustered_dataframe)
     # Display the plot
     plt.title('Boxplot Grouped by Cluster')
     plt.xlabel('Cluster')
     plt.ylabel(y_label)
+
+
+def plot_clustered_trj_on_map(data_loader, clustered_dataframe):
+    """Plot the clustered trajectory on the map"""
+    visual = Visualization()
+    # first episode, please change accordingly
+    visual.plot_clustered_trj_on_map(data_loader.scenario.episodes[0], clustered_dataframe)
 
 
 def main():
@@ -139,8 +165,8 @@ def main():
 
     feature_extractor = FeatureExtraction()
     features = {'episode': [], 'id': [], 'long_acc_max': [], 'long_acc_fc': [], 'lat_acc_sf': [],
-                'lat_acc_rms': [], 'vel_std': [], 'cluster': None}
-
+                'lat_acc_rms': [], 'vel_std': [], 'label': None}
+    # extract feature values from the dataset
     for inx, episode in enumerate(data_loader.scenario.episodes):
         for agent_id, agent in episode.agents.items():
             long_acc = agent.ax_vec
@@ -158,19 +184,18 @@ def main():
 
     df = pd.DataFrame(features)
 
+    # begin the clustering
+    cluster = Clustering()
     if args.clustering == 'kmeans':
-        clustered_dataframe = Clustering.kmeans(df)
-        visual = Visualization()
-        # first episode, please change accordingly
-        visual.plot_clustered_trj_on_map(data_loader.scenario.episodes[0], clustered_dataframe)
+        clustered_dataframe = cluster.kmeans(df)
     elif args.clustering == 'hierarchical':
-        clustered_dataframe = Clustering.hierarchical(df)
+        clustered_dataframe = cluster.hierarchical(df)
     elif args.clustering == 'gmm':
-        clustered_dataframe = Clustering.GMM(df)
+        clustered_dataframe = cluster.GMM(df)
     else:
         raise 'No clustering method is specified'
 
-    # verify the results
+    # visualize each feature values after clustering
     plot_features('long_acc_fc', clustered_dataframe)
     plot_features('long_acc_max', clustered_dataframe)
     plot_features('lat_acc_sf', clustered_dataframe)
@@ -178,6 +203,12 @@ def main():
     plot_features('vel_std', clustered_dataframe)
 
     plt.show()
+
+    # calculate important metrics
+    silhouette, dbi, chi = cluster.evaluation(clustered_dataframe)
+    print('silhouette value is ', silhouette)
+    print('Davies-Bouldin Index is ', dbi)
+    print('Calinski-Harabasz Index is ', chi)
 
 
 if __name__ == '__main__':

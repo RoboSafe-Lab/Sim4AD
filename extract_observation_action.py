@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-from typing import Optional
+from typing import Optional, List
+import numpy as np
 
 
 @dataclass
@@ -28,14 +29,15 @@ class ExtractObservationAction:
         self._clustered_dataframe = clustered_dataframe
         self._episodes = episodes
 
-    def extract_observation(self):
+    def extract_demonstrations(self):
         """Extract observations"""
 
         grouped_cluster = self._clustered_dataframe.groupby('label')
         # we train one driving style as an example
+        # TODO: Change for different driving styles
         driving_style_a = grouped_cluster.get_group(0)
 
-        observations = []
+        demonstrations = []
         for episode in self._episodes:
             episode_id = episode.config.recording_id
             matching_rows = driving_style_a.iloc[:, 0] == episode_id
@@ -44,11 +46,15 @@ class ExtractObservationAction:
                 for agent_id in agent_ids:
                     agent = episode.agents[agent_id]
 
+                    # calculate steering angle
+                    theta = self.extract_steering_angle(agent)
                     ego_agent_feature = {'time': agent.time, 'vx': agent.vx_vec, 'vy': agent.vy_vec, 'ax': agent.ax_vec,
                                          'ay': agent.ay_vec, 'psi': agent.psi_vec, 'aid': agent_id, 'eid': episode_id,
                                          'distance_left_lane_marking': agent.distance_left_lane_marking,
                                          'distance_right_lane_marking': agent.distance_right_lane_marking,
+                                         'theta': theta,
                                          'surroundings': []}
+
                     for inx, t in enumerate(agent.time):
                         surrounding_agents_features = {}
                         # get surrounding agent's information
@@ -72,8 +78,24 @@ class ExtractObservationAction:
 
                         ego_agent_feature['surroundings'].append(surrounding_agents_features)
 
-                    observations.append(ego_agent_feature)
+                    demonstrations.append(ego_agent_feature)
 
-    def extract_action(self):
-        """Extract action here"""
-        pass
+    @staticmethod
+    def extract_steering_angle(agent) -> List:
+        """Extract steering_angle here"""
+        delta_t = agent.delta_t
+        yaw_rate_vec = [(agent.psi_vec[i + 1] - agent.psi_vec[i]) / delta_t for i in range(len(agent.psi_vec) - 1)]
+        # make sure yaw_rate has the same length as time
+        yaw_rate_vec.append(yaw_rate_vec[-1])
+
+        # approximate the wheelbase using a vehicle's length (could occur errors)
+        wheel_base = agent.length * 0.6
+
+        # TODO: need to be verified
+        theta = []
+        for inx, yaw_rate in enumerate(yaw_rate_vec):
+            v = np.sqrt(agent.vx_vec[inx] ** 2 + agent.vy_vec[inx] ** 2)
+            theta_t = np.atan(yaw_rate * wheel_base / v)
+            theta.append(theta_t)
+
+        return theta

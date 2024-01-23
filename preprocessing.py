@@ -20,7 +20,7 @@ def main():
 
     # extract observations and actions
     extractor = ExtractObservationAction(episodes, clustered_dataframe)
-    extractor.extract_observation()
+    extractor.extract_demonstrations()
 
 
 if __name__ == '__main__':

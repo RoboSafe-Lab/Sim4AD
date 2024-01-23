@@ -324,7 +324,7 @@ def parse_args() -> argparse.Namespace:
 
     # --------General arguments-------------#
     parser.add_argument('--map', '-m',
-                        default=None,
+                        default='automatum',
                         help="name of the map to be processed",
                         type=str)
     parser.add_argument('--clustering', '-c',

@@ -20,6 +20,10 @@ class FeatureExtraction:
     features determined by the paper "Feature selection for driving style and skill clustering using naturalistic
     driving data and driving behavior questionnaire"
     """
+    def __init__(self, episodes):
+        self._features = {'episode_id': [], 'agent_id': [], 'long_acc_max': [], 'long_acc_fc': [], 'lat_acc_sf': [],
+                          'lat_acc_rms': [], 'vel_std': [], 'label': None}
+        self.episodes = episodes
 
     @staticmethod
     def get_root_mean_square(data):
@@ -70,6 +74,26 @@ class FeatureExtraction:
     @staticmethod
     def get_max_value(data):
         return np.max(data)
+
+    def extract_features(self) -> pd.DataFrame:
+        """Extract feature values from the dataset for clustering"""
+        for episode in self.episodes:
+            for agent_id, agent in episode.agents.items():
+                long_acc = agent.ax_vec
+                lat_acc = agent.ay_vec
+                velocity = [np.sqrt(agent.vx_vec[i] ** 2 + agent.vy_vec[i] ** 2) for i in range(len(agent.vx_vec))]
+
+                # get feature values
+                self._features['episode_id'].append(episode.config.recording_id)
+                self._features['agent_id'].append(agent_id)
+                self._features['long_acc_max'].append(self.get_max_value(long_acc))
+                self._features['long_acc_fc'].append(self.get_frequency_centroid(long_acc))
+                self._features['lat_acc_sf'].append(self.get_shape_factor(lat_acc))
+                self._features['lat_acc_rms'].append(self.get_root_mean_square(lat_acc))
+                self._features['vel_std'].append(self.get_standard_devisation(velocity))
+        df = pd.DataFrame(self._features)
+
+        return df
 
 
 class Clustering:
@@ -163,26 +187,9 @@ def main():
     data_loader = DatasetDataLoader(f"scenarios/configs/{args.map}.json")
     data_loader.load()
 
-    feature_extractor = FeatureExtraction()
-    features = {'episode': [], 'id': [], 'long_acc_max': [], 'long_acc_fc': [], 'lat_acc_sf': [],
-                'lat_acc_rms': [], 'vel_std': [], 'label': None}
+    feature_extractor = FeatureExtraction(data_loader.scenario.episodes)
     # extract feature values from the dataset
-    for inx, episode in enumerate(data_loader.scenario.episodes):
-        for agent_id, agent in episode.agents.items():
-            long_acc = agent.ax_vec
-            lat_acc = agent.ay_vec
-            velocity = [np.sqrt(agent.vx_vec[i] ** 2 + agent.vy_vec[i] ** 2) for i in range(len(agent.vx_vec))]
-
-            # get feature values
-            features['episode'].append(inx)
-            features['id'].append(agent_id)
-            features['long_acc_max'].append(feature_extractor.get_max_value(long_acc))
-            features['long_acc_fc'].append(feature_extractor.get_frequency_centroid(long_acc))
-            features['lat_acc_sf'].append(feature_extractor.get_shape_factor(lat_acc))
-            features['lat_acc_rms'].append(feature_extractor.get_root_mean_square(lat_acc))
-            features['vel_std'].append(feature_extractor.get_standard_devisation(velocity))
-
-    df = pd.DataFrame(features)
+    df = feature_extractor.extract_features()
 
     # begin the clustering
     cluster = Clustering()

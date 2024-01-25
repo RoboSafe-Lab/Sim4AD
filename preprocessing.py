@@ -21,6 +21,7 @@ def main():
     # extract observations and actions
     extractor = ExtractObservationAction(episodes, clustered_dataframe)
     extractor.extract_demonstrations()
+    extractor.save_trajectory()
 
 
 if __name__ == '__main__':

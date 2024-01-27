@@ -1,7 +1,8 @@
 from dataclasses import dataclass
-
+import os
 from typing import Optional, List
 import numpy as np
+import pickle
 
 
 @dataclass
@@ -28,6 +29,7 @@ class ExtractObservationAction:
         """
         self._clustered_dataframe = clustered_dataframe
         self._episodes = episodes
+        self._demonstrations = []
 
     def extract_demonstrations(self):
         """Extract observations"""
@@ -37,7 +39,6 @@ class ExtractObservationAction:
         # TODO: Change for different driving styles
         driving_style_a = grouped_cluster.get_group(0)
 
-        demonstrations = []
         for episode in self._episodes:
             episode_id = episode.config.recording_id
             matching_rows = driving_style_a.iloc[:, 0] == episode_id
@@ -48,12 +49,13 @@ class ExtractObservationAction:
 
                     # calculate steering angle
                     theta = self.extract_steering_angle(agent)
-                    ego_agent_feature = {'time': agent.time, 'vx': agent.vx_vec, 'vy': agent.vy_vec, 'ax': agent.ax_vec,
-                                         'ay': agent.ay_vec, 'psi': agent.psi_vec, 'aid': agent_id, 'eid': episode_id,
-                                         'distance_left_lane_marking': agent.distance_left_lane_marking,
-                                         'distance_right_lane_marking': agent.distance_right_lane_marking,
-                                         'theta': theta,
-                                         'surroundings': []}
+                    ego_agent_observations = {'time': agent.time, 'vx': agent.vx_vec, 'vy': agent.vy_vec,
+                                              'psi': agent.psi_vec, 'aid': agent_id,
+                                              'eid': episode_id,
+                                              'distance_left_lane_marking': agent.distance_left_lane_marking,
+                                              'distance_right_lane_marking': agent.distance_right_lane_marking,
+                                              'surroundings': []}
+                    ego_agent_actions = {'ax':  agent.ax_vec, 'ay': agent.ay_vec, 'theta': theta}
 
                     for inx, t in enumerate(agent.time):
                         surrounding_agents_features = {}
@@ -76,9 +78,9 @@ class ExtractObservationAction:
 
                             surrounding_agents_features[surrounding_agent_relation] = surrounding_agent_feature
 
-                        ego_agent_feature['surroundings'].append(surrounding_agents_features)
+                        ego_agent_observations['surroundings'].append(surrounding_agents_features)
 
-                    demonstrations.append(ego_agent_feature)
+                    self._demonstrations.append((ego_agent_observations, ego_agent_actions))
 
     @staticmethod
     def extract_steering_angle(agent) -> List:
@@ -99,3 +101,18 @@ class ExtractObservationAction:
             deltas.append(delta_t)
 
         return deltas
+
+    def save_trajectory(self):
+        """Save a list of trajectories, and each trajectory include (state, action) pair"""
+        folder_path = 'scenarios/data/trainingdata'
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+        for episode in self._episodes:
+            episode_id = episode.config.recording_id
+            episode_path = os.path.join(folder_path, episode_id)
+            if not os.path.exists(episode_path):
+                os.makedirs(episode_path)
+
+            # Saving the data to a file
+            with open(episode_path + "/demonstration.pkl", "wb") as file:
+                pickle.dump(self._demonstrations, file)

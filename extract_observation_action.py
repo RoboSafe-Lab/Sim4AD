@@ -85,22 +85,22 @@ class ExtractObservationAction:
     @staticmethod
     def extract_steering_angle(agent) -> List:
         """Extract steering_angle here"""
-        delta_t = agent.delta_t
-        yaw_rate_vec = [(agent.psi_vec[i + 1] - agent.psi_vec[i]) / delta_t for i in range(len(agent.psi_vec) - 1)]
+        dt = agent.delta_t
+        theta_dot_vec = [(agent.psi_vec[i] - agent.psi_vec[i-1]) / dt for i in range(1, len(agent.psi_vec))]
         # make sure yaw_rate has the same length as time
-        yaw_rate_vec.append(yaw_rate_vec[-1])
+        theta_dot_vec.insert(0, theta_dot_vec[0])
 
         # approximate the wheelbase using a vehicle's length (could occur errors)
         wheel_base = agent.length * 0.6
 
         # TODO: need to be verified
-        theta = []
-        for inx, yaw_rate in enumerate(yaw_rate_vec):
+        deltas = []
+        for inx, theta_dot in enumerate(theta_dot_vec):
             v = np.sqrt(agent.vx_vec[inx] ** 2 + agent.vy_vec[inx] ** 2)
-            theta_t = np.arctan2(yaw_rate * wheel_base, v)
-            theta.append(theta_t)
+            delta_t = np.arctan2(theta_dot * wheel_base, v)
+            deltas.append(delta_t)
 
-        return theta
+        return deltas
 
     def save_trajectory(self):
         """Save a list of trajectories, and each trajectory include (state, action) pair"""

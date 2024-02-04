@@ -36,6 +36,9 @@ class ExtractObservationAction:
         # Create a dataframe with the columns of the demonstrations list
         self._demonstrations_df = pd.DataFrame(columns=['observations', 'actions'])
 
+        # save for IRL training
+        self._irl_data = {}
+
     def extract_demonstrations(self):
         """Extract observations"""
 
@@ -52,18 +55,21 @@ class ExtractObservationAction:
                 for agent_id in agent_ids:
                     agent = episode.agents[agent_id]
 
+                    self._irl_data[agent_id] = agent
+
                     # calculate steering angle
                     delta = self.extract_steering_angle(agent)
 
                     ego_agent_observations = {'time': agent.time, 'vx': agent.vx_vec, 'vy': agent.vy_vec,
-                                              'psi': agent.psi_vec, #'aid': agent_id, TODO: include it!
-                                              #'eid': episode_id,
+                                              'psi': agent.psi_vec,  # 'aid': agent_id, TODO: include it!
+                                              # 'eid': episode_id,
                                               'distance_left_lane_marking': agent.distance_left_lane_marking,
                                               'distance_right_lane_marking': agent.distance_right_lane_marking}
+
                     # todo: explain that ego_agent_observations should be a dataframe where the rows are the timestamps
                     # and the columns are the features. then, we have a list of these dataframes, one for each agent
 
-                    ego_agent_actions = {'ax':  agent.ax_vec, 'ay': agent.ay_vec, 'delta': delta}
+                    ego_agent_actions = {'ax': agent.ax_vec, 'ay': agent.ay_vec, 'delta': delta}
 
                     for inx, t in enumerate(agent.time):
                         # get surrounding agent's information
@@ -84,7 +90,7 @@ class ExtractObservationAction:
                             else:
                                 # Set to invalid value if there is no surrounding agent
                                 surrounding_rel_dx = surrounding_rel_dy = surrounding_vx = surrounding_vy = \
-                                    surrounding_ax = surrounding_ay = surrounding_psi = -1 # TODO: set up a value that makes sense for missing values
+                                    surrounding_ax = surrounding_ay = surrounding_psi = -1
 
                             # if the surrounding agent is not in the dictionary, add it
                             if surrounding_agent_relation not in ego_agent_observations:
@@ -121,7 +127,7 @@ class ExtractObservationAction:
     def extract_steering_angle(agent) -> List:
         """Extract steering_angle here"""
         dt = agent.delta_t
-        theta_dot_vec = [(agent.psi_vec[i] - agent.psi_vec[i-1]) / dt for i in range(1, len(agent.psi_vec))]
+        theta_dot_vec = [(agent.psi_vec[i] - agent.psi_vec[i - 1]) / dt for i in range(1, len(agent.psi_vec))]
         # make sure yaw_rate has the same length as time
         theta_dot_vec.insert(0, theta_dot_vec[0])
 
@@ -148,7 +154,10 @@ class ExtractObservationAction:
             if not os.path.exists(episode_path):
                 os.makedirs(episode_path)
 
-            # Saving the data to a file
+            # Saving the demonstration data to a file
             with open(episode_path + "/demonstration.pkl", "wb") as file:
                 pickle.dump(self._demonstrations, file)
 
+            # Saving IRL data to a file
+            with open(episode_path + "/irl.pkl", "wb") as file:
+                pickle.dump(self._irl_data, file)

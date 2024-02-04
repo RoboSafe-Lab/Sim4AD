@@ -1,17 +1,21 @@
 import numpy as np
-import pandas as pd
 import os
 import pickle
+import matplotlib.pyplot as plt
+
+from sim4ad.opendrive import Map, plot_map
+from sim4ad.irlenv import IRLEnv
 
 
 # load clustered trajectories
-def load_demonstrations():
+def load_data():
     """Loading the demonstrations for training"""
     demonstrations = []
     data_path = 'scenarios/data/trainingdata'
     folders = [f for f in os.listdir(data_path) if os.path.isdir(os.path.join(data_path, f))]
     for folder in folders:
-        with open(folder, 'rb') as file:
+        folder_path = os.path.join(data_path, folder, 'irl.pkl')
+        with open(folder_path, 'rb') as file:
             # Load the contents from the file
             data = pickle.load(file)
         demonstrations.append(data)
@@ -20,8 +24,13 @@ def load_demonstrations():
 
 
 def compute_features(data):
-    """Compuste the features of each trajectory"""
-    features = data
+    """Compute the features of each trajectory"""
+    # ego motion
+
+    # feature array
+    features = np.array([ego_speed, abs(ego_longitudial_acc), abs(ego_lateral_acc), abs(ego_longitudial_jerk),
+                         THWF, THWB, collision, social_impact, ego_likeness])
+
     return features
 
 
@@ -29,24 +38,7 @@ def reward_function(weights, features):
     return np.dot(weights, features)
 
 
-def simulate_trj(vehicles):
-    """sample trajectory for each vehicle at each timestep """
-    for vech in vehicles:
-        # run until the road ends
-        for start in train_steps:
-            # target sampling space
-            lateral_offsets, target_speeds = env.sampling_space()
-
-            # for each lateral offset and target_speed combination
-            for lateral in lateral_offsets:
-                for target_speed in target_speeds:
-                    pass
-
-        # calculate human trajectory feature at each step
-        pass
-
-
-def maxent_irl():
+def maxent_irl(feature_num: int, n_iters: int, scene_trajs, lam, lr):
     # initialize weights
     theta = np.random.normal(0, 0.05, size=feature_num)
 
@@ -70,7 +62,7 @@ def maxent_irl():
 
         # calculate feature expectation with respect to the weights
         traj_features = np.array([traj[1] for traj in scene_trajs])
-        feature_exp += np.dot(probs, traj_features) # feature expectation
+        feature_exp += np.dot(probs, traj_features)  # feature expectation
 
         # compute gradient
         grad = human_feature_exp - feature_exp - 2 * lam * theta
@@ -97,8 +89,48 @@ def main():
     feature_num = 8
     period = 0
 
+    debug = True
+    # load the static map
+    scenario_map = Map.parse_from_opendrive(
+        "scenarios/data/automatum/hw-a9-appershofen-001-d8087340-8287-46b6-9612-869b09e68448/staticWorld.xodr")
+
     # Extract demonstrations (trajectories) from the data
-    demonstrations = load_demonstrations()
+    agents = load_data()
+
+    plot_map(scenario_map, markings=True, midline=False, drivable=True, plot_background=False)
+
+    # for each agent
+    for aid, agent in agents.items():
+        sampled_trajectories = []
+
+        # for each time step
+        for inx, t in enumerate(agent.time):
+            irl_agent = IRLEnv(agent=agent, current_inx=inx, scenario_map=scenario_map)
+
+            lateral_offsets, target_speeds = irl_agent.sampling_space()
+            # for each lateral offset and target_speed combination
+            for lateral in lateral_offsets:
+                for target_speed in target_speeds:
+                    # 5 is the horizontal time
+                    action = (lateral, target_speed, 5)
+                    irl_agent.trajectory_planner(*action)
+                    sampled_trajectories.append(irl_agent.planned_trajectory)
+
+            # visualize the planned trajectories
+            if debug:
+                trajectories_local = []
+                for trj in sampled_trajectories:
+                    trj_local = []
+                    for p in trj:
+                        trj_local.append(irl_agent.position_local(s=p[0], d=p[1]))
+                    trajectories_local.append(np.array(trj_local))
+                for trj in trajectories_local:
+                    plt.plot(trj[:, 0], trj[:, 1], linewidth=1)
+
+                plt.show()
+
+    # compute demonstration features
+    demonstration_features = compute_features(agents)
 
     # Run MaxEnt IRL
     learned_reward_weights = maxent_irl()

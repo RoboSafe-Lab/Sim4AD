@@ -123,11 +123,9 @@ def main():
                                       batch_first=True,
                                       padding_value=PADDING_VALUE)
 
-    # Split the expert data into training and testing sets using pytorch
     expert_states_train, expert_states_test, expert_actions_train, expert_actions_test = train_test_split(
         expert_states_all, expert_actions_all, test_size=0.2)
 
-    # Normalize the states using PyTorch transformations
     normalize = transforms.Normalize(mean=expert_states_train.mean(dim=0),
                                      std=expert_states_train.std(
                                          dim=0) + 1e-8)  # add a small number to std to avoid division by zero

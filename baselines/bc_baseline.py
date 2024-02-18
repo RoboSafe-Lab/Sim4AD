@@ -25,10 +25,13 @@ class PolicyNetwork(nn.Module):
 
     def forward(self, state):
         # out contains the hidden state for each time step of the trajectory, after all the layers
+        state = torch.tensor(state, dtype=torch.float32)
         out, _ = self.rnn(state)
-        assert out.shape[:2] == state.shape[:2], f"out.shape: {out.shape}, state.shape: {state.shape}"
 
         return self.fc(out)
+
+    def load_policy(self, path='baselines/bc.pth'): # TODO: moe dynamic / based on file_utils.py
+        self.load_state_dict(torch.load(path))
 
 
 def compute_policy_loss(policy_network, states, expert_actions):
@@ -54,7 +57,7 @@ def compute_policy_loss(policy_network, states, expert_actions):
     return loss.mean()
 
 
-def train_policy_network(policy_network, expert_states, expert_actions, num_epochs=100, batch_size=32,
+def train_policy_network(policy_network, expert_states, expert_actions, num_epochs=10, batch_size=32,
                          lr=1e-3):  # TODO: change number of epochs
     """
     Trains the policy network using behavioural cloning.
@@ -107,7 +110,7 @@ def evaluate_policy(policy_network, states, actions):
         return loss(predicted_actions, actions).item()
 
 
-def main():
+def train():
     # Load the expert data
     # TODO: load other episodes as well!
     with open(
@@ -140,6 +143,36 @@ def main():
     policy_mse = evaluate_policy(policy_network, expert_states_test, expert_actions_test)
     print(f'Policy MSE: {policy_mse}')
 
+    # Save the trained policy network
+    torch.save(policy_network.state_dict(), 'baselines/bc.pth')
+
+def use_existing_policy():
+    # Load the expert data
+    with open(
+            'scenarios/data/trainingdata/hw-a9-appershofen-001-d8087340-8287-46b6-9612-869b09e68448/demonstration.pkl',
+            'rb') as f:
+        expert_data = pickle.load(f)
+
+    PADDING_VALUE = -1  # used to pad the LSTM input to the same length
+    expert_states_all = pad_sequence([torch.as_tensor(seq, dtype=torch.float32) for seq in expert_data['observations']],
+                                     batch_first=True,
+                                     padding_value=PADDING_VALUE)
+    expert_actions_all = pad_sequence([torch.as_tensor(seq, dtype=torch.float32) for seq in expert_data['actions']],
+                                      batch_first=True,
+                                      padding_value=PADDING_VALUE)
+
+    normalize = transforms.Normalize(mean=expert_states_all.mean(dim=0),
+                                     std=expert_states_all.std(
+                                         dim=0) + 1e-8)  # add a small number to std to avoid division by zero
+
+    expert_states_all = normalize(expert_states_all)
+
+    policy_network = PolicyNetwork(state_dim=expert_states_all.shape[-1], action_dim=expert_actions_all.shape[-1])
+    policy_network.load_policy()
+
+    policy_mse = evaluate_policy(policy_network, expert_states_all, expert_actions_all)
+    print(f'Policy MSE: {policy_mse}')
+
 
 if __name__ == '__main__':
-    main()
+    train()

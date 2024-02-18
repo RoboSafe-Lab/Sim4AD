@@ -8,6 +8,9 @@ from sim4ad.opendrive.map import Map
 
 logger = logging.getLogger(__name__)
 
+"""
+Code based on: https://github.com/uoe-agents/IGP2/blob/ogrit/igp2/data/scenario.py
+"""
 
 class ScenarioConfig:
     """Metadata about a scenario used for goal recognition"""
@@ -152,7 +155,7 @@ class DatasetScenario(Scenario):
         else:
             to_load = sorted(self.config.episodes, key=lambda x: x.recording_id)
 
-        logger.info(f"Loading {len(to_load)} episode(s).")
+        logger.info(f"Loading {len(to_load)} episode(self).")
         episodes = []
         for idx, config in enumerate(to_load):
             logger.info(f"Loading Episode {idx + 1}/{len(to_load)}")

@@ -128,7 +128,6 @@ class Episode:
 class DatasetEpisodeLoader(EpisodeLoader):
     def load(self, config: EpisodeConfig, agent_types: List[str] = None, scale: float = None):
         path_to_dataset_folder = os.path.join(self.scenario_config.data_root, config.recording_id)
-        opendrive_map = path_to_dataset_folder + '/staticWorld.xodr'
 
         dataset = droneDataset(path_to_dataset_folder)
         dynWorld = dataset.dynWorld
@@ -156,7 +155,8 @@ class DatasetEpisodeLoader(EpisodeLoader):
                 closest_index = np.argmin(differences)
                 frames[closest_index].add_agent_state(agent_id, state)
 
-        return Episode(config, agents, frames, statWorld, opendrive_map)
+        self.xodr_ = path_to_dataset_folder + '/staticWorld.xodr'
+        return Episode(config, agents, frames, statWorld, self.xodr_)
 
     @staticmethod
     def _state_from_tracks(dynObj, idx, metadata: AgentMetadata = None):

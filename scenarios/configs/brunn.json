@@ -1,0 +1,9 @@
+{
+    "data_format": "automatum",
+    "data_root": "scenarios/data/automatum",
+    "episodes": [
+        {
+            "recording_id": "hw-a9-brunn-002-30250d63-e5d7-44b4-9e56-4a29534a9b09"
+        }
+    ]
+}

@@ -1,0 +1,42 @@
+{
+    "FEATURES_IN_OBSERVATIONS": [
+        "velocity",
+        "heading",
+        "distance_left_lane_marking",
+        "distance_right_lane_marking",
+        "front_ego_rel_dx",
+        "front_ego_rel_dy",
+        "front_ego_v",
+        "front_ego_a",
+        "front_ego_heading",
+        "behind_ego_rel_dx",
+        "behind_ego_rel_dy",
+        "behind_ego_v",
+        "behind_ego_a",
+        "behind_ego_heading",
+        "front_left_rel_dx",
+        "front_left_rel_dy",
+        "front_left_v",
+        "front_left_a",
+        "front_left_heading",
+        "behind_left_rel_dx",
+        "behind_left_rel_dy",
+        "behind_left_v",
+        "behind_left_a",
+        "behind_left_heading",
+        "front_right_rel_dx",
+        "front_right_rel_dy",
+        "front_right_v",
+        "front_right_a",
+        "front_right_heading",
+        "behind_right_rel_dx",
+        "behind_right_rel_dy",
+        "behind_right_v",
+        "behind_right_a",
+        "behind_right_heading"
+    ],
+    "FEATURES_IN_ACTIONS": [
+        "acceleration",
+        "steer_angle"
+    ]
+}

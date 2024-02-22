@@ -67,6 +67,17 @@ class AgentMetadata:
                     setattr(meta_dest, field, value)
         return meta_dest
 
+    def set_width(self, value):
+        self.width = value
+
+    def set_length(self, value):
+        self.length = value
+
+    def set_agent_type(self, value):
+        self.agent_type = value
+
+
+
 
 @dataclass
 class AgentState:

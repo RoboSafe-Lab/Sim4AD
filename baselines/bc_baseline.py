@@ -23,10 +23,10 @@ class PolicyNetwork(nn.Module):
         self.fc = nn.Linear(128, action_dim)
         self.loss_function = loss_function
 
-    def forward(self, state):
+    def forward(self, history):
         # out contains the hidden state for each time step of the trajectory, after all the layers
-        state = torch.tensor(state, dtype=torch.float32)
-        out, _ = self.rnn(state)
+        history = torch.tensor(history, dtype=torch.float32)
+        out, _ = self.rnn(history)
 
         return self.fc(out)
 

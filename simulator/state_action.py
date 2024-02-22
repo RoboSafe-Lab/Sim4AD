@@ -9,10 +9,11 @@ import json
 import os
 from dataclasses import dataclass
 from random import random
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union, Any
 from dataclasses import dataclass
 
 import numpy as np
+from shapely import Point
 
 from sim4ad.opendrive import Lane
 from sim4ad.path_utils import get_common_property
@@ -42,7 +43,7 @@ class ActionState:
         for feature_name, value in state.items():
             self.__features[feature_name] = value
 
-    def get_observation(self):
+    def get_tuple(self):
         """
         Return a tuple of the values of the features in the state, in the order set by the state space.
         """
@@ -56,16 +57,25 @@ class ActionState:
 
         return representation
 
+    def get_feature(self, feature_name: str) -> Any:
+        """
+        Return the value of the feature with the given name.
+        """
+        return self.__features[feature_name]
 
 class State:
     """
     Class for a state in the simulator.
     """
 
-    def __init__(self, time: float, position: np.ndarray[float, float], velocity: float, acceleration: float,
+    def __init__(self, time: float, position: Union[np.ndarray[float, float], Point], velocity: float, acceleration: float,
                  heading: float, lane: Lane = None):
         self.time = time
-        self.position = position
+
+        if isinstance(position, np.ndarray) or isinstance(position, list) or isinstance(position, tuple):
+            self.position = Point(position[0], position[1])
+        else:
+            self.position = position
         self.velocity = velocity
         self.acceleration = acceleration
         self.heading = heading

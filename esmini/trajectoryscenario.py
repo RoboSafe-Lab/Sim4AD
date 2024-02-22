@@ -63,9 +63,6 @@ class TrjScenario(ScenarioGenerator):
 
         for inx, agent in enumerate(self.__episode.agents.values()):
 
-            if inx != 0:
-                continue
-
             positionlist = []
             for i in range(len(agent.x_vec)):
                 pos = (agent.x_vec[i], agent.y_vec[i])

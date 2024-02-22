@@ -508,11 +508,9 @@ class Lane:
                                           "predecessors of the right/left lanes if the closes vehicle may be there")
             neighbours.extend(self.link.successor)
 
-        import matplotlib.pyplot as plt
-
         # get adjacent lanes to the right
         # TODO: ensure the positive v negative id distinction works more generally
-        invert_sign = 1 if self.id>0 else -1
+        invert_sign = 1 if self.id > 0 else -1
         if self.id != 1:
             left_lane = self.lane_section.get_lane(self.id - (1 * invert_sign))
 
@@ -520,7 +518,6 @@ class Lane:
                 if return_lfr_order is True:
                     neighbours.append(None)
             elif left_lane is not None:
-                # plt.plot(*left_lane.boundary.boundary.xy, color="orange")
                 neighbours.append(left_lane)
 
         if return_lfr_order is True:
@@ -534,11 +531,7 @@ class Lane:
                 if return_lfr_order is True:
                     neighbours.append(None)
             elif right_lane is not None:
-                # Plot the map for debug
-                # plt.plot(*right_lane.boundary.boundary.xy, color="green")
                 neighbours.append(right_lane)
-
-        # plt.show() # TODO: remove
 
         return neighbours
 

@@ -1,6 +1,7 @@
 """
 Class to define an agent that follows a given policy pi(s) -> (acceleration, steering_angle).
 """
+from collections import defaultdict
 from typing import Callable, Tuple, Any, Dict
 from simulator.state_action import Observation, Action, State
 import numpy as np
@@ -29,7 +30,7 @@ class PolicyAgent:
         self._state_trajectory = [initial_state]
         self._obs_trajectory = []
         self._action_trajectory = []
-        self.__evaluation_features_trajectory = []  # List of all the features used for evaluation at each time step.
+        self.__evaluation_features_trajectory = defaultdict(list)  # List of all the features used for evaluation at each time step.
         self._step = 0
         self._initial_state = initial_state
         self._step_max = 1000  # TODO: set to a reasonable value ??? WHAT IS THIS FOR??
@@ -135,9 +136,31 @@ class PolicyAgent:
         return self._action_trajectory
 
     @property
-    def evaluation_features_trajectory(self) -> [Dict[str, Any]]:
-        """ List of all the features used for evaluation at each time step. """
-        return self.__evaluation_features_trajectory
+    def nearby_vehicles(self) -> [Dict[str, Any]]:
+        """ The nearby vehicles at each time step. """
+        return self.__evaluation_features_trajectory["nearby_vehicles"]
+
+    def add_nearby_vehicles(self, nearby_vehicles: [Dict[str, Any]]):
+        """
+        Add the nearby vehicles to the trajectory of the agent.
+
+        :param nearby_vehicles: The nearby vehicles to add.
+        """
+        self.__evaluation_features_trajectory["nearby_vehicles"].append(nearby_vehicles)
+
+    @property
+    def distance_right_lane_marking(self):
+        return self.__evaluation_features_trajectory["distance_right_lane_marking"]
+
+    @property
+    def distance_left_lane_marking(self):
+        return self.__evaluation_features_trajectory["distance_left_lane_marking"]
+
+    def add_distance_right_lane_marking(self, distance_right_lane_marking: float):
+        self.__evaluation_features_trajectory["distance_right_lane_marking"].append(distance_right_lane_marking)
+
+    def add_distance_left_lane_marking(self, distance_left_lane_marking: float):
+        self.__evaluation_features_trajectory["distance_left_lane_marking"].append(distance_left_lane_marking)
 
     @property
     def meta(self):

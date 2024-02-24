@@ -181,9 +181,9 @@ class Sim4ADSimulation:
             # Compute the evaluation features for the agent
             evaluation = True  # TODO: make it parameter
             if evaluation is True:
-                self.__eval.compute_features(agent=agent, state=self.__state[agent_id], nearby_vehicles=vehicles_nearby,
-                                             right_marking_distance=obs.get_feature("distance_right_lane_marking"),
-                                             left_marking_distance=obs.get_feature("distance_left_lane_marking"))
+                agent.add_nearby_vehicles(vehicles_nearby)
+                agent.add_distance_right_lane_marking(obs.get_feature("distance_right_lane_marking"))
+                agent.add_distance_left_lane_marking(obs.get_feature("distance_left_lane_marking"))
 
             # Put the observation in a tuple, as the policy expects it
             obs = obs.get_tuple()
@@ -403,16 +403,6 @@ class Sim4ADSimulation:
             distance_left_lane_marking = position.distance(closest_point)
             distance_right_lane_marking = lane.get_width_at(ds_on_lane) - distance_left_lane_marking
 
-        # if debug is True: # TODO
-        #     # Plot the lane and the agent
-        #     plot_map(self.__scenario_map, markings=True, hide_road_bounds_in_junction=True)
-        #     position_plot = np.array([state.position.x, state.position.y])
-        #     plt.plot(*position_plot, marker="o", color="blue")
-        #     closest_point_plot = np.array([closest_point.x, closest_point.y])
-        #     plt.plot(*closest_point_plot, marker="o", color="red")
-        #     plt.show()
-        #     print()
-
         assert distance_left_lane_marking + distance_right_lane_marking - lane.get_width_at(ds_on_lane) < 1e-6
 
         return distance_left_lane_marking, distance_right_lane_marking
@@ -593,6 +583,7 @@ class Sim4ADSimulation:
     @property
     def evaluator(self):
         return self.__eval
+
 
 if __name__ == "__main__":
 

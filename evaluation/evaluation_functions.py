@@ -32,27 +32,21 @@ class EvaluationFeaturesExtractor:
 
         assert (len(states) - 1) == len(obs) == len(actions)  # There is an extra state at the end
 
-        logger.error("This method is not implemented yet.")
+        self.agents[agent.agent_id]["death_cause"] = death_cause.value
+        self.agents[agent.agent_id]["states"] = states
+        self.agents[agent.agent_id]["observations"] = obs
+        self.agents[agent.agent_id]["actions"] = actions
+
+        # compute ttcs and tths
+        for i in range(len(states)-1): # -1 because there is an extra state at the end, before the agent dies
+            self._compute_ttc_tth(agent, states[i], agent.nearby_vehicles[i])
+
+        self.agents[agent.agent_id]["nearby_vehicles"] = agent.nearby_vehicles
+        self.agents[agent.agent_id]["right_marking_distance"] = agent.distance_right_lane_marking
+        self.agents[agent.agent_id]["left_marking_distance"] = agent.distance_left_lane_marking
+
+
         # TODO
-
-    def compute_features(self, agent: PolicyAgent, state: State, nearby_vehicles: Dict[PNA, Dict[str, Any]],
-                         right_marking_distance: float, left_marking_distance: float):
-        """
-        Compute the evaluation features for the agents in the simulation.
-
-        :param agent: The agent for which we are computing the features.
-        :param state: The state of the agent.
-        :param nearby_vehicles: The agents nearby the agent. Each agent then has a dictionary of features.
-        :param right_marking_distance: The distance to the right marking.
-        :param left_marking_distance: The distance to the left marking.
-        """
-
-        self.agents[agent.agent_id]["death_cause"] = None
-        self.agents[agent.agent_id]["time"].append(state.time)
-        self.agents[agent.agent_id]["nearby_vehicles"].append(nearby_vehicles)
-        self.agents[agent.agent_id]["right_marking_distance"].append(right_marking_distance)
-        self.agents[agent.agent_id]["left_marking_distance"].append(left_marking_distance)
-        self._compute_ttc_tth(agent, state, nearby_vehicles)
 
     def _compute_ttc_tth(self, agent: PolicyAgent, state: State, nearby_vehicles: Dict[PNA, Dict[str, Any]]):
         """
@@ -96,9 +90,19 @@ class EvaluationFeaturesExtractor:
 
     # TODO: for each feature + R/L marking distance, I could test it with real data from the dataset!
 
+    def rmse_velocity(self):
+        """
+        Compute the root-mean-square error (RMSE) of the velocity of the agents, compared to the original vehicle(s).
+        """
+
+
+
+
+
     def compute_realism_scores(self):
         # TODO: Implement this method.
         raise NotImplementedError("This method is not implemented yet.")
+
 
     @property
     def agents(self):

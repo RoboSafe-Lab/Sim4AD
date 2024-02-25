@@ -2,11 +2,13 @@
 Class to define an agent that follows a given policy pi(s) -> (acceleration, steering_angle).
 """
 from collections import defaultdict
-from typing import Callable, Tuple, Any, Dict
+from typing import Any, Dict
 from simulator.state_action import Observation, Action, State
-import numpy as np
 from sim4ad.agentstate import AgentMetadata
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 class PolicyAgent:
     def __init__(self, agent: Any, policy, initial_state: State):
@@ -33,7 +35,6 @@ class PolicyAgent:
         self.__evaluation_features_trajectory = defaultdict(list)  # List of all the features used for evaluation at each time step.
         self._step = 0
         self._initial_state = initial_state
-        self._step_max = 1000  # TODO: set to a reasonable value ??? WHAT IS THIS FOR??
 
         # For the bicycle model
         correction = (self._metadata.rear_overhang - self._metadata.front_overhang) / 2  # Correction for cg
@@ -45,24 +46,29 @@ class PolicyAgent:
         Get the action for the given state history.
 
         :param history: The history of the observations/states.
-        :return: The desired acceleration and steering angle. TODO: update
+        :return: The desired acceleration and steering angle.
         """
         acceleration, delta = self.policy(history)[0].tolist()
 
         action = Action(acceleration=acceleration, steer_angle=delta)
         self._step += 1
 
-        # Run the bicycle model to get the next state (position, velocity, heading)
-
-        # Compute the new Observation based on the new Observation and Action
-        # TODO: add to traj
-        # TODO: change life status
-
         return action
 
-    def done(self):
-        # TODO: could do that is also done if reached goal location ?
-        return self._step >= self._step_max
+    @staticmethod
+    def reached_goal(state: State) -> bool:
+        """
+        Check if the agent has reached the goal.
+
+        :param state: The current state of the agent.
+        :return: Whether the agent has reached the goal.
+        """
+
+        reached_end_lane = state.lane.distance_at(state.position) > 0.98 * state.lane.length
+        if reached_end_lane is True:
+            # TODO: adapt for other scenarios
+            logger.warning("This only works for AUTOMATUM where is there is only one lane")
+        return reached_end_lane
 
     def __call__(self, history: [[Observation]]) -> tuple[Observation, Action]:
         """

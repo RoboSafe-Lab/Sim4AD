@@ -5,6 +5,7 @@ class DeathCause(Enum):
     OFF_ROAD = 0
     COLLISION = 1
     TIMEOUT = 2
+    GOAL_REACHED = 3
 
 
 class PositionNearbyAgent(Enum):

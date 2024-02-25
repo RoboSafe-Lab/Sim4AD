@@ -8,18 +8,19 @@ import logging
 import random
 from collections import defaultdict
 from copy import deepcopy
-from typing import Tuple
+from typing import Tuple, List, Dict, Any
 
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
-from shapely import LineString, Point
+from shapely import Point
 
 from baselines.bc_baseline import PolicyNetwork as BC
 from extract_observation_action import ExtractObservationAction
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 from sim4ad.data import DatasetDataLoader, Episode
 from sim4ad.opendrive import plot_map, Lane, Map
+from sim4ad.util import Box
 from simulator.policy_agent import PolicyAgent
 from simulator.state_action import State, Action, Observation
 from simulator.simulator_util import DeathCause
@@ -35,7 +36,7 @@ class Sim4ADSimulation:
                  scenario_map: Map,
                  dt: float = 0.1,
                  open_loop: bool = False,
-                 episode: Episode = None,
+                 episode_agents: Dict[str, Any] = None,
                  policy_type: str = "BC",
                  simulation_name: str = "sim4ad_simulation"):
 
@@ -45,6 +46,7 @@ class Sim4ADSimulation:
             scenario_map: The current road layout.
             dt: Time difference between two time steps.
             open_loop: If true then no physical controller will be applied.
+            episode_agents: The agents in the episode. As a dictionary (agent_id, agent).
         """
         self.__scenario_map = scenario_map
         self.__dt = dt
@@ -55,11 +57,11 @@ class Sim4ADSimulation:
         self.__time_steps = 0
         self.__state = {}
         self.__agents = {}
-        self.__episode = episode
-        self.__agents_to_add = deepcopy(self.__episode.agents)  # Agents that have not been added to the simulation yet.
+        self.__episode_agents = episode_agents
+        self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
         self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
         self.__simulation_name = simulation_name
-        self.__eval = EvaluationFeaturesExtractor(sim_name=simulation_name, episode=episode)
+        self.__eval = EvaluationFeaturesExtractor(sim_name=simulation_name)
 
         assert policy_type in ["BC", "follow_dataset"], f"Policy type {policy_type} not found."
         self.__policy_type = policy_type
@@ -91,7 +93,7 @@ class Sim4ADSimulation:
         initial_state = State(time=agent.time[0], position=center,
                               speed=np.sqrt(float(agent.vx_vec[0]) ** 2 + float(agent.vy_vec[0]) ** 2),
                               acceleration=np.sqrt(float(agent.ax_vec[0]) ** 2 + float(agent.ay_vec[0]) ** 2),
-                              heading=heading, lane=lane)
+                              heading=heading, lane=lane, agent_width=agent.width, agent_length=agent.length)
 
         if policy == "BC":
             # TODO: we predict (acceleration, steering angle) from the history of observations
@@ -133,7 +135,7 @@ class Sim4ADSimulation:
         self.__agents = {}
         self.__state = {}
         self.__dead_agents = {}
-        self.__agents_to_add = deepcopy(self.__episode.agents)
+        self.__agents_to_add = deepcopy(self.__episode_agents)
         self.__simulation_history = []
 
     def step(self):
@@ -191,20 +193,25 @@ class Sim4ADSimulation:
                 agent.add_distance_right_lane_marking(obs.get_feature("distance_right_lane_marking"))
                 agent.add_distance_left_lane_marking(obs.get_feature("distance_left_lane_marking"))
 
+            collision = self.__collision(agent_state=self.__state[agent_id], nearby_vehicles=vehicles_nearby)
+
+            if collision is True:
+                self.__dead_agents[agent_id] = DeathCause.COLLISION
+
             # Put the observation in a tuple, as the policy expects it
             obs = obs.get_tuple()
             agent.add_observation(obs)
 
         # Given the above observations, choose an action and compute the next state
         for agent_id, agent in self.__agents.items():
-            if agent is None:
+            if agent is None and agent_id not in self.__dead_agents: # Check if agent e.g., if collision
                 continue
 
             if self.__policy_type == "follow_dataset":
                 # TODO: if we go randomly, then we should update the timestep below
                 dataset_time_step = round((self.__time - agent.initial_state.time) / self.__dt)
                 # Get the acceleration and steering angle from the dataset
-                dataset_agent = self.__episode.agents[agent_id]
+                dataset_agent = self.__episode_agents[agent_id]
                 deltas = ExtractObservationAction.extract_steering_angle(agent=dataset_agent)
                 acceleration = np.sqrt(float(dataset_agent.ax_vec[dataset_time_step]) ** 2 +
                                        float(dataset_agent.ay_vec[dataset_time_step]) ** 2)
@@ -219,8 +226,6 @@ class Sim4ADSimulation:
 
             done = False
             if self.__policy_type == "follow_dataset":
-                #assert new_state.position.distance(Point(dataset_agent.x_vec[dataset_time_step + 1],
-                #                                         dataset_agent.y_vec[dataset_time_step + 1])) < 1e-6
 
                 if dataset_time_step+1 < len(dataset_agent.x_vec):
                     position = Point(dataset_agent.x_vec[dataset_time_step + 1],
@@ -231,37 +236,23 @@ class Sim4ADSimulation:
                     acceleration = np.sqrt(float(dataset_agent.ax_vec[dataset_time_step + 1]) ** 2 +
                                               float(dataset_agent.ay_vec[dataset_time_step + 1]) ** 2)
                     new_state = State(time=new_state.time, position=position, speed=speed, acceleration=acceleration,
-                                      heading=heading, lane=new_state.lane)
+                                      heading=heading, lane=new_state.lane, agent_width=agent.meta.width,
+                                      agent_length=agent.meta.length)
                 else:
                     # The agent has reached the end of the dataset
                     done = True
+            else:
+                done = agent.reached_goal(new_state)
 
-            # TODO: given nearby agents, check if there is a collision
-            collision = False  # TODO: check!
-            # done = agent.done() TODO ???
             off_road = new_state.lane is None
 
-            if collision:
-                self.__dead_agents[agent_id] = DeathCause.COLLISION
-            elif off_road:
+            if done is True:
+                self.__dead_agents[agent_id] = DeathCause.GOAL_REACHED  # todo: what if goal reached?
+            elif off_road is True:
                 self.__dead_agents[agent_id] = DeathCause.OFF_ROAD
 
-                if debug is True:
-                    # Plot teh trajectory until the time of death.
-                    plot_map(self.__scenario_map, markings=True, hide_road_bounds_in_junction=True)
-                    for state in agent.trajectory:
-                        plt.plot(*state.position, marker="o")
-                    plt.show()
-
-            elif done:
-                self.__dead_agents[agent_id] = DeathCause.TIMEOUT  # todo: what if goal reached?
-
-            dead = collision or done
-
-            if not dead:
-                # If is dead, the agent will be removed from the simulation before the next step.
-                new_frame[agent_id] = new_state
-                agent.add_state(new_state)  # TODO: agent.trajectory.add_state(new_state, reload_path=False)
+            new_frame[agent_id] = new_state
+            agent.add_state(new_state)  # TODO: agent.trajectory.add_state(new_state, reload_path=False)
 
         new_frame["time"] = self.__time + self.__dt
         self.__simulation_history.append(new_frame)
@@ -302,7 +293,7 @@ class Sim4ADSimulation:
 
         # TODO: is the time correct? or should we use the time of the action?
         return State(time=self.time + self.dt, position=center, speed=speed, acceleration=acceleration,
-                     heading=heading, lane=new_lane)
+                     heading=heading, lane=new_lane, agent_width=agent.meta.width, agent_length=agent.meta.length)
 
     def _get_observation(self, agent: PolicyAgent, state: State) -> Tuple[Observation, dict]:
         """
@@ -312,9 +303,8 @@ class Sim4ADSimulation:
         :return: The observation and the nearby agents.
         """
 
-        distance_left_lane_marking, distance_right_lane_marking = self._compute_distance_markings(state=state) # TODO: remove debug
+        distance_left_lane_marking, distance_right_lane_marking = self._compute_distance_markings(state=state)
 
-        # TODO: NEARBY AGENTS could be in the evaluation features ?
         # nearby_agents_features contains dx, dy, v, a, heading for each nearby agent
         # vehicles_nearby contains the agent object
         nearby_agents_features, vehicles_nearby = self._get_nearby_vehicles(agent=agent, state=state)
@@ -366,7 +356,7 @@ class Sim4ADSimulation:
         observation = Observation(state=observation)
         return observation, vehicles_nearby
 
-    def _compute_distance_markings(self, state: State, debug=False) -> Tuple[float, float]:
+    def _compute_distance_markings(self, state: State) -> Tuple[float, float]:
         """
         Compute the distance to the left and right lane markings.
 
@@ -376,10 +366,11 @@ class Sim4ADSimulation:
         """
 
         lane = state.lane
-        ds_on_lane = lane.distance_at(state.position)
 
         if lane is None:
             raise ValueError(f"No lane found at position {state.position} and heading {state.heading}.")
+
+        ds_on_lane = lane.distance_at(state.position)
 
         # 1. find the slope of the line perpendicular to the lane through the agent
 
@@ -411,7 +402,7 @@ class Sim4ADSimulation:
 
         return distance_left_lane_marking, distance_right_lane_marking
 
-    def _find_perpendicular(self, lane: Lane, state: State, length=50, debug=False) -> Tuple[Point, Point]: # TODO: complete signature
+    def _find_perpendicular(self, lane: Lane, state: State, length=50) -> Tuple[Point, Point]: # TODO: complete signature
 
         # We need to take the tangent as we want the slope (ration dy/dx) and not the heading
         ds_on_lane = lane.distance_at(state.position)
@@ -439,7 +430,7 @@ class Sim4ADSimulation:
         # return A and B, the left and right points.
         return Point(x_left, y_left), Point(x_right, y_right)
 
-    def _get_nearby_vehicles(self, agent: PolicyAgent, state: State, debug=False):
+    def _get_nearby_vehicles(self, agent: PolicyAgent, state: State):
 
         """
         TODO: we assume that there is only one lane, and not consider that vehicle may be in different lane groups,
@@ -449,12 +440,7 @@ class Sim4ADSimulation:
         # 1. We need the id of the lane where the vehicle is on
         lane = state.lane
 
-        # plot scenario and position of all vehicles # TODO
         if lane is None:
-            plot_map(self.__scenario_map, markings=True, hide_road_bounds_in_junction=True)
-            for state in agent.state_trajectory:
-                plt.plot(*state.position, marker="o", color="blue")
-            plt.show()
             raise ValueError(f"No lane found at position {state.position} and heading {state.heading}.")
 
         # 2. We want the lanes to the left and right of the current one (as long as they have the same flow of motion)
@@ -468,7 +454,7 @@ class Sim4ADSimulation:
         # 3. We want to further divide the lanes into two parts, the one in front and the one behind the vehicle.
         # We will use the perpendicular line to the lane to divide the lanes into two parts.
         # perpendicular = np.array(left_point, right_point) TODO: check this is still updated
-        perpendicular = self._find_perpendicular(lane, state, debug=agent.agent_id[:8] == "d7bf5aaf") # TODO: remove dbeug
+        perpendicular = self._find_perpendicular(lane, state)
 
         nearby_vehicles_features = defaultdict(None)
         vehicles_nearby = defaultdict(None)
@@ -530,6 +516,22 @@ class Sim4ADSimulation:
         return nearby_vehicles_features, vehicles_nearby
 
     @staticmethod
+    def __collision(agent_state: State, nearby_vehicles: dict):
+        """
+        Check if the agent is colliding with a nearby vehicle.
+
+        :param agent_state: The state of the agent.
+        :param nearby_vehicles: Nearby vehicles.
+        :return: True if the agent is colliding with any of the nearby vehicle, False otherwise.
+        """
+
+        for nearby_vehicle in nearby_vehicles.values():
+            if nearby_vehicle is not None:
+                if agent_state.bbox.overlaps(nearby_vehicle.state.bbox):
+                    return True
+        return False
+
+    @staticmethod
     def __get_vehicle_features(nearby_vehicle: PolicyAgent, state: State):
         """
         :param nearby_vehicle: The vehicle to get the features from, w.r.t the ego agent.
@@ -545,6 +547,49 @@ class Sim4ADSimulation:
             features["heading"] = nearby_vehicle.state.heading
         return features
 
+    def get_spawn_positions(self, n: int):
+        """
+        Get possible spawn positions for the agents in the simulation.
+        Get from the dataset the initial positions, headings, and speeds of the agents.
+        Then, sample from those distribution to get the spawn positions.
+
+        :param n: Number of spawn positions to return.
+        :return: List of spawn positions.
+        """
+
+        # For each lane, store the distances from the start of the lane where the agents were spawned in the dataset,
+        # the speeds, and the headings.
+        possible_lanes = {"distance": [], "speed": [], "heading": [], "acceleration": []}
+        vehicle_dimensions = [] # store it as a list of tuples (width, length)
+
+        for agent in self.__episode_agents:
+            # Get the distances from the start of the lane to the start of the road
+            lane = self.__scenario_map.best_lane_at(agent.position, agent.heading)
+            distance = lane.distance_at(agent.position)
+
+            # Store the distance, speed, and heading
+            possible_lanes[lane]["distance"].append(distance)
+            possible_lanes[lane]["speed"].append(agent.speed)
+            possible_lanes[lane]["heading"].append(agent.heading)
+            possible_lanes[lane]["acceleration"].append(agent.acceleration)
+
+            vehicle_dimensions.append((agent.width, agent.length))
+
+        # Sample from the distributions to get the spawn positions
+        spawn_positions = []
+        for _ in range(n):
+            lane = random.choice(list(possible_lanes.keys()))
+            distance = random.choice(possible_lanes[lane]["distance"])
+            speed = random.choice(possible_lanes[lane]["speed"])
+            heading = random.choice(possible_lanes[lane]["heading"])
+            acceleration = random.choice(possible_lanes[lane]["acceleration"])
+            width, length = random.choice(vehicle_dimensions)
+
+            spawn_positions.append({"lane": lane, "distance": distance, "speed": speed, "heading": heading,
+                                    "acceleration": acceleration, "width": width, "length": length})
+
+        return spawn_positions
+
     def replay_simulation(self):
         """
         Replay the simulation as a video using self.__simulation_history which is a list of frames, where each
@@ -554,7 +599,7 @@ class Sim4ADSimulation:
         fig, ax = plt.subplots()
 
         def update(frame):
-            #ax.clear() TODO: clear the axis
+            ax.clear()
             plot_map(self.__scenario_map, markings=True, hide_road_bounds_in_junction=True, ax=ax)
             time = frame['time']
             for idx, (agent_id, state) in enumerate(frame.items()):
@@ -566,7 +611,7 @@ class Sim4ADSimulation:
                 color = (random.random(), random.random(), random.random())
 
                 # Plot the ground truth position with a cross.
-                original_agent = self.__episode.agents[agent_id]
+                original_agent = self.__episode_agents[agent_id]
                 initial_time = original_agent.time[0]
                 time_idx = int((time - initial_time) / self.__dt)
                 ax.plot(original_agent.x_vec[time_idx], original_agent.y_vec[time_idx], marker=",", color=color)
@@ -574,6 +619,12 @@ class Sim4ADSimulation:
                 # TODO: could use the initial=l_time above to get the start position for plotting the trajectory
                 position = np.array([state.position.x, state.position.y])
                 ax.plot(*position, marker=".", color=color)
+
+                # Plot the bounding box of the agent
+                bbox = state.bbox.boundary
+                # repeat the first point to create a 'closed loop'
+                bbox = [*bbox, bbox[0]]
+                ax.plot([point[0] for point in bbox], [point[1] for point in bbox], color=color)
 
             ax.set_title(f"Simulation Time: {time}")
 
@@ -587,7 +638,6 @@ class Sim4ADSimulation:
     @property
     def evaluator(self):
         return self.__eval
-
 
 
 if __name__ == "__main__":
@@ -612,7 +662,7 @@ if __name__ == "__main__":
     dt = agent.time[1] - agent.time[
         0]  # TODO: dataset.dynWorld https://openautomatumdronedata.readthedocs.io/en/latest/readme_include.html
 
-    sim = Sim4ADSimulation(scenario_map, episode=episode, dt=dt)
+    sim = Sim4ADSimulation(scenario_map, episode_agents=episode.agents, dt=dt)
     sim.reset()
 
     simulation_length = 50  # seconds

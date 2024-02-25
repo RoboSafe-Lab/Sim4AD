@@ -43,12 +43,13 @@ class TestEvaluationFeatures(unittest.TestCase):
 
         # Take the time difference between steps to be the gap in the dataset
         dt = agent.delta_t
-        sim = Sim4ADSimulation(scenario_map, episode=self.episode, dt=dt, policy_type="follow_dataset")
+        sim = Sim4ADSimulation(scenario_map, episode_agents=self.episode.agents, dt=dt, policy_type="follow_dataset")
 
         simulation_length = 150  # seconds
 
         for _ in tqdm(range(int(np.floor(simulation_length / sim.dt)))):
             sim.step()
+        sim.kill_all_agents()
 
         self.__simulation_evaluator = sim.evaluator
         self.__simulation_agent_features = sim.evaluator.agents
@@ -191,7 +192,11 @@ class TestEvaluationFeatures(unittest.TestCase):
         if self.__simulation_agent_features is None:
             self._setup_simulation()
 
-        assert self.__simulation_evaluator.rmse_speed() < 0.001
+        real_speeds = {}
+        for agent_id, agent in self.episode.agents.items():
+            real_speeds[agent_id] = {"vx_s": agent.vx_vec, "vy_s": agent.vy_vec}
+
+        assert self.__simulation_evaluator.rmse_speed(real_speeds=real_speeds) < 0.001
 
     def test_position_rmse(self):
         """Check that if we replay the dataset, the position RMSE is 0."""
@@ -199,5 +204,9 @@ class TestEvaluationFeatures(unittest.TestCase):
         if self.__simulation_agent_features is None:
             self._setup_simulation()
 
-        assert self.__simulation_evaluator.rmse_position() < 0.001
+        real_position = {}
+        for agent_id, agent in self.episode.agents.items():
+            real_position[agent_id] = {"x_s": agent.x_vec, "y_s": agent.y_vec}
+
+        assert self.__simulation_evaluator.rmse_position(real_position=real_position) < 0.001
 

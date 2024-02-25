@@ -14,8 +14,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
 from shapely import LineString, Point
-from shapely.ops import split
-from tqdm import tqdm
 
 from baselines.bc_baseline import PolicyNetwork as BC
 from extract_observation_action import ExtractObservationAction
@@ -61,7 +59,7 @@ class Sim4ADSimulation:
         self.__agents_to_add = deepcopy(self.__episode.agents)  # Agents that have not been added to the simulation yet.
         self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
         self.__simulation_name = simulation_name
-        self.__eval = EvaluationFeaturesExtractor(sim_name=simulation_name)
+        self.__eval = EvaluationFeaturesExtractor(sim_name=simulation_name, episode=episode)
 
         assert policy_type in ["BC", "follow_dataset"], f"Policy type {policy_type} not found."
         self.__policy_type = policy_type
@@ -91,7 +89,7 @@ class Sim4ADSimulation:
         heading = agent.psi_vec[0]
         lane = self.__scenario_map.best_lane_at(center, heading)
         initial_state = State(time=agent.time[0], position=center,
-                              velocity=np.sqrt(float(agent.vx_vec[0]) ** 2 + float(agent.vy_vec[0]) ** 2),
+                              speed=np.sqrt(float(agent.vx_vec[0]) ** 2 + float(agent.vy_vec[0]) ** 2),
                               acceleration=np.sqrt(float(agent.ax_vec[0]) ** 2 + float(agent.ay_vec[0]) ** 2),
                               heading=heading, lane=lane)
 
@@ -119,6 +117,14 @@ class Sim4ADSimulation:
         self.__eval.save_trajectory(agent=agent_removed, death_cause=death_cause)
 
         logger.debug(f"Removed Agent {agent_id}")
+
+    def kill_all_agents(self):
+        """ Remove all agents from the simulation with TIMEOUT death. """
+
+        for agent_id in list(self.__agents):
+            self.remove_agent(agent_id, DeathCause.TIMEOUT)
+
+        self.__agents = {}
 
     def reset(self):
         """ Remove all agents and reset internal state of simulation. """
@@ -207,11 +213,11 @@ class Sim4ADSimulation:
             else:
                 action = agent.next_action(history=agent.observation_trajectory)
 
+            agent.add_action(action)
             # Use the bicycle model to find where the agent will be at t+1
             new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
 
             done = False
-
             if self.__policy_type == "follow_dataset":
                 #assert new_state.position.distance(Point(dataset_agent.x_vec[dataset_time_step + 1],
                 #                                         dataset_agent.y_vec[dataset_time_step + 1])) < 1e-6
@@ -219,12 +225,12 @@ class Sim4ADSimulation:
                 if dataset_time_step+1 < len(dataset_agent.x_vec):
                     position = Point(dataset_agent.x_vec[dataset_time_step + 1],
                                                  dataset_agent.y_vec[dataset_time_step + 1])
-                    velocity = np.sqrt(float(dataset_agent.vx_vec[dataset_time_step + 1]) ** 2 +
+                    speed = np.sqrt(float(dataset_agent.vx_vec[dataset_time_step + 1]) ** 2 +
                                                     float(dataset_agent.vy_vec[dataset_time_step + 1]) ** 2)
                     heading = dataset_agent.psi_vec[dataset_time_step + 1]
                     acceleration = np.sqrt(float(dataset_agent.ax_vec[dataset_time_step + 1]) ** 2 +
                                               float(dataset_agent.ay_vec[dataset_time_step + 1]) ** 2)
-                    new_state = State(time=new_state.time, position=position, velocity=velocity, acceleration=acceleration,
+                    new_state = State(time=new_state.time, position=position, speed=speed, acceleration=acceleration,
                                       heading=heading, lane=new_state.lane)
                 else:
                     # The agent has reached the end of the dataset
@@ -252,12 +258,10 @@ class Sim4ADSimulation:
 
             dead = collision or done
 
-            agent.add_state(new_state)  # TODO: agent.trajectory.add_state(new_state, reload_path=False)
-            agent.add_action(action)
-
             if not dead:
                 # If is dead, the agent will be removed from the simulation before the next step.
                 new_frame[agent_id] = new_state
+                agent.add_state(new_state)  # TODO: agent.trajectory.add_state(new_state, reload_path=False)
 
         new_frame["time"] = self.__time + self.__dt
         self.__simulation_history.append(new_frame)
@@ -280,24 +284,24 @@ class Sim4ADSimulation:
 
         acceleration = np.clip(action.acceleration, - agent.meta.max_acceleration, agent.meta.max_acceleration)
 
-        velocity = current_state.velocity + acceleration * self.__dt
-        velocity = max(0, velocity)
+        speed = current_state.speed + acceleration * self.__dt
+        speed = max(0, speed)
 
         beta = np.arctan(agent._l_r * np.tan(action.steer_angle) / agent.meta.wheelbase)
         d_position = np.array(
-            [velocity * np.cos(beta + current_state.heading),
-             velocity * np.sin(beta + current_state.heading)]
+            [speed * np.cos(beta + current_state.heading),
+             speed * np.sin(beta + current_state.heading)]
         )
 
         center = np.array([current_state.position.x, current_state.position.y]) + d_position * self.__dt
-        d_theta = velocity * np.tan(action.steer_angle) * np.cos(beta) / agent.meta.wheelbase
+        d_theta = speed * np.tan(action.steer_angle) * np.cos(beta) / agent.meta.wheelbase
         d_theta = np.clip(d_theta, - agent.meta.max_angular_vel, agent.meta.max_angular_vel)
         heading = (current_state.heading + d_theta * self.__dt + np.pi) % (2 * np.pi) - np.pi
 
         new_lane = self.__scenario_map.best_lane_at(center, heading)
 
         # TODO: is the time correct? or should we use the time of the action?
-        return State(time=self.time + self.dt, position=center, velocity=velocity, acceleration=acceleration,
+        return State(time=self.time + self.dt, position=center, speed=speed, acceleration=acceleration,
                      heading=heading, lane=new_lane)
 
     def _get_observation(self, agent: PolicyAgent, state: State) -> Tuple[Observation, dict]:
@@ -323,7 +327,7 @@ class Sim4ADSimulation:
         right_behind = nearby_agents_features[PNA.RIGHT_BEHIND]
 
         observation = {
-            "velocity": state.velocity,
+            "speed": state.speed,
             "heading": state.heading,
             "distance_left_lane_marking": distance_left_lane_marking,
             "distance_right_lane_marking": distance_right_lane_marking,
@@ -536,7 +540,7 @@ class Sim4ADSimulation:
         if nearby_vehicle is not None:
             features["rel_dx"] = nearby_vehicle.state.position.x - state.position.x
             features["rel_dy"] = nearby_vehicle.state.position.y - state.position.y
-            features["v"] = nearby_vehicle.state.velocity
+            features["v"] = nearby_vehicle.state.speed
             features["a"] = nearby_vehicle.state.acceleration
             features["heading"] = nearby_vehicle.state.heading
         return features
@@ -585,6 +589,7 @@ class Sim4ADSimulation:
         return self.__eval
 
 
+
 if __name__ == "__main__":
 
     # TODO: dynamic way of loading the map and dataset below
@@ -616,7 +621,8 @@ if __name__ == "__main__":
     for _ in range(int(np.floor(simulation_length / dt))):
         sim.step()
 
-    # TODO: remove all agents left in the simulation
+    # Remove all agents left in the simulation.
+    sim.kill_all_agents()
 
     sim.replay_simulation()
 

@@ -68,7 +68,7 @@ class State:
     Class for a state in the simulator.
     """
 
-    def __init__(self, time: float, position: Union[np.ndarray[float, float], Point], velocity: float, acceleration: float,
+    def __init__(self, time: float, position: Union[np.ndarray[float, float], Point], speed: float, acceleration: float,
                  heading: float, lane: Lane = None):
         self.time = time
 
@@ -76,7 +76,7 @@ class State:
             self.position = Point(position[0], position[1])
         else:
             self.position = position
-        self.velocity = velocity
+        self.speed = speed
         self.acceleration = acceleration
         self.heading = heading
         self.lane = lane

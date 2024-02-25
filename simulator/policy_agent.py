@@ -140,13 +140,24 @@ class PolicyAgent:
         """ The nearby vehicles at each time step. """
         return self.__evaluation_features_trajectory["nearby_vehicles"]
 
-    def add_nearby_vehicles(self, nearby_vehicles: [Dict[str, Any]]):
+    def add_nearby_vehicles(self, nearby_vehicles: Dict[str, Any]):
         """
         Add the nearby vehicles to the trajectory of the agent.
 
         :param nearby_vehicles: The nearby vehicles to add.
         """
-        self.__evaluation_features_trajectory["nearby_vehicles"].append(nearby_vehicles)
+
+        # for each vehicle, get the position, velocity and metadata
+        nearby_vehicles_new = {}
+        for position, vehicle in nearby_vehicles.items():
+
+            if vehicle is not None:
+                vehicle = {"agent_id": vehicle.agent_id, "position": vehicle.state.position,
+                           "speed": vehicle.state.speed, "metadata": vehicle.metadata}
+
+            nearby_vehicles_new[position] = vehicle
+
+        self.__evaluation_features_trajectory["nearby_vehicles"].append(nearby_vehicles_new)
 
     @property
     def distance_right_lane_marking(self):

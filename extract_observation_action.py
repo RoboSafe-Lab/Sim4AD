@@ -65,8 +65,8 @@ class ExtractObservationAction:
                     # calculate steering angle
                     delta = self.extract_steering_angle(agent)
 
-                    velocity = combine(agent.vx_vec, agent.vy_vec)
-                    ego_agent_observations = {'time': agent.time, 'velocity': velocity,
+                    speed = combine(agent.vx_vec, agent.vy_vec)
+                    ego_agent_observations = {'time': agent.time, 'speed': speed,
                                               'heading': agent.psi_vec,  # 'aid': agent_id, TODO: include it!
                                               # 'eid': episode_id,
                                               'distance_left_lane_marking': agent.distance_left_lane_marking,

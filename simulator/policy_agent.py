@@ -2,7 +2,10 @@
 Class to define an agent that follows a given policy pi(s) -> (acceleration, steering_angle).
 """
 from collections import defaultdict
-from typing import Any, Dict
+from typing import Any, Dict, List
+
+import numpy as np
+
 from simulator.state_action import Observation, Action, State
 from sim4ad.agentstate import AgentMetadata
 
@@ -63,6 +66,10 @@ class PolicyAgent:
         :param state: The current state of the agent.
         :return: Whether the agent has reached the goal.
         """
+
+        if state.lane is None:
+            # The agent went out of the road.
+            return False
 
         reached_end_lane = state.lane.distance_at(state.position) > 0.98 * state.lane.length
         if reached_end_lane is True:
@@ -192,4 +199,28 @@ class PolicyAgent:
     def state(self) -> State:
         """The last state in the trajectory"""
         return self.state_trajectory[-1]
+
+
+class DummyRandomAgent:
+    """
+    An agent that is temporarily used to spawn a vehicle at a random location.
+    Needs to have the same interface as an agent in the AUTOMATUM dataset.
+    """
+
+    def __init__(self, UUID: str, length: float, width: float, type: str, initial_position: np.ndarray,
+                 initial_heading: float, initial_time: float, initial_speed: List, initial_acceleration: List):
+
+        self.UUID = UUID
+        self.length = length
+        self.width = width
+        self.type = type
+        self.x_vec = [initial_position[0]]
+        self.y_vec = [initial_position[1]]
+        self.psi_vec = [initial_heading]
+        self.vx_vec = [initial_speed[0]]
+        self.vy_vec = [initial_speed[1]]
+        self.ax_vec = [initial_acceleration[0]]
+        self.ay_vec = [initial_acceleration[1]]
+        self.time = [initial_time]
+
 

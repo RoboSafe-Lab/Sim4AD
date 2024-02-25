@@ -21,7 +21,7 @@ from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 from sim4ad.data import DatasetDataLoader, Episode
 from sim4ad.opendrive import plot_map, Lane, Map
 from sim4ad.util import Box
-from simulator.policy_agent import PolicyAgent
+from simulator.policy_agent import PolicyAgent, DummyRandomAgent
 from simulator.state_action import State, Action, Observation
 from simulator.simulator_util import DeathCause
 from simulator.simulator_util import PositionNearbyAgent as PNA
@@ -38,7 +38,8 @@ class Sim4ADSimulation:
                  open_loop: bool = False,
                  episode_agents: Dict[str, Any] = None,
                  policy_type: str = "BC",
-                 simulation_name: str = "sim4ad_simulation"):
+                 simulation_name: str = "sim4ad_simulation",
+                 spawn_method: str = "dataset"):
 
         """ Initialise new simulation.
 
@@ -47,6 +48,9 @@ class Sim4ADSimulation:
             dt: Time difference between two time steps.
             open_loop: If true then no physical controller will be applied.
             episode_agents: The agents in the episode. As a dictionary (agent_id, agent).
+            policy_type: The type of policy to use.
+            simulation_name: The name of the simulation.
+            spawn_method: The method to spawn the vehicles in the simulation. Either "dataset" or "random".
         """
         self.__scenario_map = scenario_map
         self.__dt = dt
@@ -62,6 +66,14 @@ class Sim4ADSimulation:
         self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
         self.__simulation_name = simulation_name
         self.__eval = EvaluationFeaturesExtractor(sim_name=simulation_name)
+        self.__last_agent_id = 0
+
+        # dataset-all: agents are spawned at the time they appear in the dataset, but are controlled by the policy.
+        # random: agents are spawned at random times and positions.
+        # dataset-one: all but one agent follow the dataset, the other one, is controlled by the policy.
+        assert spawn_method in ["dataset-all", "random", "dataset-one"], f"Spawn method {spawn_method} not found."
+
+        self.__spawn_method = spawn_method
 
         assert policy_type in ["BC", "follow_dataset"], f"Policy type {policy_type} not found."
         self.__policy_type = policy_type
@@ -81,9 +93,22 @@ class Sim4ADSimulation:
 
         self.__agents[new_agent.agent_id] = new_agent
         self.__state[new_agent.agent_id] = new_agent.initial_state
-        self.__agents_to_add.pop(new_agent.agent_id)
+
+        if "random" not in new_agent.agent_id:
+            # If it has "random", then we have no data in self.agents_to_add
+            self.__agents_to_add.pop(new_agent.agent_id)
 
         logger.debug(f"Added Agent {new_agent.agent_id}")
+
+    @staticmethod
+    def _get_bc_policy():
+        """
+        Load the BC policy.
+        """
+        # TODO: we predict (acceleration, steering angle) from the history of observations
+        policy = BC(state_dim=34, action_dim=2)
+        policy.load_policy()
+        return policy
 
     def _create_policy_agent(self, agent, policy: str = "BC"):
 
@@ -96,9 +121,7 @@ class Sim4ADSimulation:
                               heading=heading, lane=lane, agent_width=agent.width, agent_length=agent.length)
 
         if policy == "BC":
-            # TODO: we predict (acceleration, steering angle) from the history of observations
-            policy = BC(state_dim=34, action_dim=2)  # todo: make dynamic
-            policy.load_policy()
+            policy = self._get_bc_policy()
         elif policy == "follow_dataset":
             pass
         else:
@@ -158,10 +181,23 @@ class Sim4ADSimulation:
         """
 
         add_agents = {}
-        for agent_id, agent in self.__agents_to_add.items():
-            if (agent.time[0] - self.__time < 1e-6) and (agent.time[-1] - self.__time > 0):
-                if agent_id not in self.__agents:
-                    add_agents[agent_id] = agent
+
+        if self.__spawn_method == "dataset-all":
+            for agent_id, agent in self.__agents_to_add.items():
+                if (agent.time[0] - self.__time < 1e-6) and (agent.time[-1] - self.__time > 0):
+                    if agent_id not in self.__agents:
+                        add_agents[agent_id] = agent
+        elif self.__spawn_method == "random":
+            if self.__time == 0:
+                self.__spawn_features, self.__possible_vehicle_dimensions = self._get_spawn_positions()
+
+            spawn_probability = 0.3  # TODO: make it a parameter
+            if random.random() < spawn_probability:
+                agent_to_spawn = self._get_vehicle_to_spawn()
+                add_agents[agent_to_spawn.UUID] = agent_to_spawn
+
+        elif self.__spawn_method == "dataset-one":
+            raise NotImplementedError("Spawn method 'dataset-one' not implemented yet.")
 
         for agent_id, agent in add_agents.items():
             self.add_agent(self._create_policy_agent(agent, policy=self.__policy_type))
@@ -172,7 +208,80 @@ class Sim4ADSimulation:
 
         self.__dead_agents = {}
 
-    def __take_actions(self, debug=False):
+    def _get_vehicle_to_spawn(self):
+
+        for _ in range(1000):  # Try 1000 times to spawn a vehicle, otherwise fail
+            # Sample a random position and dimension, then check if we can spawn a vehicle there (i.e., if it is not
+            # already occupied by another vehicle)
+            spawn_lane = random.choice(list(self.__spawn_features.keys()))
+            spawn_distance = random.choice(self.__spawn_features[spawn_lane]["distance"])
+            spawn_vx = random.choice(self.__spawn_features[spawn_lane]["vx"])
+            spawn_vy = random.choice(self.__spawn_features[spawn_lane]["vy"])
+            spawn_heading = random.choice(self.__spawn_features[spawn_lane]["heading"])
+            spawn_ax = random.choice(self.__spawn_features[spawn_lane]["ax"])
+            spawn_ay = random.choice(self.__spawn_features[spawn_lane]["ay"])
+
+            agent_type, spawn_width, spawn_length = random.choice(self.__possible_vehicle_dimensions)
+
+            spawn_position = spawn_lane.point_at(spawn_distance)
+
+            # Check if the position is free
+            bbox = Box(center=spawn_position, length=spawn_length, width=spawn_width, heading=spawn_heading)
+
+            safe_to_spawn = True
+            for agent in self.__agents.values():
+                if agent.state.bbox.overlaps(bbox):
+                    safe_to_spawn = False
+                    break
+
+            if safe_to_spawn is False:
+                continue
+
+            agent_id = f"random_agent_{self.__last_agent_id}"
+            self.__last_agent_id += 1
+
+            agent = DummyRandomAgent(UUID=agent_id, length=spawn_length, width=spawn_width, type=agent_type,
+                                     initial_position=spawn_position,
+                                     initial_heading=spawn_heading, initial_time=self.__time,
+                                     initial_speed=[spawn_vx, spawn_vy],
+                                     initial_acceleration=[spawn_ax, spawn_ay])
+            return agent
+
+        raise ValueError("Could not spawn a vehicle after 1000 attempts.")
+
+    def _get_spawn_positions(self):
+        """
+        Get from the dataset the initial positions, headings, and speeds of the agents.
+
+        :return: List of spawn positions.
+        """
+
+        # For each lane, store the distances from the start of the lane where the agents were spawned in the dataset,
+        # the speeds, and the headings. Key: lane, Value: (distance, speed, heading, ...)
+        possible_lanes = defaultdict(lambda: {"distance": [], "vx": [], "vy": [], "heading": [], "ax": [], "ay": []})
+        vehicle_dimensions = []  # store it as a list of tuples (width, length)
+
+        for _, agent in self.__episode_agents.items():
+            # Get the distances from the start of the lane to the start of the road
+
+            initial_position = Point(agent.x_vec[0], agent.y_vec[0])
+            initial_heading = agent.psi_vec[0]
+            lane = self.__scenario_map.best_lane_at(initial_position, initial_heading)
+            distance = lane.distance_at(initial_position)  # where the agent was spawned
+
+            # Store the distance, speed, and heading
+            possible_lanes[lane]["distance"].append(distance)
+            possible_lanes[lane]["vx"].append(agent.vx_vec[0])
+            possible_lanes[lane]["vy"].append(agent.vy_vec[0])
+            possible_lanes[lane]["heading"].append(initial_heading)
+            possible_lanes[lane]["ax"].append(agent.ax_vec[0])
+            possible_lanes[lane]["ay"].append(agent.ay_vec[0])
+
+            vehicle_dimensions.append((agent.type, agent.width, agent.length))
+
+        return possible_lanes, vehicle_dimensions
+
+    def __take_actions(self):
 
         # A frame is a dictionary (agent_id, State)
         new_frame = {}
@@ -547,49 +656,6 @@ class Sim4ADSimulation:
             features["heading"] = nearby_vehicle.state.heading
         return features
 
-    def get_spawn_positions(self, n: int):
-        """
-        Get possible spawn positions for the agents in the simulation.
-        Get from the dataset the initial positions, headings, and speeds of the agents.
-        Then, sample from those distribution to get the spawn positions.
-
-        :param n: Number of spawn positions to return.
-        :return: List of spawn positions.
-        """
-
-        # For each lane, store the distances from the start of the lane where the agents were spawned in the dataset,
-        # the speeds, and the headings.
-        possible_lanes = {"distance": [], "speed": [], "heading": [], "acceleration": []}
-        vehicle_dimensions = [] # store it as a list of tuples (width, length)
-
-        for agent in self.__episode_agents:
-            # Get the distances from the start of the lane to the start of the road
-            lane = self.__scenario_map.best_lane_at(agent.position, agent.heading)
-            distance = lane.distance_at(agent.position)
-
-            # Store the distance, speed, and heading
-            possible_lanes[lane]["distance"].append(distance)
-            possible_lanes[lane]["speed"].append(agent.speed)
-            possible_lanes[lane]["heading"].append(agent.heading)
-            possible_lanes[lane]["acceleration"].append(agent.acceleration)
-
-            vehicle_dimensions.append((agent.width, agent.length))
-
-        # Sample from the distributions to get the spawn positions
-        spawn_positions = []
-        for _ in range(n):
-            lane = random.choice(list(possible_lanes.keys()))
-            distance = random.choice(possible_lanes[lane]["distance"])
-            speed = random.choice(possible_lanes[lane]["speed"])
-            heading = random.choice(possible_lanes[lane]["heading"])
-            acceleration = random.choice(possible_lanes[lane]["acceleration"])
-            width, length = random.choice(vehicle_dimensions)
-
-            spawn_positions.append({"lane": lane, "distance": distance, "speed": speed, "heading": heading,
-                                    "acceleration": acceleration, "width": width, "length": length})
-
-        return spawn_positions
-
     def replay_simulation(self):
         """
         Replay the simulation as a video using self.__simulation_history which is a list of frames, where each
@@ -611,10 +677,11 @@ class Sim4ADSimulation:
                 color = (random.random(), random.random(), random.random())
 
                 # Plot the ground truth position with a cross.
-                original_agent = self.__episode_agents[agent_id]
-                initial_time = original_agent.time[0]
-                time_idx = int((time - initial_time) / self.__dt)
-                ax.plot(original_agent.x_vec[time_idx], original_agent.y_vec[time_idx], marker=",", color=color)
+                if self.__spawn_method in ["dataset-all", "dataset-one"]:
+                    original_agent = self.__episode_agents[agent_id]
+                    initial_time = original_agent.time[0]
+                    time_idx = int((time - initial_time) / self.__dt)
+                    ax.plot(original_agent.x_vec[time_idx], original_agent.y_vec[time_idx], marker=",", color=color)
 
                 # TODO: could use the initial=l_time above to get the start position for plotting the trajectory
                 position = np.array([state.position.x, state.position.y])
@@ -662,7 +729,7 @@ if __name__ == "__main__":
     dt = agent.time[1] - agent.time[
         0]  # TODO: dataset.dynWorld https://openautomatumdronedata.readthedocs.io/en/latest/readme_include.html
 
-    sim = Sim4ADSimulation(scenario_map, episode_agents=episode.agents, dt=dt)
+    sim = Sim4ADSimulation(scenario_map, episode_agents=episode.agents, dt=dt, spawn_method="random")
     sim.reset()
 
     simulation_length = 50  # seconds

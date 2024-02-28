@@ -119,9 +119,9 @@ class FrenetPath:
         self.c = []
 
 
-def calc_frenet_paths(s_d, s_d_d, s_d_d_d, c_d, c_d_d, c_d_dd, target_search_area, speed_search_area, T):
+def calc_frenet_paths(s_d, s_d_d, s_d_d_d, c_d, c_d_d, c_d_dd, target_search_area, speed_search_area, T, delta_t):
     frenet_paths = []
-    DT = 0.1  # time tick [s]
+    DT = delta_t  # time tick [s]
 
     # Lateral motion planning (Generate path to each offset goal)
     # for di in target_search_area:
@@ -161,8 +161,8 @@ def calc_global_paths(fplist):
     return fplist
 
 
-def planner(s_d, s_d_d, s_d_d_d, c_d, c_d_d, c_d_dd, target_search_area, speed_search_area, T):
-    fplist = calc_frenet_paths(s_d, s_d_d, s_d_d_d, c_d, c_d_d, c_d_dd, target_search_area, speed_search_area, T)
+def planner(s_d, s_d_d, s_d_d_d, c_d, c_d_d, c_d_dd, target_search_area, speed_search_area, T, delta_t):
+    fplist = calc_frenet_paths(s_d, s_d_d, s_d_d_d, c_d, c_d_d, c_d_dd, target_search_area, speed_search_area, T, delta_t)
     fplist = calc_global_paths(fplist)
 
     return fplist
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     paths = []
     for target in target_search_area:
         for speed in speed_search_area:
-            path = planner(s_d, s_d_d, s_d_d_d, c_d, c_d_d, c_d_dd, target, speed, T)[0]
+            path = planner(s_d, s_d_d, s_d_d_d, c_d, c_d_d, c_d_dd, target, speed, T, 0.033)[0]
             paths.append(path)
 
     plt.figure(figsize=(10, 6))

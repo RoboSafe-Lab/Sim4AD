@@ -1,26 +1,21 @@
 import numpy as np
-import os
-import pickle
+from loguru import logger
 import matplotlib.pyplot as plt
 
 from sim4ad.opendrive import Map, plot_map
-from sim4ad.irlenv import IRLEnv
+from sim4ad.irlenv import IRLEnv, utils
+from sim4ad.data.data_loaders import DatasetDataLoader
 
 
 # load clustered trajectories
-def load_data():
-    """Loading the demonstrations for training"""
-    demonstrations = []
-    data_path = 'scenarios/data/trainingdata'
-    folders = [f for f in os.listdir(data_path) if os.path.isdir(os.path.join(data_path, f))]
-    for folder in folders:
-        folder_path = os.path.join(data_path, folder, 'irl.pkl')
-        with open(folder_path, 'rb') as file:
-            # Load the contents from the file
-            data = pickle.load(file)
-        demonstrations.append(data)
+def load_dataset():
+    """Loading the dataset"""
+    data_loader = DatasetDataLoader(f"scenarios/configs/automatum.json")
+    data_loader.load()
 
-    return data
+    episodes = data_loader.scenario.episodes
+
+    return episodes
 
 
 def compute_features(data):
@@ -89,45 +84,56 @@ def main():
     feature_num = 8
     period = 0
 
-    debug = True
-    # load the static map
-    scenario_map = Map.parse_from_opendrive(
-        "scenarios/data/automatum/hw-a9-appershofen-001-d8087340-8287-46b6-9612-869b09e68448/staticWorld.xodr")
+    debug = False
 
-    # Extract demonstrations (trajectories) from the data
-    agents = load_data()
+    # load the dataset
+    episodes = load_dataset()
 
-    plot_map(scenario_map, markings=True, midline=False, drivable=True, plot_background=False)
+    for episode in episodes:
+        # load the opendrive map
+        scenario_map = Map.parse_from_opendrive(episode.map_file)
 
-    # for each agent
-    for aid, agent in agents.items():
-        sampled_trajectories = []
+        # for each agent
+        for aid, agent in episode.agents.items():
+            sampled_trajectories = []
 
-        # for each time step
-        for inx, t in enumerate(agent.time):
-            irl_agent = IRLEnv(agent=agent, current_inx=inx, scenario_map=scenario_map)
+            if aid != 'b387c5de-38fe-47f0-82b7-7683d699de31':
+                continue
+            logger.info(f"Ego agent: {aid}")
 
-            lateral_offsets, target_speeds = irl_agent.sampling_space()
-            # for each lateral offset and target_speed combination
-            for lateral in lateral_offsets:
-                for target_speed in target_speeds:
-                    # 5 is the horizontal time
-                    action = (lateral, target_speed, 5)
-                    irl_agent.trajectory_planner(*action)
-                    sampled_trajectories.append(irl_agent.planned_trajectory)
+            irl_env = IRLEnv(episode=episode, scenario_map=scenario_map, ego=agent, IDM=False)
+            for inx, t in enumerate(agent.time):
 
-            # visualize the planned trajectories
-            if debug:
-                trajectories_local = []
-                for trj in sampled_trajectories:
-                    trj_local = []
-                    for p in trj:
-                        trj_local.append(irl_agent.position_local(s=p[0], d=p[1]))
-                    trajectories_local.append(np.array(trj_local))
-                for trj in trajectories_local:
-                    plt.plot(trj[:, 0], trj[:, 1], linewidth=1)
+                if t < 37.37:
+                    continue
+                logger.info(f"Simulation time: {t}")
 
-                plt.show()
+                irl_env.reset(reset_time=t)
+                lateral_offsets, target_speeds = irl_env.sampling_space()
+                # for each lateral offset and target_speed combination
+                for lateral in lateral_offsets:
+                    for target_speed in target_speeds:
+                        action = (lateral, target_speed)
+                        features, terminated, info = irl_env.step(action)
+
+                        sampled_trajectories.append(irl_env.vehicle.planned_trajectory)
+
+                        # set back to previous step
+                        irl_env.reset(reset_time=t)
+
+                # visualize the planned trajectories
+                if debug:
+                    trajectories_local = []
+                    for trj in sampled_trajectories:
+                        trj_local = []
+                        for p in trj:
+                            trj_local.append(
+                                utils.frenet2local(reference_line=irl_env.vehicle.lane.midline, s=p[0], d=p[1]))
+                        trajectories_local.append(np.array(trj_local))
+                    for trj in trajectories_local:
+                        plt.plot(trj[:, 0], trj[:, 1], linewidth=1)
+
+                    plt.show()
 
     # compute demonstration features
     demonstration_features = compute_features(agents)

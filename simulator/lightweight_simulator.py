@@ -37,7 +37,7 @@ class Sim4ADSimulation:
                  dt: float = 0.1,
                  open_loop: bool = False,
                  episode_agents: Dict[str, Any] = None,
-                 policy_type: str = "BC",
+                 policy_type: str = "bc",
                  simulation_name: str = "sim4ad_simulation",
                  spawn_method: str = "dataset"):
 
@@ -74,7 +74,7 @@ class Sim4ADSimulation:
 
         self.__spawn_method = spawn_method
 
-        assert policy_type in ["BC", "follow_dataset"], f"Policy type {policy_type} not found."
+        assert policy_type == "follow_dataset" or "bc" in policy_type.lower(), f"Policy type {policy_type} not found."
         if policy_type == "follow_dataset":
             assert spawn_method != "random", "Policy type 'follow_dataset' is not compatible with 'random' spawn"
 
@@ -129,16 +129,16 @@ class Sim4ADSimulation:
         logger.debug(f"Added Agent {new_agent.agent_id}")
 
     @staticmethod
-    def _get_bc_policy():
+    def _get_bc_policy(baseline_name: str = "bc-1epoch"):
         """
         Load the BC policy.
         """
         # TODO: we predict (acceleration, steering angle) from the history of observations
-        policy = BC(state_dim=34, action_dim=2)
-        policy.load_policy()
+        policy = BC()
+        policy.load_policy(baseline_name=baseline_name)
         return policy
 
-    def _create_policy_agent(self, agent, policy: str = "BC"):
+    def _create_policy_agent(self, agent, policy: str = "bc"):
 
         center = np.array([float(agent.x_vec[0]), float(agent.y_vec[0])])
         heading = agent.psi_vec[0]
@@ -148,8 +148,8 @@ class Sim4ADSimulation:
                               acceleration=np.sqrt(float(agent.ax_vec[0]) ** 2 + float(agent.ay_vec[0]) ** 2),
                               heading=heading, lane=lane, agent_width=agent.width, agent_length=agent.length)
 
-        if policy == "BC":
-            policy = self._get_bc_policy()
+        if "bc" in policy.lower():
+            policy = self._get_bc_policy(baseline_name=policy)
         elif policy == "follow_dataset":
             pass
         else:
@@ -232,7 +232,7 @@ class Sim4ADSimulation:
             if self.__time == 0:
                 self.__spawn_features, self.__possible_vehicle_dimensions = self._get_spawn_positions()
 
-            spawn_probability = 0.3  # TODO: make it a parameter
+            spawn_probability = 0.05  # TODO: make it a parameter
             if random.random() < spawn_probability:
                 agent_to_spawn = self._get_vehicle_to_spawn()
                 add_agents[agent_to_spawn.UUID] = (agent_to_spawn, self.__policy_type)
@@ -483,6 +483,8 @@ class Sim4ADSimulation:
             "heading": state.heading,
             "distance_left_lane_marking": distance_left_lane_marking,
             "distance_right_lane_marking": distance_right_lane_marking,
+            "x": state.position.x, # TODO: remove x and y
+            "y": state.position.y,
             "front_ego_rel_dx": front_ego["rel_dx"],
             "front_ego_rel_dy": front_ego["rel_dy"],
             "front_ego_v": front_ego["v"],
@@ -786,7 +788,8 @@ if __name__ == "__main__":
     dt = agent.time[1] - agent.time[
         0]  # TODO: dataset.dynWorld https://openautomatumdronedata.readthedocs.io/en/latest/readme_include.html
 
-    sim = Sim4ADSimulation(scenario_map, episode_agents=episode.agents, dt=dt, spawn_method="dataset_one", policy_type="BC")
+    sim = Sim4ADSimulation(scenario_map, episode_agents=episode.agents, dt=dt, spawn_method="random",
+                           policy_type="bc")
     # sim.reset()
 
     simulation_length = 50  # seconds

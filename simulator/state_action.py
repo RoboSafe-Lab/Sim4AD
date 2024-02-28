@@ -45,6 +45,10 @@ class ActionState:
         for feature_name, value in state.items():
             self.__features[feature_name] = value
 
+        # If there is a none value in the features, raise an error
+        if None in self.__features.values():
+            raise ValueError(f"Features are not set properly: {self.__features}")
+
     def get_tuple(self):
         """
         Return a tuple of the values of the features in the state, in the order set by the state space.

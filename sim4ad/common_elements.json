@@ -4,6 +4,8 @@
         "heading",
         "distance_left_lane_marking",
         "distance_right_lane_marking",
+        "x",
+        "y",
         "front_ego_rel_dx",
         "front_ego_rel_dy",
         "front_ego_v",

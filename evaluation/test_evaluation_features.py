@@ -43,16 +43,27 @@ class TestEvaluationFeatures(unittest.TestCase):
 
         # Take the time difference between steps to be the gap in the dataset
         dt = agent.delta_t
-        sim = Sim4ADSimulation(scenario_map, episode_agents=self.episode.agents, dt=dt, policy_type="follow_dataset")
+        sim = Sim4ADSimulation(scenario_map, episode_agents=self.episode.agents, dt=dt, policy_type="follow_dataset",
+                               spawn_method="dataset_all")
+
+        # Simulation where all agents are spawned in random positions
+        sim_random = Sim4ADSimulation(scenario_map, episode_agents=self.episode.agents, dt=dt, policy_type="bc-1epoch",
+                                      spawn_method="random")
 
         simulation_length = 150  # seconds
 
         for _ in tqdm(range(int(np.floor(simulation_length / sim.dt)))):
             sim.step()
+            sim_random.step()
+
         sim.kill_all_agents()
+        sim_random.kill_all_agents()
 
         self.__simulation_evaluator = sim.evaluator
         self.__simulation_agent_features = sim.evaluator.agents
+
+        self.__random_simulation_evaluator = sim_random.evaluator
+        self.__random_simulation_agent_features = sim_random.evaluator.agents
 
     def test_time_steps_equal(self):
 
@@ -209,4 +220,16 @@ class TestEvaluationFeatures(unittest.TestCase):
             real_position[agent_id] = {"x_s": agent.x_vec, "y_s": agent.y_vec}
 
         assert self.__simulation_evaluator.rmse_position(real_position=real_position) < 0.001
+
+    def test_collision_rate(self):
+        """Check that if we replay the dataset, the collision rate is 0."""
+
+        if self.__simulation_agent_features is None:
+            self._setup_simulation()
+
+        assert self.__simulation_evaluator.compute_collision_rate() == 0
+
+        # Check that in the random simulation, it is not 0
+        assert self.__random_simulation_evaluator.compute_collision_rate() > 0
+
 

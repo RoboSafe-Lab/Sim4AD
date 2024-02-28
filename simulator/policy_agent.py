@@ -1,11 +1,17 @@
 """
 Class to define an agent that follows a given policy pi(s) -> (acceleration, steering_angle).
 """
-from typing import Callable, Tuple, Any, Dict
-from simulator.state_action import Observation, Action, State
+from collections import defaultdict
+from typing import Any, Dict, List
+
 import numpy as np
+
+from simulator.state_action import Observation, Action, State
 from sim4ad.agentstate import AgentMetadata
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 class PolicyAgent:
     def __init__(self, agent: Any, policy, initial_state: State):
@@ -29,10 +35,9 @@ class PolicyAgent:
         self._state_trajectory = [initial_state]
         self._obs_trajectory = []
         self._action_trajectory = []
-        self.__evaluation_features_trajectory = []  # List of all the features used for evaluation at each time step.
+        self.__evaluation_features_trajectory = defaultdict(list)  # List of all the features used for evaluation at each time step.
         self._step = 0
         self._initial_state = initial_state
-        self._step_max = 1000  # TODO: set to a reasonable value ??? WHAT IS THIS FOR??
 
         # For the bicycle model
         correction = (self._metadata.rear_overhang - self._metadata.front_overhang) / 2  # Correction for cg
@@ -44,24 +49,33 @@ class PolicyAgent:
         Get the action for the given state history.
 
         :param history: The history of the observations/states.
-        :return: The desired acceleration and steering angle. TODO: update
+        :return: The desired acceleration and steering angle.
         """
         acceleration, delta = self.policy(history)[0].tolist()
 
         action = Action(acceleration=acceleration, steer_angle=delta)
         self._step += 1
 
-        # Run the bicycle model to get the next state (position, velocity, heading)
-
-        # Compute the new Observation based on the new Observation and Action
-        # TODO: add to traj
-        # TODO: change life status
-
         return action
 
-    def done(self):
-        # TODO: could do that is also done if reached goal location ?
-        return self._step >= self._step_max
+    @staticmethod
+    def reached_goal(state: State) -> bool:
+        """
+        Check if the agent has reached the goal.
+
+        :param state: The current state of the agent.
+        :return: Whether the agent has reached the goal.
+        """
+
+        if state.lane is None:
+            # The agent went out of the road.
+            return False
+
+        reached_end_lane = state.lane.distance_at(state.position) > 0.98 * state.lane.length
+        if reached_end_lane is True:
+            # TODO: adapt for other scenarios
+            logger.warning("This only works for AUTOMATUM where is there is only one lane")
+        return reached_end_lane
 
     def __call__(self, history: [[Observation]]) -> tuple[Observation, Action]:
         """
@@ -135,9 +149,42 @@ class PolicyAgent:
         return self._action_trajectory
 
     @property
-    def evaluation_features_trajectory(self) -> [Dict[str, Any]]:
-        """ List of all the features used for evaluation at each time step. """
-        return self.__evaluation_features_trajectory
+    def nearby_vehicles(self) -> [Dict[str, Any]]:
+        """ The nearby vehicles at each time step. """
+        return self.__evaluation_features_trajectory["nearby_vehicles"]
+
+    def add_nearby_vehicles(self, nearby_vehicles: Dict[str, Any]):
+        """
+        Add the nearby vehicles to the trajectory of the agent.
+
+        :param nearby_vehicles: The nearby vehicles to add.
+        """
+
+        # for each vehicle, get the position, velocity and metadata
+        nearby_vehicles_new = {}
+        for position, vehicle in nearby_vehicles.items():
+
+            if vehicle is not None:
+                vehicle = {"agent_id": vehicle.agent_id, "position": vehicle.state.position,
+                           "speed": vehicle.state.speed, "metadata": vehicle.metadata}
+
+            nearby_vehicles_new[position] = vehicle
+
+        self.__evaluation_features_trajectory["nearby_vehicles"].append(nearby_vehicles_new)
+
+    @property
+    def distance_right_lane_marking(self):
+        return self.__evaluation_features_trajectory["distance_right_lane_marking"]
+
+    @property
+    def distance_left_lane_marking(self):
+        return self.__evaluation_features_trajectory["distance_left_lane_marking"]
+
+    def add_distance_right_lane_marking(self, distance_right_lane_marking: float):
+        self.__evaluation_features_trajectory["distance_right_lane_marking"].append(distance_right_lane_marking)
+
+    def add_distance_left_lane_marking(self, distance_left_lane_marking: float):
+        self.__evaluation_features_trajectory["distance_left_lane_marking"].append(distance_left_lane_marking)
 
     @property
     def meta(self):
@@ -152,4 +199,28 @@ class PolicyAgent:
     def state(self) -> State:
         """The last state in the trajectory"""
         return self.state_trajectory[-1]
+
+
+class DummyRandomAgent:
+    """
+    An agent that is temporarily used to spawn a vehicle at a random location.
+    Needs to have the same interface as an agent in the AUTOMATUM dataset.
+    """
+
+    def __init__(self, UUID: str, length: float, width: float, type: str, initial_position: np.ndarray,
+                 initial_heading: float, initial_time: float, initial_speed: List, initial_acceleration: List):
+
+        self.UUID = UUID
+        self.length = length
+        self.width = width
+        self.type = type
+        self.x_vec = [initial_position[0]]
+        self.y_vec = [initial_position[1]]
+        self.psi_vec = [initial_heading]
+        self.vx_vec = [initial_speed[0]]
+        self.vy_vec = [initial_speed[1]]
+        self.ax_vec = [initial_acceleration[0]]
+        self.ay_vec = [initial_acceleration[1]]
+        self.time = [initial_time]
+
 

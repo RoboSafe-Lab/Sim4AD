@@ -5,12 +5,19 @@ import pathlib
 def get_base_dir():
     return str(pathlib.Path(__file__).parent.parent.absolute()) + '/'
 
+
 def get_config_path(scenario_name):
     config_path = f"{get_base_dir()}scenarios/configs/{scenario_name}.json"
     return config_path
 
+
 def _common_elements_path():
     return f'{get_base_dir()}/sim4ad/common_elements.json'
+
+
+def baseline_path(file_name):
+    return f"{get_base_dir()}/baselines/{file_name}.pth"
+
 
 # FUNCTIONS FOR SHARED VARIABLES IN common_elements.json
 def check_common_property_equals(property_name, value):

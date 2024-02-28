@@ -1,4 +1,4 @@
-import json
+from collections import defaultdict
 from dataclasses import dataclass
 import os
 from typing import Optional, List
@@ -65,12 +65,16 @@ class ExtractObservationAction:
                     # calculate steering angle
                     delta = self.extract_steering_angle(agent)
 
-                    velocity = combine(agent.vx_vec, agent.vy_vec)
-                    ego_agent_observations = {'time': agent.time, 'velocity': velocity,
-                                              'heading': agent.psi_vec,  # 'aid': agent_id, TODO: include it!
-                                              # 'eid': episode_id,
-                                              'distance_left_lane_marking': agent.distance_left_lane_marking,
-                                              'distance_right_lane_marking': agent.distance_right_lane_marking}
+                    speed = combine(agent.vx_vec, agent.vy_vec)
+
+                    ego_agent_observations = defaultdict(list)
+                    ego_agent_observations['time'] = agent.time
+                    ego_agent_observations['speed'] = speed
+                    ego_agent_observations['heading'] = agent.psi_vec
+                    ego_agent_observations['distance_left_lane_marking'] = agent.distance_left_lane_marking
+                    ego_agent_observations['distance_right_lane_marking'] = agent.distance_right_lane_marking
+                    ego_agent_observations['x'] = agent.x_vec
+                    ego_agent_observations['y'] = agent.y_vec
 
                     # todo: explain that ego_agent_observations should be a dataframe where the rows are the timestamps
                     # and the columns are the features. then, we have a list of these dataframes, one for each agent
@@ -78,9 +82,16 @@ class ExtractObservationAction:
                     acceleration = combine(agent.ax_vec, agent.ay_vec)
                     ego_agent_actions = {'acceleration': acceleration, 'steer_angle': delta}
 
+                    skip_vehicle = False
                     for inx, t in enumerate(agent.time):
                         # get surrounding agent's information
-                        surrounding_agents = agent.object_relation_dict_list[inx]
+                        try:
+                            surrounding_agents = agent.object_relation_dict_list[inx]
+                        except IndexError as e:
+                            print(f"KeyError: {e}. Skipping vehicle {agent_id}.")
+                            skip_vehicle = True
+                            break
+
                         for surrounding_agent_relation, surrounding_agent_id in surrounding_agents.items():
                             if surrounding_agent_id is not None:
                                 surrounding_agent = episode.agents[surrounding_agent_id]
@@ -89,29 +100,26 @@ class ExtractObservationAction:
                                 surrounding_agent_inx = surrounding_agent.next_index_of_specific_time(t)
                                 surrounding_rel_dx = long_distance
                                 surrounding_rel_dy = lat_distance
-                                surrounding_v = combine(surrounding_agent.vx_vec[surrounding_agent_inx],
-                                                        surrounding_agent.vy_vec[surrounding_agent_inx])
-                                surrounding_a = combine(surrounding_agent.ax_vec[surrounding_agent_inx],
-                                                        surrounding_agent.ay_vec[surrounding_agent_inx])
+                                surrounding_rel_speed = (combine(surrounding_agent.vx_vec[surrounding_agent_inx],
+                                                                 surrounding_agent.vy_vec[surrounding_agent_inx])
+                                                         - speed[inx])
+                                surrounding_rel_a = (combine(surrounding_agent.ax_vec[surrounding_agent_inx],
+                                                             surrounding_agent.ay_vec[surrounding_agent_inx])
+                                                     - acceleration[inx])
                                 surrounding_heading = surrounding_agent.psi_vec[surrounding_agent_inx]
                             else:
                                 # Set to invalid value if there is no surrounding agent
-                                surrounding_rel_dx = surrounding_rel_dy = surrounding_v = surrounding_a \
+                                surrounding_rel_dx = surrounding_rel_dy = surrounding_rel_speed = surrounding_rel_a \
                                     = surrounding_heading = MISSING_NEARBY_AGENT_VALUE
-
-                            # if the surrounding agent is not in the dictionary, add it
-                            if surrounding_agent_relation not in ego_agent_observations:
-                                ego_agent_observations[f'{surrounding_agent_relation}_rel_dx'] = []
-                                ego_agent_observations[f'{surrounding_agent_relation}_rel_dy'] = []
-                                ego_agent_observations[f'{surrounding_agent_relation}_v'] = []
-                                ego_agent_observations[f'{surrounding_agent_relation}_a'] = []
-                                ego_agent_observations[f'{surrounding_agent_relation}_heading'] = []
 
                             ego_agent_observations[f'{surrounding_agent_relation}_rel_dx'].append(surrounding_rel_dx)
                             ego_agent_observations[f'{surrounding_agent_relation}_rel_dy'].append(surrounding_rel_dy)
-                            ego_agent_observations[f'{surrounding_agent_relation}_v'].append(surrounding_v)
-                            ego_agent_observations[f'{surrounding_agent_relation}_a'].append(surrounding_a)
+                            ego_agent_observations[f'{surrounding_agent_relation}_rel_speed'].append(surrounding_rel_speed)
+                            ego_agent_observations[f'{surrounding_agent_relation}_rel_a'].append(surrounding_rel_a)
                             ego_agent_observations[f'{surrounding_agent_relation}_heading'].append(surrounding_heading)
+
+                    if skip_vehicle is True:
+                        continue
 
                     ego_agent_observations = pd.DataFrame(ego_agent_observations, index=agent.time)
 

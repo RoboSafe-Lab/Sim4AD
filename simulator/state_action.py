@@ -15,8 +15,10 @@ from dataclasses import dataclass
 import numpy as np
 from shapely import Point
 
+from sim4ad.agentstate import AgentMetadata
 from sim4ad.opendrive import Lane
 from sim4ad.path_utils import get_common_property
+from sim4ad.util import Box
 
 
 class ActionState:
@@ -43,6 +45,10 @@ class ActionState:
         for feature_name, value in state.items():
             self.__features[feature_name] = value
 
+        # If there is a none value in the features, raise an error
+        if None in self.__features.values():
+            raise ValueError(f"Features are not set properly: {self.__features}")
+
     def get_tuple(self):
         """
         Return a tuple of the values of the features in the state, in the order set by the state space.
@@ -63,23 +69,27 @@ class ActionState:
         """
         return self.__features[feature_name]
 
+
 class State:
     """
     Class for a state in the simulator.
     """
 
-    def __init__(self, time: float, position: Union[np.ndarray[float, float], Point], velocity: float, acceleration: float,
-                 heading: float, lane: Lane = None):
+    def __init__(self, time: float, position: Union[np.ndarray[float, float], Point], speed: float, acceleration: float,
+                 heading: float, agent_length: float, agent_width: float, lane: Lane = None):
         self.time = time
 
         if isinstance(position, np.ndarray) or isinstance(position, list) or isinstance(position, tuple):
             self.position = Point(position[0], position[1])
         else:
             self.position = position
-        self.velocity = velocity
+        self.speed = speed
         self.acceleration = acceleration
         self.heading = heading
         self.lane = lane
+
+        center = np.array([self.position.x, self.position.y])
+        self.bbox = Box(center=center, length=agent_length, width=agent_width, heading=heading)
 
 
 class Observation(ActionState):

@@ -2,8 +2,8 @@
     "data_format": "automatum",
     "data_root": "scenarios/data/automatum",
     "episodes": [
-        {
-            "recording_id": "hw-a9-appershofen-001-d8087340-8287-46b6-9612-869b09e68448"
-        }
+        {"recording_id": "hw-a9-appershofen-001-d8087340-8287-46b6-9612-869b09e68448"},
+        {"recording_id": "hw-a9-appershofen-002-2234a9ae-2de1-4ad4-9f43-65c2be9696d6"},
+        {"recording_id": "hw-a9-appershofen-003-6d6e3378-df9b-4130-8cbf-3437a77a309d"}
     ]
 }

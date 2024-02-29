@@ -3,6 +3,7 @@ from __future__ import division, print_function
 import numpy as np
 import pandas as pd
 from collections import deque
+from typing import List
 
 from sim4ad.irlenv import utils
 from sim4ad.irlenv.logger import Loggable
@@ -13,7 +14,7 @@ class Vehicle(Loggable):
     A moving vehicle on a road, and its dynamics.
 
     The vehicle is represented by a dynamical system: a modified bicycle model.
-    It's state is propagated depending on its steering and acceleration actions.
+    It is state is propagated depending on its steering and acceleration actions.
     """
     # Enable collision detection between vehicles 
     COLLISIONS_ENABLED = True
@@ -26,21 +27,21 @@ class Vehicle(Loggable):
     # Maximum reachable velocity [m/s]
     MAX_VELOCITY = 50
 
-    def __init__(self, scenario_map, position, heading, velocity):
+    def __init__(self, scenario_map, position: List[float], heading: float, velocity:  List[float]):
         self.scenario_map = scenario_map
-        self.position = np.array(position).astype('float')
+        self.position = np.array(position)
         self.heading = heading
-        self.velocity = velocity
+        self.velocity = np.array(velocity)
         self.lane = scenario_map.best_lane_at(point=position, heading=heading)
         self.action = {'steering': 0.0, 'acceleration': 0.0}
         self.crashed = False
         self.log = []
         self.history = deque(maxlen=50)
         self.record_history = False
-        self.s, self.d = utils.local2frenet(point=position, reference_line=self.lane.midline)
+        self.s, self.d = utils.local2frenet(point=self.position, reference_line=self.lane.midline)
 
     @classmethod
-    def make_on_lane(cls, scenario_map, road_id, lane_id, longitudinal, lateral, velocity=0):
+    def make_on_lane(cls, scenario_map, road_id, lane_id, longitudinal, lateral, velocity: List[float]):
         """
         Create a vehicle on a given lane at a longitudinal position.
 
@@ -58,9 +59,9 @@ class Vehicle(Loggable):
         lane_heading = lane.get_heading_at(longitudinal)
 
         if velocity is None:
-            velocity = cls.MAX_VELOCITY
+            velocity = [cls.MAX_VELOCITY, 0]
 
-        return cls(scenario_map, np.array([pos_x, pos_y]), lane_heading, velocity)
+        return cls(scenario_map, [pos_x, pos_y], lane_heading, velocity)
 
     @classmethod
     def create_random(cls, road, velocity=None, spacing=1):
@@ -196,7 +197,7 @@ class Vehicle(Loggable):
     @property
     def destination(self):
         if getattr(self, "route", None):
-            last_lane = self.route[-1]
+            last_lane = self.lane
             return last_lane.position(last_lane.length, 0)
         else:
             return self.position
@@ -276,6 +277,6 @@ class Obstacle(Vehicle):
     """
 
     def __init__(self, road, position, heading=0):
-        super(Obstacle, self).__init__(road, position, velocity=0, heading=heading)
+        super(Obstacle, self).__init__(road, position, velocity=[0, 0], heading=heading)
         self.target_velocity = 0
         self.LENGTH = self.WIDTH

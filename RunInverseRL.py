@@ -102,9 +102,10 @@ def main():
             logger.info(f"Ego agent: {aid}")
 
             irl_env = IRLEnv(episode=episode, scenario_map=scenario_map, ego=agent, IDM=False)
+            terminated = False
             for inx, t in enumerate(agent.time):
 
-                if t < 37.37:
+                if t < 40.70:
                     continue
                 logger.info(f"Simulation time: {t}")
 
@@ -120,6 +121,9 @@ def main():
 
                         # set back to previous step
                         irl_env.reset(reset_time=t)
+
+                if terminated:
+                    break
 
                 # visualize the planned trajectories
                 if debug:

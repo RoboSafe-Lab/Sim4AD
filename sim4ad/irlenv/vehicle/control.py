@@ -217,11 +217,17 @@ class MDPVehicle(ControlledVehicle):
         self.WIDTH = v_width  # Vehicle width [m]
 
     @classmethod
-    def create(cls, scenario_map, vehicle_ID, position, v_length, v_width, dataset_traj, heading=0, velocity=0,
+    def create(cls, scenario_map, vehicle_ID, position, v_length, v_width, dataset_traj, heading: float, velocity: np.ndarray,
                target_velocity=10):
         """
         Create a human-like driving vehicle in replace of a dataset vehicle.
 
+        :param target_velocity:
+        :param heading:
+        :param vehicle_ID:
+        :param dataset_traj:
+        :param v_width:
+        :param v_length:
         :param scenario_map: the road where the vehicle is driving
         :param position: the position where the vehicle start on the road
         :param velocity: initial velocity in [m/s]. If None, will be chosen randomly
@@ -311,11 +317,3 @@ class MDPVehicle(ControlledVehicle):
 
         return states
 
-    def calculate_human_likeness(self):
-        original_traj = self.dataset_traj[:self.sim_steps + 1, :2]
-        ego_traj = self.traj.reshape(-1, 2)
-        ADE = np.mean([np.linalg.norm(original_traj[i] - ego_traj[i]) for i in
-                       range(ego_traj.shape[0])])  # Average Displacement Error (ADE)
-        FDE = np.linalg.norm(original_traj[-1] - ego_traj[-1])  # Final Displacement Error (FDE)
-
-        return FDE

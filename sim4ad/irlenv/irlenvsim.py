@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from loguru import logger
+from typing import Tuple, List
 
 from sim4ad.irlenv.vehicle.humandriving import HumanLikeVehicle, DatasetVehicle
 from sim4ad.irlenv import utils
@@ -19,14 +20,14 @@ class IRLEnv:
         self.scenario_map = scenario_map
         self.IDM = IDM
         self.ego = ego
-        self.duration = len(ego.time)
+        self.duration = None
         self.time = 0
         self.vehicles = []
         self.other_agents = {}
         self.interval = []
         self.active_vehicles = []
 
-    def reset(self, human=False, reset_time=0, ):
+    def reset(self, reset_time: float, human=False):
         """
         Reset the environment at a given time (scene) and specify whether to use human target
         """
@@ -48,7 +49,7 @@ class IRLEnv:
 
         return np.array(trajectory)
 
-    def _create_vehicles(self, reset_time):
+    def _create_vehicles(self, reset_time: float):
         """
         Create ego vehicle and dataset vehicles.
         """
@@ -70,7 +71,6 @@ class IRLEnv:
         for inx in range(len(self.episode.frames) - 1):
             if self.episode.frames[inx].time == reset_time:
                 start_frame = inx
-                continue
             if start_frame is not None:
                 end_frame = inx
                 if self.episode.frames[inx].time >= self.ego.time[-1] or \
@@ -121,14 +121,13 @@ class IRLEnv:
 
         return features, terminal, info
 
-    def _simulate(self, action, debug=False):
+    def _simulate(self, action, debug=True) -> np.ndarray:
         """
         Perform several steps of simulation with the planned trajectory
         """
         trajectory_features = []
         # adjust the forward simulation time according the distance to road end
-        time_horizon = min((self.vehicle.lane.length - self.vehicle.s) / self.vehicle.velocity[0],
-                           self.forward_simulation_time)
+        time_horizon = self.forward_simulation_time
 
         # generate simulated trajectory
         if action is not None:  # sampled goal
@@ -146,7 +145,7 @@ class IRLEnv:
 
         # forward simulation
         features = None
-        for frame_inx in range(self.interval[0], self.interval[1]):
+        for frame_inx in range(self.interval[0], self.interval[1]+1):
             self.active_vehicles.clear()
             self.act(step=self.run_step, frame_inx=frame_inx)
             self.step_forward(self.delta_t)
@@ -202,7 +201,7 @@ class IRLEnv:
             else:
                 vehicle.act(step, self.delta_t)
 
-    def step_forward(self, dt):
+    def step_forward(self, dt:float):
         """
         Step the dynamics of each entity on the road.
 
@@ -222,9 +221,10 @@ class IRLEnv:
         """
         The episode is over if the ego vehicle crashed or go off road or the time is out.
         """
+        self.duration = self.interval[1] - self.interval[0]
         return self.vehicle.crashed or self.time >= self.duration or not self.vehicle.on_road
 
-    def sampling_space(self):
+    def sampling_space(self) -> Tuple[np.ndarray, np.ndarray]:
         """
             The target sampling space (longitudinal speed and lateral offset)
         """
@@ -246,7 +246,7 @@ class IRLEnv:
 
         return lateral_offsets, target_speeds
 
-    def _get_thw(self):
+    def _get_thw(self) -> Tuple[float, float]:
         """Determine the thw for front and rear vehicle"""
         _, rear_vehicle, dis_front, dis_rear = DatasetVehicle.get_front_rear_vehicle(self.active_vehicles, self.vehicle)
         thw_front = dis_front / self.vehicle.velocity[0]
@@ -256,7 +256,7 @@ class IRLEnv:
 
         return thw_front, thw_rear
 
-    def _features(self):
+    def _features(self) -> np.ndarray:
         """
         Hand-crafted features
         :return: the array of the defined features

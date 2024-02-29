@@ -3,7 +3,8 @@ from __future__ import division, print_function
 from loguru import logger
 
 import numpy as np
-import matplotlib.pyplot as plt
+from typing import Optional
+
 from sim4ad.irlenv.vehicle.control import ControlledVehicle
 from sim4ad.irlenv import utils
 from sim4ad.irlenv.vehicle.dynamics import Vehicle
@@ -101,7 +102,7 @@ class DatasetVehicle(IDMVehicle):
 
         return front_vehicle, rear_vehicle, dis_front, dis_rear
 
-    def act(self, active_vehicles):
+    def act(self, active_vehicles=None):
         """
         Execute an action when the dataset vehicle is overriden.
 
@@ -125,7 +126,7 @@ class DatasetVehicle(IDMVehicle):
         action['acceleration'] = np.clip(action['acceleration'], -self.ACC_MAX, self.ACC_MAX)
         self.action = action
 
-    def step(self, dt, active_vehicles):
+    def step(self, dt, active_vehicles=None):
         """
         Update the state of a dataset vehicle.
         If the front vehicle is too close, use IDM model to override the dataset vehicle.
@@ -134,7 +135,7 @@ class DatasetVehicle(IDMVehicle):
         self.timer += dt
         self.sim_steps += 1
         self.heading_history.append(self.heading)
-        self.velocity_history.append(self.velocity)
+        self.velocity_history.append(self.velocity.copy())
         self.crash_history.append(self.crashed)
         self.overtaken_history.append(self.overtaken)
 
@@ -184,7 +185,7 @@ class DatasetVehicle(IDMVehicle):
         if np.linalg.norm(other.position - self.position) > self.LENGTH:
             return
 
-        # if both vehicles are NGSIM vehicles and have not been overriden
+        # if both vehicles are dataset vehicles and have not been overriden
         if isinstance(self, DatasetVehicle) and not self.overtaken and isinstance(other,
                                                                                   DatasetVehicle) and not other.overtaken:
             return
@@ -193,7 +194,6 @@ class DatasetVehicle(IDMVehicle):
         if utils.rotated_rectangles_intersect((self.position, 0.9 * self.LENGTH, 0.9 * self.WIDTH, self.heading),
                                               (other.position, 0.9 * other.LENGTH, 0.9 * other.WIDTH,
                                                other.heading)) and self.appear:
-            self.velocity = other.velocity = min([self.velocity, other.velocity], key=abs)
             self.crashed = other.crashed = True
 
 
@@ -240,13 +240,14 @@ class HumanLikeVehicle(IDMVehicle):
         self.WIDTH = v_width  # Vehicle width [m]
 
     @classmethod
-    def create(cls, scenario_map, vehicle_ID, position, v_length, v_width, dataset_traj, heading, velocity, acceleration,
-               target_velocity=15, human=False, IDM=False):
+    def create(cls, scenario_map, vehicle_ID, position, v_length, v_width, dataset_traj, heading, velocity,
+               acceleration, target_velocity=15, human=False, IDM=False):
         """
         Create a human-like (IRL) driving vehicle in replace of a dataset vehicle.
         """
         v = cls(scenario_map, position, heading, velocity, acceleration, target_velocity=target_velocity,
-                vehicle_ID=vehicle_ID, v_length=v_length, v_width=v_width, dataset_traj=dataset_traj, human=human, IDM=IDM)
+                vehicle_ID=vehicle_ID, v_length=v_length, v_width=v_width, dataset_traj=dataset_traj, human=human,
+                IDM=IDM)
 
         return v
 
@@ -288,7 +289,10 @@ class HumanLikeVehicle(IDMVehicle):
         planned_trajectory_frenet = np.array([[x, y] for x, y in zip(path[0].x, path[0].y)])
         planned_trajectory = []
         for p in planned_trajectory_frenet:
-            planned_trajectory.append(utils.frenet2local(reference_line=self.lane.midline, s=p[0], d=p[1]))
+            if p[0] > self.lane.length:
+                continue
+            point_x, point_y = utils.frenet2local(reference_line=self.lane.midline, s=p[0], d=p[1])
+            planned_trajectory.append([point_x, point_y])
         self.planned_trajectory = np.array(planned_trajectory)
 
         if self.IDM:
@@ -300,16 +304,16 @@ class HumanLikeVehicle(IDMVehicle):
         # path_y = self.position[1] + self.velocity * np.sin(self.heading) * time/10
         # self.planned_trajectory = np.array([[x, y] for x, y in zip(path_x, path_y)])
 
-    def act(self, step, dt):
+    def act(self, step: Optional[int] = None, dt: Optional[float] = 0.033366700033366704):
         if self.planned_trajectory is not None:
-            self.action = {'steering': self.steering_control(self.planned_trajectory, step),
-                           'acceleration': self.velocity_control(self.planned_trajectory, step, dt)}
+            self.action = {'steering': self.steering_control(step, self.planned_trajectory),
+                           'acceleration': self.velocity_control(step, dt, self.planned_trajectory)}
         elif self.IDM:
             super(HumanLikeVehicle, self).act()
         else:
             return
 
-    def steering_control(self, trajectory, step):
+    def steering_control(self, step: int, trajectory: Optional[np.ndarray] = None) -> np.ndarray:
         """
         Steer the vehicle to follow the given trajectory.
 
@@ -318,6 +322,7 @@ class HumanLikeVehicle(IDMVehicle):
         3. Heading is controlled by a proportional controller yielding a heading rate command
         4. Heading rate command is converted to a steering angle
 
+        :param step: the index
         :param trajectory: the trajectory to follow
         :return: a steering wheel angle command [rad]
         """
@@ -342,17 +347,19 @@ class HumanLikeVehicle(IDMVehicle):
 
         return steering_angle
 
-    def velocity_control(self, trajectory, step, dt):
+    def velocity_control(self, step: int, dt: Optional[float] = None, trajectory: Optional[np.ndarray] = None) -> np.ndarray:
         """
         Control the velocity of the vehicle.
 
         Using a simple proportional controller.
 
+        :param step: the index of the trajectory
+        :param dt: the frequency in the dataset
         :param trajectory: the trajectory to follow
         :return: an acceleration command [m/s2]
         """
         target_velocity = np.array([(trajectory[step][0] - trajectory[step - 1][0]) / dt,
-                                   (trajectory[step][1] - trajectory[step - 1][1]) / dt])
+                                    (trajectory[step][1] - trajectory[step - 1][1]) / dt])
         # transform target velocity from local coordinate system to the vehicle coordinate system
         rotation_matrix = np.array([
             [np.cos(self.heading), np.sin(self.heading)],
@@ -368,7 +375,7 @@ class HumanLikeVehicle(IDMVehicle):
     def step(self, dt):
         self.sim_steps += 1
         self.heading_history.append(self.heading)
-        self.velocity_history.append(self.velocity)
+        self.velocity_history.append(self.velocity.copy())
         self.crash_history.append(self.crashed)
         super(HumanLikeVehicle, self).step(dt)
 

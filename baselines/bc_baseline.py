@@ -69,9 +69,9 @@ class PolicyNetwork(nn.Module):
         self.loss_function = nn.MSELoss(reduction="mean")  # TODO: is this the correct loss function / reduction?
         self.writer = SummaryWriter(f'baselines/runs/bc')
 
-        self.BATCH_SIZE = 64  # Define your batch size # TODO: parameterize
+        self.BATCH_SIZE = 32  # Define your batch size # TODO: parameterize
         self.SHUFFLE = True  # shuffle your data
-        self.EPOCHS = 500  # Define the number of epochs # TODO: parameterize
+        self.EPOCHS = 2500  # Define the number of epochs # TODO: parameterize
         self.LR = 1e-3  # Define your learning rate # TODO: parameterize
 
         self.train_loader = DataLoader(AutomatumDataset(expert_states_train, expert_actions_train),

@@ -6,11 +6,8 @@ import pickle
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from matplotlib import pyplot as plt
-from torchvision import transforms
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
-from torch.utils.data import TensorDataset
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 

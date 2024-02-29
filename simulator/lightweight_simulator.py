@@ -487,33 +487,33 @@ class Sim4ADSimulation:
             "y": state.position.y,
             "front_ego_rel_dx": front_ego["rel_dx"],
             "front_ego_rel_dy": front_ego["rel_dy"],
-            "front_ego_v": front_ego["v"],
-            "front_ego_a": front_ego["a"],
+            "front_ego_rel_speed": front_ego["speed"] - state.speed,
+            "front_ego_rel_a": front_ego["a"] - state.acceleration,
             "front_ego_heading": front_ego["heading"],
             "behind_ego_rel_dx": behind_ego["rel_dx"],
             "behind_ego_rel_dy": behind_ego["rel_dy"],
-            "behind_ego_v": behind_ego["v"],
-            "behind_ego_a": behind_ego["a"],
+            "behind_ego_rel_speed": behind_ego["speed"] - state.speed,
+            "behind_ego_rel_a": behind_ego["a"] - state.acceleration,
             "behind_ego_heading": behind_ego["heading"],
             "front_left_rel_dx": left_front["rel_dx"],
             "front_left_rel_dy": left_front["rel_dy"],
-            "front_left_v": left_front["v"],
-            "front_left_a": left_front["a"],
+            "front_left_rel_speed": left_front["speed"] - state.speed,
+            "front_left_rel_a": left_front["a"] - state.acceleration,
             "front_left_heading": left_front["heading"],
             "behind_left_rel_dx": left_behind["rel_dx"],
             "behind_left_rel_dy": left_behind["rel_dy"],
-            "behind_left_v": left_behind["v"],
-            "behind_left_a": left_behind["a"],
+            "behind_left_rel_speed": left_behind["speed"] - state.speed,
+            "behind_left_rel_a": left_behind["a"] - state.acceleration,
             "behind_left_heading": left_behind["heading"],
             "front_right_rel_dx": right_front["rel_dx"],
             "front_right_rel_dy": right_front["rel_dy"],
-            "front_right_v": right_front["v"],
-            "front_right_a": right_front["a"],
+            "front_right_rel_speed": right_front["speed"] - state.speed,
+            "front_right_rel_a": right_front["a"] - state.acceleration,
             "front_right_heading": right_front["heading"],
             "behind_right_rel_dx": right_behind["rel_dx"],
             "behind_right_rel_dy": right_behind["rel_dy"],
-            "behind_right_v": right_behind["v"],
-            "behind_right_a": right_behind["a"],
+            "behind_right_rel_speed": right_behind["speed"] - state.speed,
+            "behind_right_rel_a": right_behind["a"] - state.acceleration,
             "behind_right_heading": right_behind["heading"]
         }
 
@@ -706,7 +706,7 @@ class Sim4ADSimulation:
         if nearby_vehicle is not None:
             features["rel_dx"] = nearby_vehicle.state.position.x - state.position.x
             features["rel_dy"] = nearby_vehicle.state.position.y - state.position.y
-            features["v"] = nearby_vehicle.state.speed
+            features["speed"] = nearby_vehicle.state.speed
             features["a"] = nearby_vehicle.state.acceleration
             features["heading"] = nearby_vehicle.state.heading
         return features

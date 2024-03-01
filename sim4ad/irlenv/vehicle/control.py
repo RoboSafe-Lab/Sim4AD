@@ -72,7 +72,6 @@ class ControlledVehicle(Vehicle):
 
         :param action: a high-level action
         """
-        self.follow_road()
 
         if action == "FASTER":
             self.target_velocity += self.DELTA_VELOCITY
@@ -96,14 +95,6 @@ class ControlledVehicle(Vehicle):
                   'acceleration': self.velocity_control(self.target_velocity)}
         super(ControlledVehicle, self).act(action)
 
-    def follow_road(self):
-        """
-        At the end of a lane, automatically switch to a next one.
-        """
-        if self.road.network.get_lane(self.target_lane_index).after_end(self.position):
-            self.target_lane_index = self.road.network.next_lane(self.target_lane_index, route=self.route,
-                                                                 position=self.position, np_random=self.road.np_random)
-
     def steering_control(self, target_lane):
         """
         Steer the vehicle to follow the center of a given lane.
@@ -117,8 +108,8 @@ class ControlledVehicle(Vehicle):
         :return: a steering wheel angle command [rad]
         """
         target_coords = utils.local2frenet(point=self.position, reference_line=target_lane.midline)
-        lane_next_coords = target_coords[0] + self.velocity * self.PURSUIT_TAU
-        lane_future_heading = target_lane.get_heading_at(lane_next_coords)
+        lane_next_coords = target_coords + self.velocity * self.PURSUIT_TAU
+        lane_future_heading = target_lane.get_heading_at(lane_next_coords[0])
 
         # Lateral position control
         lateral_velocity_command = - self.KP_LATERAL * target_coords[1]

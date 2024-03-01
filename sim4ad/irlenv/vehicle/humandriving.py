@@ -3,11 +3,9 @@ from __future__ import division, print_function
 from loguru import logger
 
 import numpy as np
-from typing import Optional
+from typing import Optional, Tuple
 
-from sim4ad.irlenv.vehicle.control import ControlledVehicle
 from sim4ad.irlenv import utils
-from sim4ad.irlenv.vehicle.dynamics import Vehicle
 from sim4ad.irlenv.vehicle.behavior import IDMVehicle
 from sim4ad.irlenv.vehicle.control import MDPVehicle
 from sim4ad.irlenv.vehicle.planner import planner
@@ -53,6 +51,7 @@ class DatasetVehicle(IDMVehicle):
         self.heading_history = []
         self.crash_history = []
         self.overtaken_history = []
+        self.overtaken_inx = 0
 
         # Vehicle length [m]
         self.LENGTH = v_length
@@ -82,7 +81,7 @@ class DatasetVehicle(IDMVehicle):
         return v
 
     @staticmethod
-    def get_front_rear_vehicle(vehicles, subject):
+    def get_front_rear_vehicle(vehicles, subject) -> Tuple[tuple, tuple]:
         """Get the front and rear vehicle of ego"""
         dis_front = np.inf
         dis_rear = -np.inf
@@ -100,7 +99,7 @@ class DatasetVehicle(IDMVehicle):
                     dis_rear = s - subject.s
                     rear_vehicle = vehicle
 
-        return front_vehicle, rear_vehicle, dis_front, dis_rear
+        return (front_vehicle, dis_front), (rear_vehicle, dis_rear)
 
     def act(self, active_vehicles=None):
         """
@@ -112,10 +111,9 @@ class DatasetVehicle(IDMVehicle):
             return
 
         action = {}
-        front_vehicle, rear_vehicle, _, _, = self.get_front_rear_vehicle(active_vehicles, self)
+        front_vehicle, rear_vehicle = self.get_front_rear_vehicle(active_vehicles, self)
 
         # Lateral: MOBIL
-        self.follow_road()
         if self.enable_lane_change:
             self.change_lane_policy()
         action['steering'] = self.steering_control(self.target_lane)
@@ -123,7 +121,7 @@ class DatasetVehicle(IDMVehicle):
         # Longitudinal: IDM
         action['acceleration'] = self.acceleration(ego_vehicle=self, front_vehicle=front_vehicle,
                                                    rear_vehicle=rear_vehicle)
-        action['acceleration'] = np.clip(action['acceleration'], -self.ACC_MAX, self.ACC_MAX)
+        action['acceleration'] = np.array([np.clip(action['acceleration'], -self.ACC_MAX, self.ACC_MAX), 0])
         self.action = action
 
     def step(self, dt, active_vehicles=None):
@@ -139,35 +137,35 @@ class DatasetVehicle(IDMVehicle):
         self.crash_history.append(self.crashed)
         self.overtaken_history.append(self.overtaken)
 
-        # Check if need to overtake
-        front_vehicle, rear_vehicle, dis_front, _ = self.get_front_rear_vehicle(active_vehicles, self)
-        if front_vehicle is not None and isinstance(front_vehicle, DatasetVehicle) and front_vehicle.overtaken:
-            gap = dis_front
-            desired_gap = self.desired_gap(self, front_vehicle)
-        elif front_vehicle is not None and (
-                isinstance(front_vehicle, HumanLikeVehicle) or isinstance(front_vehicle, MDPVehicle)):
-            gap = dis_front
-            desired_gap = self.desired_gap(self, front_vehicle)
+        # Check if the vehicle is needed to be overtaken
+        front_vehicle, _ = self.get_front_rear_vehicle(active_vehicles, self)
+        if front_vehicle[0] is not None and isinstance(front_vehicle[0], DatasetVehicle) and front_vehicle[0].overtaken:
+            gap = front_vehicle[1]
+            desired_gap = self.desired_gap(self, front_vehicle[0])
+        elif front_vehicle[0] is not None and (
+                isinstance(front_vehicle[0], HumanLikeVehicle) or isinstance(front_vehicle[0], MDPVehicle)):
+            gap = front_vehicle[1]
+            desired_gap = self.desired_gap(self, front_vehicle[0])
         else:
             gap = 100
             desired_gap = 50
 
         if gap >= desired_gap and not self.overtaken:
             # follow the original dataset trajectory
-            self.position = self.dataset_traj[self.sim_steps][:2]
+            self.position = self.dataset_traj[self.sim_steps][:2].copy()
+            self.velocity = self.dataset_traj[self.sim_steps][2:4].copy()
             self.heading = self.dataset_traj[self.sim_steps][-1]
-            self.velocity = self.dataset_traj[self.sim_steps][2:4]
             self.target_velocity = self.velocity
             self.lane = self.scenario_map.best_lane_at(point=self.position, heading=self.heading)
             self.s, self.d = utils.local2frenet(point=self.position, reference_line=self.lane.midline)
         else:
             self.overtaken = True
-            logger.info(f'Vehicle {self.vehicle_ID} is overtaken!')
+            if self.overtaken and not self.overtaken_history[-1]:
+                self.overtaken_inx = self.sim_steps
+                logger.info(f'Vehicle {self.vehicle_ID} is overtaken!')
+            # keep driving on the current lane
+            self.target_lane = self.lane
 
-            if self.lane.id < 0:
-                self.target_lane = self.scenario_map.get_lane(self.lane.parent_road.id, self.lane.id + 1, 0)
-            else:
-                self.target_lane = self.scenario_map.get_lane(self.lane.parent_road.id, self.lane.id - 1, 0)
             super(DatasetVehicle, self).step(dt)
 
         self.traj = np.append(self.traj, self.position, axis=0)
@@ -215,7 +213,7 @@ class HumanLikeVehicle(IDMVehicle):
                  velocity,
                  acceleration,
                  target_lane=None,
-                 target_velocity=15,  # Speed reference
+                 target_velocity=None,  # Speed reference
                  route=None,
                  timer=None,
                  vehicle_ID=None, v_length=None, v_width=None, dataset_traj=None, human=False, IDM=False):
@@ -241,7 +239,7 @@ class HumanLikeVehicle(IDMVehicle):
 
     @classmethod
     def create(cls, scenario_map, vehicle_ID, position, v_length, v_width, dataset_traj, heading, velocity,
-               acceleration, target_velocity=15, human=False, IDM=False):
+               acceleration, target_velocity=None, human=False, IDM=False):
         """
         Create a human-like (IRL) driving vehicle in replace of a dataset vehicle.
         """

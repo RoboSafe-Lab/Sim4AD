@@ -71,7 +71,6 @@ class IDMVehicle(ControlledVehicle):
         front_vehicle, rear_vehicle = self.road.neighbour_vehicles(self)
 
         # Lateral: MOBIL
-        self.follow_road()
         if self.enable_lane_change:
             self.change_lane_policy()
         action['steering'] = self.steering_control(self.target_lane_index)
@@ -112,14 +111,15 @@ class IDMVehicle(ControlledVehicle):
         if not ego_vehicle:
             return 0
 
-        ego_target_velocity = utils.not_zero(getattr(ego_vehicle, "target_velocity", 0))
+        ego_velocity = getattr(ego_vehicle, "target_velocity", 0)
+        ego_target_velocity_x = utils.not_zero(ego_velocity[0])
         acceleration = self.COMFORT_ACC_MAX * (
-                    1 - np.power(max(ego_vehicle.velocity, 0) / ego_target_velocity, self.DELTA))
+                    1 - np.power(max(ego_vehicle.velocity[0], 0) / ego_target_velocity_x, self.DELTA))
 
-        if front_vehicle:
-            d = ego_vehicle.lane_distance_to(front_vehicle)
+        if front_vehicle[0]:
+            d = front_vehicle[1]
             acceleration -= self.COMFORT_ACC_MAX * np.power(
-                self.desired_gap(ego_vehicle, front_vehicle) / utils.not_zero(d), 2)
+                self.desired_gap(ego_vehicle, front_vehicle[0]) / utils.not_zero(d), 2)
 
         return acceleration
 

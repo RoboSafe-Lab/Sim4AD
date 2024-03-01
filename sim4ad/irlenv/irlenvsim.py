@@ -1,10 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from loguru import logger
-from typing import Tuple, List
+from typing import Tuple
 
 from sim4ad.irlenv.vehicle.humandriving import HumanLikeVehicle, DatasetVehicle
-from sim4ad.irlenv import utils
 from sim4ad.opendrive import plot_map
 
 
@@ -97,7 +96,7 @@ class IRLEnv:
             length = agent[0].metadata.length
             width = agent[0].metadata.width
             other_trajectory = np.array(
-                [np.concatenate((state.position, state.velocity), axis=None) for state in agent])
+                [np.concatenate((state.position, state.velocity, state.heading), axis=None) for state in agent])
             dataset_vehicle = DatasetVehicle.create(self.scenario_map, aid, agent[0].position,
                                                     length, width, other_trajectory, heading=heading,
                                                     velocity=agent[0].velocity)
@@ -136,9 +135,9 @@ class IRLEnv:
         else:  # human goal
             # TODO: change to the human goal
             self.vehicle.trajectory_planner(
-                self.vehicle.ngsim_traj[self.vehicle.sim_steps + time_horizon / self.delta_t][1],
-                (self.vehicle.ngsim_traj[self.vehicle.sim_steps + time_horizon / self.delta_t][0] -
-                 self.vehicle.ngsim_traj[self.vehicle.sim_steps + time_horizon / self.delta_t - 1][
+                self.vehicle.dataset_traj[self.vehicle.sim_steps + time_horizon / self.delta_t][1],
+                (self.vehicle.dataset_traj[self.vehicle.sim_steps + time_horizon / self.delta_t][0] -
+                 self.vehicle.dataset_traj[self.vehicle.sim_steps + time_horizon / self.delta_t - 1][
                      0]) / self.delta_t, time_horizon)
 
         self.run_step = 1
@@ -150,6 +149,11 @@ class IRLEnv:
             self.act(step=self.run_step, frame_inx=frame_inx)
             self.step_forward(self.delta_t)
 
+            self.time += 1
+            self.run_step += 1
+            features = self._features()
+            trajectory_features.append(features)
+
             # show the forward simulation
             if debug and self.time % 5 == 0:
                 plot_map(self.scenario_map, markings=True, midline=False, drivable=True, plot_background=False)
@@ -157,21 +161,19 @@ class IRLEnv:
                          linewidth=1)
                 for vehicle in self.active_vehicles:
                     ego_traj = vehicle.traj.reshape(-1, 2)
-                    plt.plot(ego_traj[:, 0], ego_traj[:, 1], 'y*', linewidth=1)
-                    if isinstance(vehicle, DatasetVehicle):
-                        plt.plot(vehicle.dataset_traj[:, 0], vehicle.dataset_traj[:, 1], color="orange", linewidth=1)
+                    if isinstance(vehicle, HumanLikeVehicle):
+                        plt.scatter(ego_traj[:, 0], ego_traj[:, 1], color='#ADD8E6', s=10)
+                    else:
+                        plt.plot(vehicle.dataset_traj[:, 0], vehicle.dataset_traj[:, 1], color="y", linewidth=1)
+                        plt.scatter(ego_traj[:, 0], ego_traj[:, 1], color='orange', s=10)
                         if vehicle.overtaken:
-                            plt.plot(ego_traj[:, 0], ego_traj[:, 1], 'r*', linewidth=1)
+                            plt.scatter(ego_traj[vehicle.overtaken_inx:, 0], ego_traj[vehicle.overtaken_inx:, 1],
+                                        color='r', s=10)
                     plt.xlabel('x')
                     plt.ylabel('y')
                     plt.title(f't={self.episode.frames[frame_inx].time}')
                     # plt.savefig(f"frame_{self.run_step}.png")  # Save each frame as an image
                 plt.show()
-
-            self.time += 1
-            self.run_step += 1
-            features = self._features()
-            trajectory_features.append(features)
 
             # Stop at terminal states
             if self._is_terminal():
@@ -222,7 +224,7 @@ class IRLEnv:
         The episode is over if the ego vehicle crashed or go off road or the time is out.
         """
         self.duration = self.interval[1] - self.interval[0]
-        return self.vehicle.crashed or self.time >= self.duration or not self.vehicle.on_road
+        return self.vehicle.crashed or self.run_step >= self.duration or not self.vehicle.on_road
 
     def sampling_space(self) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -248,9 +250,9 @@ class IRLEnv:
 
     def _get_thw(self) -> Tuple[float, float]:
         """Determine the thw for front and rear vehicle"""
-        _, rear_vehicle, dis_front, dis_rear = DatasetVehicle.get_front_rear_vehicle(self.active_vehicles, self.vehicle)
-        thw_front = dis_front / self.vehicle.velocity[0]
-        thw_rear = -dis_rear / rear_vehicle.velocity[0] if rear_vehicle is not None else np.inf
+        front_vehicle, rear_vehicle = DatasetVehicle.get_front_rear_vehicle(self.active_vehicles, self.vehicle)
+        thw_front = front_vehicle[1] / self.vehicle.velocity[0]
+        thw_rear = -rear_vehicle[1] / rear_vehicle[0].velocity[0] if rear_vehicle[0] is not None else np.inf
         thw_front = np.exp(-1 / thw_front)
         thw_rear = np.exp(-1 / thw_rear)
 

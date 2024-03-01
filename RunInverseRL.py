@@ -97,16 +97,12 @@ def main():
         for aid, agent in episode.agents.items():
             sampled_trajectories = []
 
-            if aid != 'b387c5de-38fe-47f0-82b7-7683d699de31':
-                continue
             logger.info(f"Ego agent: {aid}")
 
             irl_env = IRLEnv(episode=episode, scenario_map=scenario_map, ego=agent, IDM=False)
             terminated = False
             for inx, t in enumerate(agent.time):
 
-                if t < 40.70:
-                    continue
                 logger.info(f"Simulation time: {t}")
 
                 irl_env.reset(reset_time=t)

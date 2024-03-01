@@ -85,7 +85,7 @@ class IRLEnv:
             # select the other agents which appear at the same time as the ego and have the same driving direction
             for aid, agent in frame.agents.items():
                 agent_lane = self.scenario_map.best_lane_at(point=agent.position, heading=agent.heading)
-                if aid != self.vehicle.vehicle_ID and agent_lane.id * self.vehicle.lane.id > 0:
+                if aid != self.vehicle.vehicle_id and agent_lane.id * self.vehicle.lane.id > 0:
                     if aid not in self.other_agents:
                         self.other_agents[aid] = []
                     self.other_agents[aid].append(agent)
@@ -144,7 +144,7 @@ class IRLEnv:
 
         # forward simulation
         features = None
-        for frame_inx in range(self.interval[0], self.interval[1]+1):
+        for frame_inx in range(self.interval[0], self.interval[1] + 1):
             self.active_vehicles.clear()
             self.act(step=self.run_step, frame_inx=frame_inx)
             self.step_forward(self.delta_t)
@@ -194,7 +194,7 @@ class IRLEnv:
         simulation_time = self.episode.frames[frame_inx].time
         for aid, agent in self.other_agents.items():
             for vehicle in self.vehicles:
-                if aid == vehicle.vehicle_ID and agent[0].time <= simulation_time < agent[-1].time:
+                if aid == vehicle.vehicle_id and agent[0].time <= simulation_time < agent[-1].time:
                     self.active_vehicles.append(vehicle)
         # TODO: active_vehicles are changed during the for-loop
         for vehicle in self.active_vehicles:
@@ -203,7 +203,7 @@ class IRLEnv:
             else:
                 vehicle.act(step, self.delta_t)
 
-    def step_forward(self, dt:float):
+    def step_forward(self, dt: float):
         """
         Step the dynamics of each entity on the road.
 

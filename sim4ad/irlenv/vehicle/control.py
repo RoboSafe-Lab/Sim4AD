@@ -1,6 +1,8 @@
 from __future__ import division, print_function
 import numpy as np
 import copy
+from typing import List
+
 from sim4ad.irlenv import utils
 from sim4ad.irlenv.vehicle.dynamics import Vehicle
 
@@ -50,18 +52,24 @@ class ControlledVehicle(Vehicle):
                 target_lane=vehicle.target_lane, target_velocity=vehicle.target_velocity, route=vehicle.route)
         return v
 
-    def plan_route_to(self, destination):
-        """
-        Plan a route to a destination in the road network
-
-        :param destination: a node in the road network
-        """
-        path = self.road.network.shortest_path(self.lane_index[1], destination)
-        if path:
-            self.route = [self.lane_index] + [(path[i], path[i + 1], None) for i in range(len(path) - 1)]
+    def get_adjacent_target_lane(self, lane_change_left=False):
+        """ depending on which lane change direction is allowed, we determine the target lane"""
+        if lane_change_left:
+            if self.lane.id < 0:
+                target_lane = self.scenario_map.get_lane(self.lane.parent_road.id, self.lane.id + 1,
+                                                         self.lane.lane_section.idx)
+            else:
+                target_lane = self.scenario_map.get_lane(self.lane.parent_road.id, self.lane.id - 1,
+                                                         self.lane.lane_section.idx)
         else:
-            self.route = [self.lane_index]
-        return self
+            if self.lane.id < 0:
+                target_lane = self.scenario_map.get_lane(self.lane.parent_road.id, self.lane.id - 1,
+                                                         self.lane.lane_section.idx)
+            else:
+                target_lane = self.scenario_map.get_lane(self.lane.parent_road.id, self.lane.id + 1,
+                                                         self.lane.lane_section.idx)
+
+        return target_lane if target_lane.type == 'driving' else None
 
     def act(self, action=None):
         """
@@ -80,18 +88,12 @@ class ControlledVehicle(Vehicle):
             self.target_velocity -= self.DELTA_VELOCITY
 
         elif action == "LANE_RIGHT":
-            _from, _to, _id = self.target_lane_index
-            target_lane_index = _from, _to, np.clip(_id + 1, 0, len(self.road.network.graph[_from][_to]) - 1)
-            if self.road.network.get_lane(target_lane_index).is_reachable_from(self.position):
-                self.target_lane_index = target_lane_index
+            self.target_lane = self.get_adjacent_target_lane
 
         elif action == "LANE_LEFT":
-            _from, _to, _id = self.target_lane_index
-            target_lane_index = _from, _to, np.clip(_id - 1, 0, len(self.road.network.graph[_from][_to]) - 1)
-            if self.road.network.get_lane(target_lane_index).is_reachable_from(self.position):
-                self.target_lane_index = target_lane_index
+            self.target_lane = self.get_adjacent_target_lane(lane_change_left=True)
 
-        action = {'steering': self.steering_control(self.target_lane_index),
+        action = {'steering': self.steering_control(self.target_lane),
                   'acceleration': self.velocity_control(self.target_velocity)}
         super(ControlledVehicle, self).act(action)
 
@@ -139,43 +141,26 @@ class ControlledVehicle(Vehicle):
         """
         return self.KP_A * (target_velocity - self.velocity)
 
-    def set_route_at_intersection(self, _to):
-        """
-        Set the road to be followed at the next intersection.
-        Erase current planned route.
-        :param _to: index of the road to follow at next intersection, in the road network
-        """
-
-        if not self.route:
-            return
-        for index in range(min(len(self.route), 3)):
-            try:
-                next_destinations = self.road.network.graph[self.route[index][1]]
-            except KeyError:
-                continue
-            if len(next_destinations) >= 2:
-                break
-        else:
-            return
-
-        next_destinations_from = list(next_destinations.keys())
-        if _to == "random":
-            _to = self.road.np_random.randint(0, len(next_destinations_from))
-        next_index = _to % len(next_destinations_from)
-        self.route = self.route[0:index + 1] + [
-            (self.route[index][1], next_destinations_from[next_index], self.route[index][2])]
-
-    def predict_trajectory_constant_velocity(self, times):
+    def predict_trajectory_constant_velocity(self, times, delta_t=0.033366700033366704):
         """
         Predict the future positions of the vehicle along its planned route, under constant velocity
-        :param times: timesteps of prediction
+        :param delta_t: the frequency of the dataset
+        :param times: time steps of prediction
         :return: positions, headings
         """
-        coordinates = self.lane.local_coordinates(self.position)
-        route = self.route or [self.lane_index]
-        return zip(
-            *[self.road.network.position_heading_along_route(route, coordinates[0] + self.velocity * t, 0) for t in
-              times])
+        traj = []
+        position = self.position
+        for t in times:
+            s, _ = utils.local2frenet(point=position, reference_line=self.lane.midline)
+            heading = self.lane.get_heading_at(self.s)
+            rotation_matrix = np.array([
+                [np.cos(heading), -np.sin(heading)],
+                [np.sin(heading), np.cos(heading)]
+            ])
+            position += np.dot(rotation_matrix, self.velocity) * delta_t * t
+            traj.append(position)
+
+        return traj
 
 
 class MDPVehicle(ControlledVehicle):
@@ -190,32 +175,33 @@ class MDPVehicle(ControlledVehicle):
     def __init__(self,
                  scenario_map,
                  position,
-                 heading=0,
-                 velocity=0,
+                 heading,
+                 velocity,
                  target_lane=None,
                  target_velocity=None,
                  route=None,
                  dataset_traj=None,
-                 vehicle_ID=None, v_length=None, v_width=None):
+                 vehicle_id=None, v_length=None, v_width=None):
         super(MDPVehicle, self).__init__(scenario_map, position, heading, velocity, target_lane, target_velocity, route)
         self.velocity_index = self.speed_to_index(self.target_velocity)
         self.target_velocity = self.index_to_speed(self.velocity_index)
         self.dataset_traj = dataset_traj
         self.traj = np.array(self.position)
         self.sim_steps = 0
-        self.vehicle_ID = vehicle_ID
+        self.vehicle_id = vehicle_id
         self.LENGTH = v_length  # Vehicle length [m]
         self.WIDTH = v_width  # Vehicle width [m]
 
     @classmethod
-    def create(cls, scenario_map, vehicle_ID, position, v_length, v_width, dataset_traj, heading: float, velocity: np.ndarray,
-               target_velocity=10):
+    def create(cls, scenario_map, vehicle_id, position, v_length, v_width, dataset_traj, heading: float,
+               velocity: List[float],
+               target_velocity):
         """
         Create a human-like driving vehicle in replace of a dataset vehicle.
 
         :param target_velocity:
         :param heading:
-        :param vehicle_ID:
+        :param vehicle_id:
         :param dataset_traj:
         :param v_width:
         :param v_length:
@@ -225,7 +211,7 @@ class MDPVehicle(ControlledVehicle):
         :return: A vehicle with random position and/or velocity
         """
         v = cls(scenario_map, position, heading, velocity, target_velocity=target_velocity,
-                vehicle_ID=vehicle_ID, v_length=v_length, v_width=v_width, dataset_traj=dataset_traj)
+                vehicle_id=vehicle_id, v_length=v_length, v_width=v_width, dataset_traj=dataset_traj)
 
         return v
 
@@ -307,4 +293,3 @@ class MDPVehicle(ControlledVehicle):
                     states.append(copy.deepcopy(v))
 
         return states
-

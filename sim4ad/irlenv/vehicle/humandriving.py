@@ -3,7 +3,7 @@ from __future__ import division, print_function
 from loguru import logger
 
 import numpy as np
-from typing import Optional, Tuple
+from typing import Optional
 
 from sim4ad.irlenv import utils
 from sim4ad.irlenv.vehicle.behavior import IDMVehicle
@@ -35,15 +35,15 @@ class DatasetVehicle(IDMVehicle):
                  target_lane=None,
                  target_velocity=None,
                  route=None,
-                 enable_lane_change=False,  # only changed here
+                 enable_lane_change=True,  # only changed here
                  timer=None,
-                 vehicle_ID=None, v_length=None, v_width=None, dataset_traj=None):
+                 vehicle_id=None, v_length=None, v_width=None, dataset_traj=None):
         super(DatasetVehicle, self).__init__(scenario_map, position, heading, velocity, target_lane, target_velocity,
-                                             route, enable_lane_change, timer)
+                                             route, enable_lane_change, timer, vehicle_id)
 
         self.dataset_traj = dataset_traj
         self.traj = np.array(self.position)
-        self.vehicle_ID = vehicle_ID
+        self.vehicle_id = vehicle_id
         self.sim_steps = 0
         self.overtaken = False
         self.appear = True if self.position[0] != 0 else False
@@ -59,12 +59,12 @@ class DatasetVehicle(IDMVehicle):
         self.WIDTH = v_width
 
     @classmethod
-    def create(cls, scenario_map, vehicle_ID, position, v_length, v_width, dataset_traj, heading, velocity):
+    def create(cls, scenario_map, vehicle_id, position, v_length, v_width, dataset_traj, heading, velocity):
         """
         Create a new dataset vehicle .
 
         :param scenario_map: the road where the vehicle is driving
-        :param vehicle_ID: dataset vehicle ID
+        :param vehicle_id: dataset vehicle ID
         :param position: the position where the vehicle start on the road
         :param v_length: vehicle length
         :param v_width: vehicle width
@@ -75,36 +75,16 @@ class DatasetVehicle(IDMVehicle):
         :return: A vehicle with dataset position and velocity
         """
 
-        v = cls(scenario_map, position, heading, velocity, vehicle_ID=vehicle_ID, v_length=v_length, v_width=v_width,
+        v = cls(scenario_map, position, heading, velocity, vehicle_id=vehicle_id, v_length=v_length, v_width=v_width,
                 dataset_traj=dataset_traj)
 
         return v
 
-    @staticmethod
-    def get_front_rear_vehicle(vehicles, subject) -> Tuple[tuple, tuple]:
-        """Get the front and rear vehicle of ego"""
-        dis_front = np.inf
-        dis_rear = -np.inf
-        front_vehicle = rear_vehicle = None
-        for vehicle in vehicles:
-            if vehicle.vehicle_ID == subject.vehicle_ID:
-                continue
-            if vehicle.lane == subject.lane:
-                # check the s value along the lane
-                s, d = utils.local2frenet(vehicle.position, subject.lane.midline)
-                if s > subject.s and s - subject.s < dis_front:
-                    dis_front = s - subject.s
-                    front_vehicle = vehicle
-                elif s < subject.s and s - subject.s > dis_rear:
-                    dis_rear = s - subject.s
-                    rear_vehicle = vehicle
-
-        return (front_vehicle, dis_front), (rear_vehicle, dis_rear)
-
-    def act(self, active_vehicles=None):
+    def act(self, active_vehicles=None, action=None):
         """
-        Execute an action when the dataset vehicle is overriden.
+        Execute an action if the dataset vehicle is overriden.
 
+        :param action:
         :param active_vehicles: the existing vehicles in a scene
         """
         if not self.overtaken or self.crashed:
@@ -115,7 +95,7 @@ class DatasetVehicle(IDMVehicle):
 
         # Lateral: MOBIL
         if self.enable_lane_change:
-            self.change_lane_policy()
+            self.change_lane_policy(active_vehicles)
         action['steering'] = self.steering_control(self.target_lane)
 
         # Longitudinal: IDM
@@ -162,7 +142,7 @@ class DatasetVehicle(IDMVehicle):
             self.overtaken = True
             if self.overtaken and not self.overtaken_history[-1]:
                 self.overtaken_inx = self.sim_steps
-                logger.info(f'Vehicle {self.vehicle_ID} is overtaken!')
+                logger.info(f'Vehicle {self.vehicle_id} is overtaken!')
             # keep driving on the current lane
             self.target_lane = self.lane
 
@@ -184,8 +164,8 @@ class DatasetVehicle(IDMVehicle):
             return
 
         # if both vehicles are dataset vehicles and have not been overriden
-        if isinstance(self, DatasetVehicle) and not self.overtaken and isinstance(other,
-                                                                                  DatasetVehicle) and not other.overtaken:
+        if isinstance(self, DatasetVehicle) and not self.overtaken and \
+                isinstance(other, DatasetVehicle) and not other.overtaken:
             return
 
             # Accurate rectangular check
@@ -216,14 +196,14 @@ class HumanLikeVehicle(IDMVehicle):
                  target_velocity=None,  # Speed reference
                  route=None,
                  timer=None,
-                 vehicle_ID=None, v_length=None, v_width=None, dataset_traj=None, human=False, IDM=False):
+                 vehicle_id=None, v_length=None, v_width=None, dataset_traj=None, human=False, IDM=False):
         super(HumanLikeVehicle, self).__init__(scenario_map, position, heading, velocity, target_lane, target_velocity,
                                                route, timer)
 
         self.dataset_traj = dataset_traj
         self.traj = np.array(self.position)
         self.sim_steps = 0
-        self.vehicle_ID = vehicle_ID
+        self.vehicle_id = vehicle_id
         self.planned_trajectory = None
         self.human = human
         self.IDM = IDM
@@ -238,13 +218,13 @@ class HumanLikeVehicle(IDMVehicle):
         self.WIDTH = v_width  # Vehicle width [m]
 
     @classmethod
-    def create(cls, scenario_map, vehicle_ID, position, v_length, v_width, dataset_traj, heading, velocity,
+    def create(cls, scenario_map, vehicle_id, position, v_length, v_width, dataset_traj, heading, velocity,
                acceleration, target_velocity=None, human=False, IDM=False):
         """
         Create a human-like (IRL) driving vehicle in replace of a dataset vehicle.
         """
         v = cls(scenario_map, position, heading, velocity, acceleration, target_velocity=target_velocity,
-                vehicle_ID=vehicle_ID, v_length=v_length, v_width=v_width, dataset_traj=dataset_traj, human=human,
+                vehicle_id=vehicle_id, v_length=v_length, v_width=v_width, dataset_traj=dataset_traj, human=human,
                 IDM=IDM)
 
         return v

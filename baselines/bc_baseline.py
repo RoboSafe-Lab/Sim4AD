@@ -13,16 +13,15 @@ from tqdm import tqdm
 
 from torch.utils.tensorboard import SummaryWriter
 
+from baselines.dataset import AutomatumDataset
 from sim4ad.path_utils import baseline_path
 
 logger = logging.getLogger(__name__)
 
-# TODO: could implement early stopping / saving only best model rather than final one
 
-# We use a Recurrent Neural Network (RNN) to model the policy network
-class PolicyNetwork(nn.Module):
+class LSTM(nn.Module):
     def __init__(self):
-        super(PolicyNetwork, self).__init__()
+        super(LSTM, self).__init__()
 
         # TODO: load other episodes as well!
         expert_data = {"observations": [], "actions": []}
@@ -46,11 +45,6 @@ class PolicyNetwork(nn.Module):
             expert_states_all, expert_actions_all, test_size=0.2)
 
         # TODO: should we normalize the data?
-        #normalize = transforms.Normalize(mean=expert_states_train.mean(dim=0),
-        #                                 std=expert_states_train.std(
-        #                                     dim=0) + 1e-8)  # add a small number to std to avoid division by zero
-        #expert_states_train = normalize(expert_states_train)
-        #expert_states_test = normalize(expert_states_test)
         expert_actions_train = expert_actions_train
         expert_actions_test = expert_actions_test
 
@@ -66,13 +60,13 @@ class PolicyNetwork(nn.Module):
 
         # TODO: should be 34 as we should not include x/y
         assert input_space == 36 and action_space == 2  # TODO: just for automatum dataset
-        self.loss_function = nn.MSELoss(reduction="mean")  # TODO: is this the correct loss function / reduction?
+        self.loss_function = nn.MSELoss() # TODO nn.MSELoss(reduction="mean")  # TODO: is this the correct loss function / reduction?
         self.writer = SummaryWriter(f'baselines/runs/bc')
 
-        self.BATCH_SIZE = 32  # Define your batch size # TODO: parameterize
+        self.BATCH_SIZE = 128  # Define your batch size # TODO: parameterize
         self.SHUFFLE = True  # shuffle your data
-        self.EPOCHS = 2500  # Define the number of epochs # TODO: parameterize
-        self.LR = 1e-3  # Define your learning rate # TODO: parameterize
+        self.EPOCHS = 100  # Define the number of epochs # TODO: parameterize
+        self.LR = 1e-4  # Define your learning rate # TODO: parameterize
 
         self.train_loader = DataLoader(AutomatumDataset(expert_states_train, expert_actions_train),
                                        batch_size=self.BATCH_SIZE, shuffle=self.SHUFFLE)
@@ -100,18 +94,20 @@ class PolicyNetwork(nn.Module):
 
         for epoch in tqdm(range(num_epochs)):
             # Training
-            for i, (state, action) in enumerate(self.train_loader):
+            for i, (trajectory, actions) in enumerate(self.train_loader):
+                # Divide the trajectory for each time step and feed the LSTM the history up until that point
                 self.optimizer.zero_grad()
-                predicted_actions = self.forward(state)
-                loss = self.loss_function(predicted_actions, action)
+                predicted_actions = self.forward(trajectory)
+                # TODO: 100 is the scale factor
+                loss = self.loss_function(predicted_actions * 10, actions * 10)
                 loss.backward()
                 self.optimizer.step()
                 self.writer.add_scalar('Train Loss', loss.item(), epoch * len(self.train_loader) + i)
 
             with torch.no_grad():
-                for i, (state, action) in enumerate(self.eval_loader):
-                    output = self.forward(state)
-                    loss = self.loss_function(output, action)
+                for i, (trajectory, actions) in enumerate(self.eval_loader):
+                    output = self.forward(trajectory)
+                    loss = self.loss_function(output, actions)
                     self.writer.add_scalar('Eval Loss', loss.item(), epoch * len(self.eval_loader) + i)
                     self.eval_losses.append(loss.item())
                     # Save the model if the validation loss is the best we've seen so far
@@ -132,18 +128,8 @@ class PolicyNetwork(nn.Module):
         torch.save(self.state_dict(), baseline_path(baseline_name))
 
 
-class AutomatumDataset(Dataset):
-    def __init__(self, states, actions):
-        self.states = states
-        self.actions = actions
-
-    def __len__(self):
-        return len(self.states)
-
-    def __getitem__(self, idx):
-        return self.states[idx], self.actions[idx]
 
 
 if __name__ == '__main__':
-    policy_network = PolicyNetwork()
+    policy_network = LSTM()
     policy_network.train(num_epochs=policy_network.EPOCHS, learning_rate=policy_network.LR)

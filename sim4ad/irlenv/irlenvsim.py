@@ -14,13 +14,13 @@ class IRLEnv:
     def __init__(self, episode, scenario_map, ego, IDM):
         self.human = False
         self.done = False
-        self.steps = None
         self.episode = episode
         self.scenario_map = scenario_map
         self.IDM = IDM
         self.ego = ego
         self.duration = None
         self.time = 0
+        self.run_step = 0
         self.vehicles = []
         self.other_agents = {}
         self.interval = []
@@ -35,7 +35,7 @@ class IRLEnv:
         self.interval.clear()
         self.human = human
         self._create_vehicles(reset_time)
-        self.steps = 0
+        self.run_step = 0
         self.time = 0
 
     @staticmethod
@@ -142,6 +142,8 @@ class IRLEnv:
 
         self.run_step = 1
 
+        # depending on the lateral offset and target speed, the trajectory may be shorter than the alive time
+        self.interval[1] = min(self.interval[0] + len(self.vehicle.planned_trajectory) - 1, self.interval[1])
         # forward simulation
         features = None
         for frame_inx in range(self.interval[0], self.interval[1] + 1):
@@ -235,10 +237,10 @@ class IRLEnv:
         # remove lateral offsets that are out of the main lanes
         lane_section = self.vehicle.lane.lane_section
         land_width = self.vehicle.lane.widths[0].constant_width
-        if self.vehicle.lane == lane_section.right_lanes[1] or self.vehicle.lane == lane_section.left_lanes[1]:
+        if self.vehicle.lane == lane_section.right_lanes[1] or self.vehicle.lane == lane_section.left_lanes[-2]:
+            lateral_offsets = np.array([0, 0 + land_width])
+        elif self.vehicle.lane == lane_section.right_lanes[-2] or self.vehicle.lane == lane_section.left_lanes[1]:
             lateral_offsets = np.array([0 - land_width, 0])
-        elif self.vehicle.lane == lane_section.right_lanes[-2] or self.vehicle.lane == lane_section.left_lanes[-2]:
-            lateral_offsets = np.array([0, 0 - land_width])
         else:
             lateral_offsets = np.array([0 - land_width, 0, 0 + land_width])
 

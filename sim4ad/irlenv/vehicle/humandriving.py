@@ -35,7 +35,7 @@ class DatasetVehicle(IDMVehicle):
                  target_lane=None,
                  target_velocity=None,
                  route=None,
-                 enable_lane_change=True,  # only changed here
+                 enable_lane_change=False,  # only changed here
                  timer=None,
                  vehicle_id=None, v_length=None, v_width=None, dataset_traj=None):
         super(DatasetVehicle, self).__init__(scenario_map, position, heading, velocity, target_lane, target_velocity,
@@ -142,7 +142,7 @@ class DatasetVehicle(IDMVehicle):
             self.overtaken = True
             if self.overtaken and not self.overtaken_history[-1]:
                 self.overtaken_inx = self.sim_steps
-                logger.info(f'Vehicle {self.vehicle_id} is overtaken!')
+
             # keep driving on the current lane
             self.target_lane = self.lane
 

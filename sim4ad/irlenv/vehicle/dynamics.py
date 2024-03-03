@@ -33,7 +33,7 @@ class Vehicle(Loggable):
         self.heading = heading
         self.velocity = np.array(velocity)
         self.lane = scenario_map.best_lane_at(point=position, heading=heading)
-        self.action = {'steering': 0.0, 'acceleration': 0.0}
+        self.action = {'steering': 0.0, 'acceleration': np.array([0.0, 0.0])}
         self.crashed = False
         self.log = []
         self.history = deque(maxlen=50)
@@ -134,9 +134,8 @@ class Vehicle(Loggable):
 
         speed = np.sqrt(self.velocity[0] ** 2 + self.velocity[1] ** 2)
         if speed > self.MAX_VELOCITY:
-            self.action['acceleration'] = min(self.action['acceleration'], 1.0*(self.MAX_VELOCITY - speed))
-        elif speed < -self.MAX_VELOCITY:
-            self.action['acceleration'] = max(self.action['acceleration'], 1.0*(self.MAX_VELOCITY - speed))
+            self.action['acceleration'] = np.array([min(self.action['acceleration'][0], 1.0*(self.MAX_VELOCITY - speed)),
+                                                    self.action['acceleration'][1]])
 
         # update position
         rotation_matrix = np.array([

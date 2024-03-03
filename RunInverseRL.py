@@ -2,7 +2,7 @@ import numpy as np
 from loguru import logger
 import matplotlib.pyplot as plt
 
-from sim4ad.opendrive import Map, plot_map
+from sim4ad.opendrive import Map
 from sim4ad.irlenv import IRLEnv, utils
 from sim4ad.data.data_loaders import DatasetDataLoader
 
@@ -16,17 +16,6 @@ def load_dataset():
     episodes = data_loader.scenario.episodes
 
     return episodes
-
-
-def compute_features(data):
-    """Compute the features of each trajectory"""
-    # ego motion
-
-    # feature array
-    features = np.array([ego_speed, abs(ego_longitudial_acc), abs(ego_lateral_acc), abs(ego_longitudial_jerk),
-                         THWF, THWB, collision, social_impact, ego_likeness])
-
-    return features
 
 
 def reward_function(weights, features):
@@ -96,16 +85,21 @@ def main():
         # for each agent
         for aid, agent in episode.agents.items():
             sampled_trajectories = []
-
+            # if aid != '1219c199-7fb6-4339-be29-9b628b9675d9':
+            #     continue
             logger.info(f"Ego agent: {aid}")
 
             irl_env = IRLEnv(episode=episode, scenario_map=scenario_map, ego=agent, IDM=False)
             terminated = False
             for inx, t in enumerate(agent.time):
-
+                # if t < 13.480146813480149:
+                #     continue
                 logger.info(f"Simulation time: {t}")
 
                 irl_env.reset(reset_time=t)
+                # only one point is alive, continue
+                if irl_env.interval[1] == irl_env.interval[0]:
+                    continue
                 lateral_offsets, target_speeds = irl_env.sampling_space()
                 # for each lateral offset and target_speed combination
                 for lateral in lateral_offsets:
@@ -119,7 +113,7 @@ def main():
                         irl_env.reset(reset_time=t)
 
                 if terminated:
-                    break
+                    continue
 
                 # visualize the planned trajectories
                 if debug:
@@ -136,13 +130,14 @@ def main():
                     plt.show()
 
     # compute demonstration features
-    demonstration_features = compute_features(agents)
+    # demonstration_features = compute_features(agents)
 
     # Run MaxEnt IRL
-    learned_reward_weights = maxent_irl()
+    # learned_reward_weights = maxent_irl()
 
     # Further steps for evaluation and testing of the learned model
     # ...
+    pass
 
 
 if __name__ == "__main__":

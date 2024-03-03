@@ -120,7 +120,7 @@ class IRLEnv:
 
         return features, terminal, info
 
-    def _simulate(self, action, debug=True) -> np.ndarray:
+    def _simulate(self, action, debug=False) -> np.ndarray:
         """
         Perform several steps of simulation with the planned trajectory
         """

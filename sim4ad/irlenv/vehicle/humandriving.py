@@ -42,7 +42,7 @@ class DatasetVehicle(IDMVehicle):
                                              route, enable_lane_change, timer, vehicle_id)
 
         self.dataset_traj = dataset_traj
-        self.traj = np.array(self.position)
+        self.traj = [self.position]
         self.vehicle_id = vehicle_id
         self.sim_steps = 0
         self.overtaken = False
@@ -148,7 +148,7 @@ class DatasetVehicle(IDMVehicle):
 
             super(DatasetVehicle, self).step(dt)
 
-        self.traj = np.append(self.traj, self.position, axis=0)
+        self.traj.append(self.position)
 
     def check_collision(self, other):
         """
@@ -201,7 +201,7 @@ class HumanLikeVehicle(IDMVehicle):
                                                route, timer)
 
         self.dataset_traj = dataset_traj
-        self.traj = np.array(self.position)
+        self.traj = [self.position]
         self.sim_steps = 0
         self.vehicle_id = vehicle_id
         self.planned_trajectory = None
@@ -269,7 +269,7 @@ class HumanLikeVehicle(IDMVehicle):
         for p in planned_trajectory_frenet:
             if p[0] > self.lane.length:
                 continue
-            point_x, point_y = utils.frenet2local(reference_line=self.lane.midline, s=p[0], d=p[1])
+            point_x, point_y = utils.frenet2local(reference_lane=self.lane, s=p[0], d=p[1])
             planned_trajectory.append([point_x, point_y])
         self.planned_trajectory = np.array(planned_trajectory)
 
@@ -357,13 +357,13 @@ class HumanLikeVehicle(IDMVehicle):
         self.crash_history.append(self.crashed)
         super(HumanLikeVehicle, self).step(dt)
 
-        self.traj = np.append(self.traj, self.position, axis=0)
+        self.traj.append(self.position)
 
     def calculate_human_likeness(self):
         original_traj = self.dataset_traj[:self.sim_steps + 1, :2]
-        ego_traj = self.traj.reshape(-1, 2)
+        ego_traj = self.traj
         ADE = np.mean([np.linalg.norm(original_traj[i] - ego_traj[i]) for i in
-                       range(ego_traj.shape[0])])  # Average Displacement Error (ADE)
+                       range(len(ego_traj))])  # Average Displacement Error (ADE)
         FDE = np.linalg.norm(original_traj[-1] - ego_traj[-1])  # Final Displacement Error (FDE)
 
         return FDE

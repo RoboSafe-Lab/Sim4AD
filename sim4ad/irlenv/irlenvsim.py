@@ -132,8 +132,8 @@ class IRLEnv:
         if action is not None:  # sampled goal
             self.vehicle.trajectory_planner(target_point=action[0], target_speed=action[1],
                                             time_horizon=time_horizon, delta_t=self.ego.delta_t)
+        # generate human trajectory given initial and final state from the dataset, may not necessary
         else:  # human goal
-            # TODO: change to the human goal
             self.vehicle.trajectory_planner(
                 self.vehicle.dataset_traj[self.vehicle.sim_steps + time_horizon / self.delta_t][1],
                 (self.vehicle.dataset_traj[self.vehicle.sim_steps + time_horizon / self.delta_t][0] -
@@ -141,6 +141,12 @@ class IRLEnv:
                      0]) / self.delta_t, time_horizon)
 
         self.run_step = 1
+
+        # the first point of simulated trajectory should be close to the planned trajectory
+        if len(self.vehicle.traj) == 1:
+            dis = np.subtract(self.vehicle.traj[0], self.vehicle.planned_trajectory[0])
+            dis = np.sqrt(dis[0] ** 2 + dis[1] ** 2)
+            assert dis < 0.1, "Simulated trajectory does not match the planned trajectory."
 
         # depending on the lateral offset and target speed, the trajectory may be shorter than the alive time
         self.interval[1] = min(self.interval[0] + len(self.vehicle.planned_trajectory) - 1, self.interval[1])
@@ -162,7 +168,7 @@ class IRLEnv:
                 plt.plot(self.vehicle.planned_trajectory[:, 0], self.vehicle.planned_trajectory[:, 1], 'b',
                          linewidth=1)
                 for vehicle in self.active_vehicles:
-                    ego_traj = vehicle.traj.reshape(-1, 2)
+                    ego_traj = vehicle.traj
                     if isinstance(vehicle, HumanLikeVehicle):
                         plt.scatter(ego_traj[:, 0], ego_traj[:, 1], color='#ADD8E6', s=10)
                     else:
@@ -307,6 +313,21 @@ class IRLEnv:
                              thw_front, thw_rear, collision, social_impact, ego_likeness])
 
         return features
+
+    def _features_human(self, reset_time: float):
+        """Get features of human drivers"""
+        reset_inx = self.ego.next_index_of_specific_time(reset_time)
+        features = None
+        for frame_inx in range(self.interval[0], self.interval[1] + 1):
+            ego_agent = self.episode.frames[frame_inx].agents[self.ego.UUID]
+
+            # travel efficiency
+            ego_speed = abs(ego_agent.speed)
+
+            # comfort
+            ego_longitudial_acc = ego_agent[-1]
+            ego_lateral_acc = ego_agent[-1]
+            ego_longitudial_jerk = ego_agent[-1]
 
     # @property
     # def position(self) -> np.ndarray:

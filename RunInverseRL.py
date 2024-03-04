@@ -85,14 +85,14 @@ def main():
         # for each agent
         for aid, agent in episode.agents.items():
             sampled_trajectories = []
-            # if aid != '1219c199-7fb6-4339-be29-9b628b9675d9':
+            # if aid != '73a9e3f7-6b81-4530-b874-fd1ccaac5512':
             #     continue
             logger.info(f"Ego agent: {aid}")
 
             irl_env = IRLEnv(episode=episode, scenario_map=scenario_map, ego=agent, IDM=False)
             terminated = False
             for inx, t in enumerate(agent.time):
-                # if t < 13.480146813480149:
+                # if t < 19.35268601935269:
                 #     continue
                 logger.info(f"Simulation time: {t}")
 
@@ -112,6 +112,10 @@ def main():
                         # set back to previous step
                         irl_env.reset(reset_time=t)
 
+                # calculate human trajectory feature
+                # irl_env.reset(reset_time=t, human=True)
+                # obs, features, terminated, info = irl_env.step()
+
                 if terminated:
                     continue
 
@@ -122,7 +126,7 @@ def main():
                         trj_local = []
                         for p in trj:
                             trj_local.append(
-                                utils.frenet2local(reference_line=irl_env.vehicle.lane.midline, s=p[0], d=p[1]))
+                                utils.frenet2local(reference_lane=irl_env.vehicle.lane, s=p[0], d=p[1]))
                         trajectories_local.append(np.array(trj_local))
                     for trj in trajectories_local:
                         plt.plot(trj[:, 0], trj[:, 1], linewidth=1)

@@ -55,7 +55,7 @@ class Vehicle(Loggable):
         """
         lane = scenario_map.get_lane(road_id=road_id, lane_id=lane_id)
 
-        pos_x, pos_y = utils.frenet2local(reference_line=lane.midline, s=longitudinal, d=lateral)
+        pos_x, pos_y = utils.frenet2local(reference_lane=lane, s=longitudinal, d=lateral)
         lane_heading = lane.get_heading_at(longitudinal)
 
         if velocity is None:

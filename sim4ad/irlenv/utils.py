@@ -118,17 +118,17 @@ def compute_angle(point1, point2):
     return np.degrees(np.arctan2(dy, dx))
 
 
-def frenet2local(reference_line, s: float, d: float):
+def frenet2local(reference_lane, s: float, d: float):
     """
     Convert Frenet coordinates (s, d) to local Cartesian coordinates on a curved road using Shapely.
 
-    :param reference_line: the middle line of a lane
+    :param reference_lane: the reference lane
     :param s: Longitudinal distance along the path.
     :param d: Lateral offset from the path, positive to the left, negative to the right.
     :return: Tuple representing the Cartesian coordinates (x, y) on the curved road.
     """
     # Create a LineString from the path points
-    path = reference_line
+    path = reference_lane.midline
 
     # Interpolate the point at distance 's' along the path
     point_on_path = path.interpolate(s)
@@ -146,8 +146,13 @@ def frenet2local(reference_line, s: float, d: float):
 
     # Calculate the offset point by rotating and translating the original point
     # Note: Shapely's rotate function uses counter-clockwise rotation, so 'd' is positive to the left
-    offset_point = translate(rotate(point_on_path, angle_degrees, origin=point_on_path, use_radians=False), d,
-                             0)
+    rotated_point = rotate(point_on_path, angle_degrees, origin=point_on_path, use_radians=False)
+
+    # left lanes
+    if reference_lane.id > 0:
+        offset_point = translate(rotated_point, d, 0)
+    else:
+        offset_point = translate(rotated_point, -d, 0)
 
     return offset_point.x, offset_point.y
 

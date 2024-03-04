@@ -155,8 +155,25 @@ def frenet2local(reference_line, s: float, d: float):
 def local2frenet(point: np.ndarray, reference_line):
     """Get the s and d values along the lane midline"""
     p = Point(point)
-    closest_point = reference_line.interpolate(reference_line.project(p))
     s = reference_line.project(p)
-    d = p.distance(closest_point)
+    closest_point = reference_line.interpolate(s)
+
+    # Compute tangent vector at the closest point
+    if s < reference_line.length:
+        look_ahead_distance = min(1.0, reference_line.length - s)
+        look_ahead_point = reference_line.interpolate(s + look_ahead_distance)
+        tangent_vector = np.array([look_ahead_point.x - closest_point.x, look_ahead_point.y - closest_point.y])
+    else:
+        look_back_point = reference_line.interpolate(s - 1.0)
+        tangent_vector = np.array([closest_point.x - look_back_point.x, closest_point.y - look_back_point.y])
+
+    # Compute vector from the closest point to p
+    point_vector = np.array([p.x - closest_point.x, p.y - closest_point.y])
+
+    # Cross product to determine the side
+    cross_product = np.cross(tangent_vector, point_vector)
+    side = np.sign(cross_product)
+
+    d = p.distance(closest_point) * side
 
     return s, d

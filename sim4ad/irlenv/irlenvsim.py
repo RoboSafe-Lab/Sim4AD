@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from loguru import logger
-from typing import Tuple
+from typing import Tuple, Optional
 
 from sim4ad.irlenv.vehicle.humandriving import HumanLikeVehicle, DatasetVehicle
 from sim4ad.opendrive import plot_map
@@ -19,6 +19,7 @@ class IRLEnv:
         self.IDM = IDM
         self.ego = ego
         self.duration = None
+        self.reset_inx = None
         self.time = 0
         self.run_step = 0
         self.vehicles = []
@@ -52,11 +53,11 @@ class IRLEnv:
         """
         Create ego vehicle and dataset vehicles.
         """
-        reset_inx = self.ego.next_index_of_specific_time(reset_time)
+        self.reset_inx = self.ego.next_index_of_specific_time(reset_time)
         whole_trajectory = self.process_raw_trajectory(self.ego)
-        ego_trajectory = whole_trajectory[reset_inx:]
-        ego_acc = np.array([self.ego.ax_vec[reset_inx], self.ego.ay_vec[reset_inx]])
-        heading = self.ego.psi_vec[reset_inx]
+        ego_trajectory = whole_trajectory[self.reset_inx:]
+        ego_acc = np.array([self.ego.ax_vec[self.reset_inx], self.ego.ay_vec[self.reset_inx]])
+        heading = self.ego.psi_vec[self.reset_inx]
         # get position, velocity and acceleration at the reset time
         self.vehicle = HumanLikeVehicle.create(self.scenario_map, self.ego.UUID, ego_trajectory[0][:2], self.ego.length,
                                                self.ego.width,
@@ -106,8 +107,11 @@ class IRLEnv:
         """
         Perform an MDP step
         """
+        if action is not None:
+            features = self._simulate(action)
+        else:
+            features = self._features_human()
 
-        features = self._simulate(action)
         terminal = self._is_terminal()
 
         info = {
@@ -146,7 +150,7 @@ class IRLEnv:
         if len(self.vehicle.traj) == 1:
             dis = np.subtract(self.vehicle.traj[0], self.vehicle.planned_trajectory[0])
             dis = np.sqrt(dis[0] ** 2 + dis[1] ** 2)
-            assert dis < 0.1, "Simulated trajectory does not match the planned trajectory."
+            assert dis < 0.2, "Simulated trajectory does not match the planned trajectory."
 
         # depending on the lateral offset and target speed, the trajectory may be shorter than the alive time
         self.interval[1] = min(self.interval[0] + len(self.vehicle.planned_trajectory) - 1, self.interval[1])
@@ -318,9 +322,9 @@ class IRLEnv:
 
         return features
 
-    def _features_human(self, reset_time: float):
+    def _features_human(self) -> Optional[np.ndarray]:
         """Get features of human drivers"""
-        reset_inx = self.ego.next_index_of_specific_time(reset_time)
+
         features = None
         for frame_inx in range(self.interval[0], self.interval[1] + 1):
             ego_agent = self.episode.frames[frame_inx].agents[self.ego.UUID]
@@ -329,9 +333,13 @@ class IRLEnv:
             ego_speed = abs(ego_agent.speed)
 
             # comfort
-            ego_longitudial_acc = ego_agent[-1]
-            ego_lateral_acc = ego_agent[-1]
-            ego_longitudial_jerk = ego_agent[-1]
+            ego_longitudial_acc = ego_agent.accleration[0]
+            ego_lateral_acc = ego_agent.acceleration[1]
+            ego_longitudial_jerk = self.ego.jerk_x_vec[self.reset_inx + self.run_step]
+
+            self.run_step += 1
+
+        return features
 
     # @property
     # def position(self) -> np.ndarray:

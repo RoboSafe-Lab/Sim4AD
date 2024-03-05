@@ -85,18 +85,22 @@ def main():
         # for each agent
         for aid, agent in episode.agents.items():
             sampled_trajectories = []
-            # if aid != '7a7b1105-40b7-46fe-a922-80319bc91570':
+            # if aid != '7f8e80a7-da54-4783-bcfe-c4cb3d5e7067':
             #     continue
             logger.info(f"Ego agent: {aid}")
 
             irl_env = IRLEnv(episode=episode, scenario_map=scenario_map, ego=agent, IDM=False)
             terminated = False
             for inx, t in enumerate(agent.time):
-                # if t < 19.35268601935269:
+                # if t < 11.077744411077745:
                 #     continue
                 logger.info(f"Simulation time: {t}")
 
                 irl_env.reset(reset_time=t)
+
+                # calculate human trajectory feature
+                # features, terminated, info = irl_env.step()
+
                 # only one point is alive, continue
                 if irl_env.interval[1] == irl_env.interval[0]:
                     continue
@@ -111,10 +115,6 @@ def main():
 
                         # set back to previous step
                         irl_env.reset(reset_time=t)
-
-                # calculate human trajectory feature
-                # irl_env.reset(reset_time=t, human=True)
-                # obs, features, terminated, info = irl_env.step()
 
                 if terminated:
                     continue

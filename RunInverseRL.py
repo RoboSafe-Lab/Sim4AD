@@ -1,5 +1,6 @@
 import numpy as np
 from loguru import logger
+import pickle
 
 from sim4ad.opendrive import Map
 from sim4ad.irlenv import IRLEnv
@@ -20,7 +21,8 @@ class IRL:
         self.human_traj_features = []
         self.theta = None
 
-        self.save_buffer = False
+        self.save_buffer = True
+        self.save_training_log = True
 
     @staticmethod
     def load_dataset():
@@ -43,15 +45,15 @@ class IRL:
 
             # for each agent
             for aid, agent in episode.agents.items():
-                if aid != '7f8e80a7-da54-4783-bcfe-c4cb3d5e7067':
-                    continue
+                # if aid != '7f8e80a7-da54-4783-bcfe-c4cb3d5e7067':
+                #     continue
                 logger.info(f"Ego agent: {aid}")
 
                 irl_env = IRLEnv(episode=episode, scenario_map=scenario_map, ego=agent, IDM=False)
                 terminated = False
                 for inx, t in enumerate(agent.time):
-                    if t < 13.813813813813816:
-                        continue
+                    # if t < 13.813813813813816:
+                    #     continue
                     logger.info(f"Simulation time: {t}")
 
                     irl_env.reset(reset_time=t)
@@ -98,29 +100,37 @@ class IRL:
 
     def normalize_features(self):
         """normalize the features"""
+        assert len(self.buffer) > 0, "Buffer is empty."
+
         features = []
         for buffer_scene in self.buffer:
             for traj in buffer_scene:
                 features.append(traj[2])
         max_v = np.max(features, axis=0)
+        # set maximum collision value to 1 to avoid divided by zero
         max_v[6] = 1.0
+        # set social impact to 1 to avoid divided by zero
+        if max_v[7] == 0:
+            max_v[7] = 1.0
 
         for f in features:
             for i in range(IRL.feature_num):
                 f[i] /= max_v[i]
 
+        # save buffer data to avoid repeated computation
+        if self.save_buffer:
+            logger.info('Saved buffer data.')
+            with open("buffer.pkl", "wb") as file:
+                pickle.dump([self.human_traj_features, self.buffer], file)
+
     def maxent_irl(self):
         """training the weights using the buffer"""
         # initialize weights
         self.theta = np.random.normal(0, 0.05, size=IRL.feature_num)
-
-        # iterations
-
         pm = None
         pv = None
-        grad_log = []
-        human_likeness_log = []
 
+        # iterations
         for iteration in range(IRL.n_iters):
             logger.info(f'interation: {iteration + 1}/{IRL.n_iters}')
             # fix collision feature's weight
@@ -153,7 +163,7 @@ class IRL:
                 log_like = np.log(probs[-1] / np.sum(probs))
                 log_like_list.append(log_like)
 
-                # select trajectories tp calculate human likeness
+                # select trajectories to calculate human likeness
                 idx = probs.argsort()[-3:][::-1]
                 iteration_human_likeness.append(np.min([scene_trajs[i][-1] for i in idx]))
 
@@ -180,6 +190,15 @@ class IRL:
             update_vec = mhat / (np.sqrt(vhat) + IRL.eps)
             self.theta += IRL.lr * update_vec
 
+            if self.save_training_log:
+                logger.info('Saved training log.')
+                """save the training info for post analysis"""
+                training_log = {'iteration': iteration, 'average_feature_difference': np.linalg.norm(human_feature_exp/num_traj - feature_exp/num_traj),
+                                'average_log-likelihood': np.sum(log_like_list)/num_traj, 'average_human_likeness': np.mean(iteration_human_likeness),
+                                'theta': self.theta}
+                with open("training_log.pkl", "wb") as file:
+                    pickle.dump(training_log, file)
+
 
 def main():
     irl_instance = IRL()
@@ -187,10 +206,10 @@ def main():
     irl_instance.get_simulated_features()
 
     # normalize features
-    # irl_instance.normalize_features()
+    irl_instance.normalize_features()
 
     # Run MaxEnt IRL
-    # irl_instance.maxent_irl()
+    irl_instance.maxent_irl()
 
     # Further steps for evaluation and testing of the learned model
     # ...

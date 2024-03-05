@@ -5,6 +5,7 @@ from typing import Tuple, Optional
 
 from sim4ad.irlenv.vehicle.humandriving import HumanLikeVehicle, DatasetVehicle
 from sim4ad.opendrive import plot_map
+from sim4ad.irlenv import utils
 
 
 class IRLEnv:
@@ -13,12 +14,10 @@ class IRLEnv:
 
     def __init__(self, episode, scenario_map, ego, IDM):
         self.human = False
-        self.done = False
         self.episode = episode
         self.scenario_map = scenario_map
         self.IDM = IDM
         self.ego = ego
-        self.duration = None
         self.reset_inx = None
         self.time = 0
         self.run_step = 0
@@ -107,11 +106,7 @@ class IRLEnv:
         """
         Perform an MDP step
         """
-        if action is not None:
-            features = self._simulate(action)
-        else:
-            features = self._features_human()
-
+        features = self._simulate(action)
         terminal = self._is_terminal()
 
         info = {
@@ -136,13 +131,12 @@ class IRLEnv:
         if action is not None:  # sampled goal
             self.vehicle.trajectory_planner(target_point=action[0], target_speed=action[1],
                                             time_horizon=time_horizon, delta_t=self.ego.delta_t)
-        # generate human trajectory given initial and final state from the dataset, may not necessary
-        else:  # human goal
-            self.vehicle.trajectory_planner(
-                self.vehicle.dataset_traj[self.vehicle.sim_steps + time_horizon / self.delta_t][1],
-                (self.vehicle.dataset_traj[self.vehicle.sim_steps + time_horizon / self.delta_t][0] -
-                 self.vehicle.dataset_traj[self.vehicle.sim_steps + time_horizon / self.delta_t - 1][
-                     0]) / self.delta_t, time_horizon)
+        # generate human trajectory given initial and final state from the dataset
+        else:
+            ego_agent = self.episode.frames[self.interval[1]].agents[self.ego.UUID]
+            target_point = utils.local2frenet(point=ego_agent.position, reference_line=self.vehicle.lane.midline)
+            self.vehicle.trajectory_planner(target_point=target_point[1], target_speed=ego_agent.speed,
+                                            time_horizon=time_horizon, delta_t=self.ego.delta_t)
 
         self.run_step = 1
 
@@ -156,7 +150,7 @@ class IRLEnv:
         self.interval[1] = min(self.interval[0] + len(self.vehicle.planned_trajectory) - 1, self.interval[1])
         # forward simulation
         features = None
-        for frame_inx in range(self.interval[0], self.interval[1] + 1):
+        for frame_inx in range(self.interval[0], self.interval[1]):
             self.active_vehicles.clear()
             self.act(step=self.run_step, frame_inx=frame_inx)
             self.step_forward(self.delta_t)
@@ -167,7 +161,7 @@ class IRLEnv:
             trajectory_features.append(features)
 
             # show the forward simulation
-            if debug and self.time % 5 == 0:
+            if debug and self.human and self.time % 5 == 0:
                 plot_map(self.scenario_map, markings=True, midline=False, drivable=True, plot_background=False)
                 plt.plot(self.vehicle.planned_trajectory[:, 0], self.vehicle.planned_trajectory[:, 1], 'b',
                          linewidth=1)
@@ -233,10 +227,9 @@ class IRLEnv:
 
     def _is_terminal(self):
         """
-        The episode is over if the ego vehicle crashed or go off road or the time is out.
+        The episode is over if the ego vehicle crashed or go off the road or the time is out.
         """
-        self.duration = self.interval[1] - self.interval[0]
-        return self.vehicle.crashed or self.run_step >= self.duration or not self.vehicle.on_road
+        return self.vehicle.crashed or not self.vehicle.on_road
 
     def sampling_space(self) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -280,25 +273,22 @@ class IRLEnv:
         :return: the array of the defined features
         """
         # ego motion
-        ego_longitudial_speeds = np.array(self.vehicle.velocity_history)[:, 0] if self.time >= 3 else [0]
-        ego_longitudial_accs = (ego_longitudial_speeds[1:] - ego_longitudial_speeds[
-                                                             :-1]) / self.delta_t if self.time >= 3 else [
-            0]
-        ego_longitudial_jerks = (ego_longitudial_accs[1:] - ego_longitudial_accs[
-                                                            :-1]) / self.delta_t if self.time >= 3 else [0]
+        ego_long_speeds = np.array(self.vehicle.velocity_history)[:, 0] if self.time >= 3 else [0]
+        ego_long_accs = (ego_long_speeds[1:] - ego_long_speeds[:-1]) / self.delta_t if self.time >= 3 else [0]
+        ego_long_jerks = (ego_long_accs[1:] - ego_long_accs[:-1]) / self.delta_t if self.time >= 3 else [0]
 
         ego_lateral_speeds = np.array(self.vehicle.velocity_history)[:, 1] if self.time >= 3 else [0]
         ego_lateral_accs = (ego_lateral_speeds[1:] - ego_lateral_speeds[:-1]) / self.delta_t if self.time >= 3 else [0]
 
         # travel efficiency
-        ego_speed = abs(ego_longitudial_speeds[-1])
+        ego_speed = abs(ego_long_speeds[-1])
 
         # comfort
-        ego_longitudial_acc = ego_longitudial_accs[-1]
-        ego_lateral_acc = ego_lateral_accs[-1]
-        ego_longitudial_jerk = ego_longitudial_jerks[-1]
+        ego_long_acc = ego_long_accs[-1]
+        ego_lat_acc = ego_lateral_accs[-1]
+        ego_long_jerk = ego_long_jerks[-1]
 
-        # time headway front (thws_front) and time headway behind (thws_rears)
+        # time headway front (thw_front) and time headway behind (thw_rear)
         thw_front, thw_rear = self._get_thw()
 
         # avoid collision
@@ -308,16 +298,14 @@ class IRLEnv:
         social_impact = 0
         for v in self.active_vehicles:
             if isinstance(v, DatasetVehicle) and v.overtaken and (v.velocity[0] != 0 or v.velocity[1] != 0):
-                social_impact += np.abs(v.velocity[0] - v.velocity_history[-1][0]) / self.delta_t if v.velocity[0] - \
-                                                                                                     v.velocity_history[
-                                                                                                         -1][
-                                                                                                         0] < 0 else 0
+                social_impact += np.abs(v.velocity[0] - v.velocity_history[-1][0]) / self.delta_t \
+                    if v.velocity[0] - v.velocity_history[-1][0] < 0 else 0
 
         # ego vehicle human-likeness
         ego_likeness = self.vehicle.calculate_human_likeness()
 
         # feature array
-        features = np.array([ego_speed, abs(ego_longitudial_acc), abs(ego_lateral_acc), abs(ego_longitudial_jerk),
+        features = np.array([ego_speed, abs(ego_long_acc), abs(ego_lat_acc), abs(ego_long_jerk),
                              thw_front, thw_rear, collision, social_impact, ego_likeness])
 
         return features
@@ -333,11 +321,22 @@ class IRLEnv:
             ego_speed = abs(ego_agent.speed)
 
             # comfort
-            ego_longitudial_acc = ego_agent.accleration[0]
+            ego_long_acc = ego_agent.acceleration[0]
             ego_lateral_acc = ego_agent.acceleration[1]
-            ego_longitudial_jerk = self.ego.jerk_x_vec[self.reset_inx + self.run_step]
+            if self.reset_inx == 0:
+                ego_long_jerk = 0.0
+            else:
+                ego_long_jerk = self.ego.ax_vec[self.reset_inx + self.run_step] - \
+                                self.ego.ax_vec[self.reset_inx + self.run_step - 1]
+
+            # time headway front (thw_front) and time headway behind (thw_rear)
+            thw_front = self.ego.tth_dict_vec[self.reset_inx + self.run_step]['front_ego']
+            thw_rear = self.ego.tth_dict_vec[self.reset_inx + self.run_step]['behind_ego']
 
             self.run_step += 1
+            # feature array
+            features = np.array([ego_speed, abs(ego_long_acc), abs(ego_lat_acc), abs(ego_long_jerk),
+                                 thw_front, thw_rear, collision, social_impact, ego_likeness])
 
         return features
 

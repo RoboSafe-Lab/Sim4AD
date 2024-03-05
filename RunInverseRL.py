@@ -85,7 +85,7 @@ def main():
         # for each agent
         for aid, agent in episode.agents.items():
             sampled_trajectories = []
-            # if aid != '73a9e3f7-6b81-4530-b874-fd1ccaac5512':
+            # if aid != '7a7b1105-40b7-46fe-a922-80319bc91570':
             #     continue
             logger.info(f"Ego agent: {aid}")
 

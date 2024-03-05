@@ -42,7 +42,7 @@ class DatasetVehicle(IDMVehicle):
                                              route, enable_lane_change, timer, vehicle_id)
 
         self.dataset_traj = dataset_traj
-        self.traj = [self.position]
+        self.traj = [self.position.copy()]
         self.vehicle_id = vehicle_id
         self.sim_steps = 0
         self.overtaken = False
@@ -148,7 +148,7 @@ class DatasetVehicle(IDMVehicle):
 
             super(DatasetVehicle, self).step(dt)
 
-        self.traj.append(self.position)
+        self.traj.append(self.position.copy())
 
     def check_collision(self, other):
         """
@@ -201,7 +201,7 @@ class HumanLikeVehicle(IDMVehicle):
                                                route, timer)
 
         self.dataset_traj = dataset_traj
-        self.traj = [self.position]
+        self.traj = [self.position.copy()]
         self.sim_steps = 0
         self.vehicle_id = vehicle_id
         self.planned_trajectory = None
@@ -357,7 +357,7 @@ class HumanLikeVehicle(IDMVehicle):
         self.crash_history.append(self.crashed)
         super(HumanLikeVehicle, self).step(dt)
 
-        self.traj.append(self.position)
+        self.traj.append(self.position.copy())
 
     def calculate_human_likeness(self):
         original_traj = self.dataset_traj[:self.sim_steps + 1, :2]

@@ -168,7 +168,7 @@ class IRLEnv:
                 plt.plot(self.vehicle.planned_trajectory[:, 0], self.vehicle.planned_trajectory[:, 1], 'b',
                          linewidth=1)
                 for vehicle in self.active_vehicles:
-                    ego_traj = vehicle.traj
+                    ego_traj = np.array(vehicle.traj)
                     if isinstance(vehicle, HumanLikeVehicle):
                         plt.scatter(ego_traj[:, 0], ego_traj[:, 1], color='#ADD8E6', s=10)
                     else:
@@ -242,13 +242,17 @@ class IRLEnv:
 
         # remove lateral offsets that are out of the main lanes
         lane_section = self.vehicle.lane.lane_section
-        land_width = self.vehicle.lane.widths[0].constant_width
-        if self.vehicle.lane == lane_section.right_lanes[1] or self.vehicle.lane == lane_section.left_lanes[-2]:
-            lateral_offsets = np.array([0, 0 + land_width])
-        elif self.vehicle.lane == lane_section.right_lanes[-2] or self.vehicle.lane == lane_section.left_lanes[1]:
-            lateral_offsets = np.array([0 - land_width, 0])
+        lane_width = self.vehicle.lane.widths[0].constant_width
+        if self.vehicle.lane == lane_section.left_lanes[-2]:
+            lateral_offsets = np.array([0, 0 + lane_width])
+        elif self.vehicle.lane == lane_section.left_lanes[1]:
+            lateral_offsets = np.array([0 - lane_width, 0])
+        elif self.vehicle.lane == lane_section.right_lanes[-2]:
+            lateral_offsets = np.array([0, 0 + lane_width])
+        elif self.vehicle.lane == lane_section.right_lanes[1]:
+            lateral_offsets = np.array([0 - lane_width, 0])
         else:
-            lateral_offsets = np.array([0 - land_width, 0, 0 + land_width])
+            lateral_offsets = np.array([0 - lane_width, 0, 0 + lane_width])
 
         min_speed = current_speed - 5 if current_speed > 5 else 0
         max_speed = current_speed + 5

@@ -16,7 +16,7 @@ episodes = load_dataset()
 
 for episode in episodes:
     for frame in episode.frames:
-        if math.isclose(frame.time, 37.37, rel_tol=1e-2):
+        if math.isclose(frame.time, 34.70, rel_tol=1e-2):
             for agent_key in frame.agents.keys():
                 print(agent_key)
             break

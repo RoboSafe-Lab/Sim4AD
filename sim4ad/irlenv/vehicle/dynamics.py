@@ -150,7 +150,7 @@ class Vehicle(Loggable):
         if self.scenario_map:
             lane = self.scenario_map.best_lane_at(point=self.position, heading=self.heading)
             # the point reach the road end
-            if lane is None and self.lane.length - self.s < 1.2:
+            if lane is None and self.lane.length - self.s < 1.5:
                 pass
             else:
                 self.lane = lane

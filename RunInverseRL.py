@@ -21,8 +21,8 @@ class IRL:
         self.human_traj_features = []
         self.theta = None
 
-        self.save_buffer = True
-        self.save_training_log = True
+        self.save_buffer = False
+        self.save_training_log = False
 
     @staticmethod
     def load_dataset():
@@ -45,15 +45,15 @@ class IRL:
 
             # for each agent
             for aid, agent in episode.agents.items():
-                # if aid != '7f8e80a7-da54-4783-bcfe-c4cb3d5e7067':
-                #     continue
+                if aid != 'b9269de1-cda3-42ee-81de-017002674b4d':
+                    continue
                 logger.info(f"Ego agent: {aid}")
 
                 irl_env = IRLEnv(episode=episode, scenario_map=scenario_map, ego=agent, IDM=False)
                 terminated = False
                 for inx, t in enumerate(agent.time):
-                    # if t < 13.813813813813816:
-                    #     continue
+                    if t < 805.4721388054722:
+                        continue
                     logger.info(f"Simulation time: {t}")
 
                     irl_env.reset(reset_time=t)
@@ -163,7 +163,8 @@ class IRL:
                 log_like = np.log(probs[-1] / np.sum(probs))
                 log_like_list.append(log_like)
 
-                # select trajectories to calculate human likeness
+                # select trajectories to calculate human likeness,
+                # extracting the indices of the top 3 highest values in probs
                 idx = probs.argsort()[-3:][::-1]
                 iteration_human_likeness.append(np.min([scene_trajs[i][-1] for i in idx]))
 
@@ -178,7 +179,7 @@ class IRL:
             grad = human_feature_exp - feature_exp - 2 * IRL.lam * self.theta
             grad = np.array(grad, dtype=float)
 
-            # update weights
+            # update weights using Adam optimization
             if pm is None:
                 pm = np.zeros_like(grad)
                 pv = np.zeros_like(grad)
@@ -193,7 +194,7 @@ class IRL:
             if self.save_training_log:
                 logger.info('Saved training log.')
                 """save the training info for post analysis"""
-                training_log = {'iteration': iteration, 'average_feature_difference': np.linalg.norm(human_feature_exp/num_traj - feature_exp/num_traj),
+                training_log = {'iteration': iteration + 1, 'average_feature_difference': np.linalg.norm(human_feature_exp/num_traj - feature_exp/num_traj),
                                 'average_log-likelihood': np.sum(log_like_list)/num_traj, 'average_human_likeness': np.mean(iteration_human_likeness),
                                 'theta': self.theta}
                 with open("training_log.pkl", "wb") as file:
@@ -206,10 +207,10 @@ def main():
     irl_instance.get_simulated_features()
 
     # normalize features
-    irl_instance.normalize_features()
+    # irl_instance.normalize_features()
 
     # Run MaxEnt IRL
-    irl_instance.maxent_irl()
+    # irl_instance.maxent_irl()
 
     # Further steps for evaluation and testing of the learned model
     # ...

@@ -174,6 +174,7 @@ class IRL:
             log_like_list.append(log_like)
 
             # select trajectories to calculate human likeness
+            # extracting the indices of the top 3 highest values in probs
             idx = probs.argsort()[-3:][::-1]
             iteration_human_likeness.append(np.min([scene_trajs[i][-1] for i in idx]))
 
@@ -188,7 +189,7 @@ class IRL:
         grad = human_feature_exp - feature_exp - 2 * IRL.lam * self.theta
         grad = np.array(grad, dtype=float)
 
-        # update weights
+        # update weights using Adam optimization
         if self.pm is None:
             self.pm = np.zeros_like(grad)
             self.pv = np.zeros_like(grad)

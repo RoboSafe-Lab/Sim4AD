@@ -161,7 +161,7 @@ class IRLEnv:
             trajectory_features.append(features)
 
             # show the forward simulation
-            if debug and self.human and self.time % 5 == 0:
+            if debug and self.time % 5 == 0:
                 plot_map(self.scenario_map, markings=True, midline=False, drivable=True, plot_background=False)
                 plt.plot(self.vehicle.planned_trajectory[:, 0], self.vehicle.planned_trajectory[:, 1], 'b',
                          linewidth=1)

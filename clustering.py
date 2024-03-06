@@ -1,3 +1,6 @@
+from overrides import overrides
+
+from sim4ad.path_utils import get_config_path
 from sim4ad.util import parse_args
 import sys
 import numpy as np
@@ -54,7 +57,7 @@ class FeatureExtraction:
         return data_sf
 
     @staticmethod
-    def get_standard_devisation(data):
+    def get_standard_deviation(data):
         return np.std(data)
 
     @staticmethod
@@ -90,7 +93,7 @@ class FeatureExtraction:
                 self._features['long_acc_fc'].append(self.get_frequency_centroid(long_acc))
                 self._features['lat_acc_sf'].append(self.get_shape_factor(lat_acc))
                 self._features['lat_acc_rms'].append(self.get_root_mean_square(lat_acc))
-                self._features['vel_std'].append(self.get_standard_devisation(velocity))
+                self._features['vel_std'].append(self.get_standard_deviation(velocity))
         df = pd.DataFrame(self._features)
 
         return df
@@ -184,7 +187,7 @@ def plot_clustered_trj_on_map(data_loader, clustered_dataframe):
 
 def main():
     args = parse_args()
-    data_loader = DatasetDataLoader(f"scenarios/configs/{args.map}.json")
+    data_loader = DatasetDataLoader(get_config_path(args.map))
     data_loader.load()
 
     feature_extractor = FeatureExtraction(data_loader.scenario.episodes)

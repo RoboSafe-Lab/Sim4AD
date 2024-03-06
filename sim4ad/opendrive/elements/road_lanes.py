@@ -491,22 +491,48 @@ class Lane:
         heading = self.get_heading_at(ds)
         return np.array([np.cos(heading), np.sin(heading)])
 
-    def traversable_neighbours(self):
+    def traversable_neighbours(self, return_lfr_order=False):
+
+        """
+        :param return_lfr_order: if True, it returns the lanes in the order: left-centre-right. If there
+                                    is no such lane, None is returned. If False, it only returns the neighbours
+                                    that are not None.
+        """
         neighbours = []
+
         if self.link.successor is not None:
+
+            if return_lfr_order is True:
+                raise NotImplementedError("We need to test how these lanes fit in within the context of finding"
+                                          "the nearby vehicles in the feature extraction. also consider the successor a"
+                                          "predecessors of the right/left lanes if the closes vehicle may be there")
             neighbours.extend(self.link.successor)
 
-        # get adjacent lanes
-        if self.id != -1:
-            right_lane = self.lane_section.get_lane(self.id + 1)
-            if right_lane is not None:
-                neighbours.append(right_lane)
+        # get adjacent lanes to the right
+        # TODO: ensure the positive v negative id distinction works more generally
+        invert_sign = 1 if self.id > 0 else -1
         if self.id != 1:
-            left_lane = self.lane_section.get_lane(self.id - 1)
-            if left_lane is not None:
+            left_lane = self.lane_section.get_lane(self.id - (1 * invert_sign))
+
+            if left_lane.type != LaneTypes.DRIVING:
+                if return_lfr_order is True:
+                    neighbours.append(None)
+            elif left_lane is not None:
                 neighbours.append(left_lane)
 
-        neighbours = [l for l in neighbours if l.type == LaneTypes.DRIVING]
+        if return_lfr_order is True:
+            # TODO: we have yet to code the case in which the lane has successors/predecessors to consider
+            neighbours.append(self)
+
+        if self.id != -1:
+            right_lane = self.lane_section.get_lane(self.id + (1 * invert_sign))
+
+            if right_lane.type != LaneTypes.DRIVING:
+                if return_lfr_order is True:
+                    neighbours.append(None)
+            elif right_lane is not None:
+                neighbours.append(right_lane)
+
         return neighbours
 
 

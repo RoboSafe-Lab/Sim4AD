@@ -7,11 +7,13 @@ from extract_observation_action import ExtractObservationAction
 
 def main():
     args = parse_args()
+
     data_loader = DatasetDataLoader(f"scenarios/configs/{args.map}.json")
     data_loader.load()
 
     episodes = data_loader.scenario.episodes
     feature_extractor = FeatureExtraction(episodes)
+
     # extract feature values from the dataset
     df = feature_extractor.extract_features()
     # begin clustering

@@ -1,10 +1,13 @@
+from collections import defaultdict
 from dataclasses import dataclass
 import os
 from typing import Optional, List
 import numpy as np
 import pandas as pd
 import pickle
-from collections import defaultdict
+
+from sim4ad.path_utils import write_common_property
+from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 
 
 @dataclass
@@ -41,6 +44,8 @@ class ExtractObservationAction:
 
     def extract_demonstrations(self):
         """Extract observations"""
+        def combine(x, y):
+            return np.sqrt(np.array(x) ** 2 + np.array(y) ** 2)
 
         grouped_cluster = self._clustered_dataframe.groupby('label')
         # we train one driving style as an example
@@ -60,20 +65,33 @@ class ExtractObservationAction:
                     # calculate steering angle
                     delta = self.extract_steering_angle(agent)
 
-                    ego_agent_observations = {'time': agent.time, 'vx': agent.vx_vec, 'vy': agent.vy_vec,
-                                              'psi': agent.psi_vec,  # 'aid': agent_id, TODO: include it!
-                                              # 'eid': episode_id,
-                                              'distance_left_lane_marking': agent.distance_left_lane_marking,
-                                              'distance_right_lane_marking': agent.distance_right_lane_marking}
+                    speed = combine(agent.vx_vec, agent.vy_vec)
+
+                    ego_agent_observations = defaultdict(list)
+                    ego_agent_observations['time'] = agent.time
+                    ego_agent_observations['speed'] = speed
+                    ego_agent_observations['heading'] = agent.psi_vec
+                    ego_agent_observations['distance_left_lane_marking'] = agent.distance_left_lane_marking
+                    ego_agent_observations['distance_right_lane_marking'] = agent.distance_right_lane_marking
+                    ego_agent_observations['x'] = agent.x_vec
+                    ego_agent_observations['y'] = agent.y_vec
 
                     # todo: explain that ego_agent_observations should be a dataframe where the rows are the timestamps
                     # and the columns are the features. then, we have a list of these dataframes, one for each agent
 
-                    ego_agent_actions = {'ax': agent.ax_vec, 'ay': agent.ay_vec, 'delta': delta}
+                    acceleration = combine(agent.ax_vec, agent.ay_vec)
+                    ego_agent_actions = {'acceleration': acceleration, 'steer_angle': delta}
 
+                    skip_vehicle = False
                     for inx, t in enumerate(agent.time):
                         # get surrounding agent's information
-                        surrounding_agents = agent.object_relation_dict_list[inx]
+                        try:
+                            surrounding_agents = agent.object_relation_dict_list[inx]
+                        except IndexError as e:
+                            print(f"KeyError: {e}. Skipping vehicle {agent_id}.")
+                            skip_vehicle = True
+                            break
+
                         for surrounding_agent_relation, surrounding_agent_id in surrounding_agents.items():
                             if surrounding_agent_id is not None:
                                 surrounding_agent = episode.agents[surrounding_agent_id]
@@ -82,33 +100,26 @@ class ExtractObservationAction:
                                 surrounding_agent_inx = surrounding_agent.next_index_of_specific_time(t)
                                 surrounding_rel_dx = long_distance
                                 surrounding_rel_dy = lat_distance
-                                surrounding_vx = surrounding_agent.vx_vec[surrounding_agent_inx]
-                                surrounding_vy = surrounding_agent.vy_vec[surrounding_agent_inx]
-                                surrounding_ax = surrounding_agent.ax_vec[surrounding_agent_inx]
-                                surrounding_ay = surrounding_agent.ay_vec[surrounding_agent_inx]
-                                surrounding_psi = surrounding_agent.psi_vec[surrounding_agent_inx]
+                                surrounding_rel_speed = (combine(surrounding_agent.vx_vec[surrounding_agent_inx],
+                                                                 surrounding_agent.vy_vec[surrounding_agent_inx])
+                                                         - speed[inx])
+                                surrounding_rel_a = (combine(surrounding_agent.ax_vec[surrounding_agent_inx],
+                                                             surrounding_agent.ay_vec[surrounding_agent_inx])
+                                                     - acceleration[inx])
+                                surrounding_heading = surrounding_agent.psi_vec[surrounding_agent_inx]
                             else:
                                 # Set to invalid value if there is no surrounding agent
-                                surrounding_rel_dx = surrounding_rel_dy = surrounding_vx = surrounding_vy = \
-                                    surrounding_ax = surrounding_ay = surrounding_psi = -1
-
-                            # if the surrounding agent is not in the dictionary, add it
-                            if surrounding_agent_relation not in ego_agent_observations:
-                                ego_agent_observations[f'{surrounding_agent_relation}_rel_dx'] = []
-                                ego_agent_observations[f'{surrounding_agent_relation}_rel_dy'] = []
-                                ego_agent_observations[f'{surrounding_agent_relation}_vx'] = []
-                                ego_agent_observations[f'{surrounding_agent_relation}_vy'] = []
-                                ego_agent_observations[f'{surrounding_agent_relation}_ax'] = []
-                                ego_agent_observations[f'{surrounding_agent_relation}_ay'] = []
-                                ego_agent_observations[f'{surrounding_agent_relation}_psi'] = []
+                                surrounding_rel_dx = surrounding_rel_dy = surrounding_rel_speed = surrounding_rel_a \
+                                    = surrounding_heading = MISSING_NEARBY_AGENT_VALUE
 
                             ego_agent_observations[f'{surrounding_agent_relation}_rel_dx'].append(surrounding_rel_dx)
                             ego_agent_observations[f'{surrounding_agent_relation}_rel_dy'].append(surrounding_rel_dy)
-                            ego_agent_observations[f'{surrounding_agent_relation}_vx'].append(surrounding_vx)
-                            ego_agent_observations[f'{surrounding_agent_relation}_vy'].append(surrounding_vy)
-                            ego_agent_observations[f'{surrounding_agent_relation}_ax'].append(surrounding_ax)
-                            ego_agent_observations[f'{surrounding_agent_relation}_ay'].append(surrounding_ay)
-                            ego_agent_observations[f'{surrounding_agent_relation}_psi'].append(surrounding_psi)
+                            ego_agent_observations[f'{surrounding_agent_relation}_rel_speed'].append(surrounding_rel_speed)
+                            ego_agent_observations[f'{surrounding_agent_relation}_rel_a'].append(surrounding_rel_a)
+                            ego_agent_observations[f'{surrounding_agent_relation}_heading'].append(surrounding_heading)
+
+                    if skip_vehicle is True:
+                        continue
 
                     ego_agent_observations = pd.DataFrame(ego_agent_observations, index=agent.time)
 
@@ -116,6 +127,11 @@ class ExtractObservationAction:
                     # the column names and drop time
                     ego_agent_observations = ego_agent_observations.drop(columns=['time'])
                     ego_agent_actions = pd.DataFrame(ego_agent_actions, index=agent.time)
+
+                    # Update the features used in the observations in the file that keeps track of the common
+                    # part across the project, common_elements.json.
+                    write_common_property('FEATURES_IN_OBSERVATIONS', ego_agent_observations.columns.tolist())
+                    write_common_property('FEATURES_IN_ACTIONS', ego_agent_actions.columns.tolist())
 
                     ego_agent_observations = ego_agent_observations.values
                     ego_agent_actions = ego_agent_actions.values

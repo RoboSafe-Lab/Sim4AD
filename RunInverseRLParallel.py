@@ -53,6 +53,10 @@ class IRL:
         irl_env = IRLEnv(episode=self.episode, scenario_map=self.scenario_map, ego=agent, IDM=False)
         terminated = False
         for inx, t in enumerate(agent.time):
+            # if the agents is reaching its life end, continue, because the planned trajectory is not complete and few
+            # points exist
+            if agent.time[-1] - t < 1:
+                continue
             logger.info(f"Simulation time: {t}")
 
             irl_env.reset(reset_time=t)

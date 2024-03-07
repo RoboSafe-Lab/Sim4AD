@@ -17,7 +17,7 @@ class IRL:
     lam = 0.01
     lr = 0.05
 
-    num_processes = 6
+    num_processes = 12
 
     def __init__(self):
         self.buffer = []

@@ -1,5 +1,7 @@
 from __future__ import division, print_function
 
+import logging
+
 import numpy as np
 import pandas as pd
 from collections import deque
@@ -149,11 +151,11 @@ class Vehicle(Loggable):
 
         if self.scenario_map:
             lane = self.scenario_map.best_lane_at(point=self.position, heading=self.heading)
-            # the point reach the road end
-            if lane is None and self.lane.length - self.s < 1.5:
-                pass
-            else:
+            # lane can not be determined, for example reaching road end
+            if lane is not None:
                 self.lane = lane
+            else:
+                logging.warning(f'No lane found at position {self.position} and heading {self.heading}.')
             self.s, self.d = utils.local2frenet(point=self.position, reference_line=self.lane.midline)
             if self.record_history:
                 self.history.appendleft(self.create_from(self))

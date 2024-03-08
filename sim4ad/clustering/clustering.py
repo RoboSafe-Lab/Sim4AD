@@ -13,7 +13,7 @@ from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_har
 import seaborn as sns
 
 from sim4ad.data.data_loaders import DatasetDataLoader
-from visualization import Visualization
+from sim4ad.clustering.visualization import Visualization
 
 
 class FeatureExtraction:

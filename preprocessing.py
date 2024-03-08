@@ -18,12 +18,17 @@ def main():
     df = feature_extractor.extract_features()
     # begin clustering
     cluster = Clustering()
-    clustered_dataframe = cluster.GMM(df)
+
+    if args.clustering is None:
+        clustered_dataframe = df
+        clustered_dataframe['label'] = 0  # The label is set to cluster the data - we only have one cluster.
+    else:
+        raise NotImplementedError("Clustering method not implemented")
+        clustered_dataframe = cluster.GMM(df)
 
     # extract observations and actions
     extractor = ExtractObservationAction(episodes, clustered_dataframe)
     extractor.extract_demonstrations()
-    extractor.save_trajectory()
 
 
 if __name__ == '__main__':

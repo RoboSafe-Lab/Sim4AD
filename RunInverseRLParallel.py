@@ -29,6 +29,11 @@ class IRL:
         self.pm = None
         self.pv = None
 
+        self.training_log = {'iteration': [], 'average_feature_difference': [],
+                        'average_log-likelihood': [],
+                        'average_human_likeness': [],
+                        'theta': []}
+
         self.save_buffer = True
         self.save_training_log = True
 
@@ -113,10 +118,12 @@ class IRL:
                 # load the open drive map
                 self.scenario_map = Map.parse_from_opendrive(episode.map_file)
 
-                human_traj_features_one_agent, buffer_one_agent = pool.map(self.get_feature_one_agent, episode.agents.items())
+                results = pool.map(self.get_feature_one_agent, episode.agents.items())
                 if self.save_buffer:
-                    self.human_traj_features.extend(human_traj_features_one_agent)
-                    self.buffer.extend(buffer_one_agent)
+                    for res in results:
+                        if res is not None:
+                            self.human_traj_features.extend(res[0])
+                            self.buffer.extend(res[1])
 
     def normalize_features(self):
         """normalize the features"""
@@ -205,14 +212,12 @@ class IRL:
         update_vec = mhat / (np.sqrt(vhat) + IRL.eps)
         self.theta += IRL.lr * update_vec
 
-        if self.save_training_log:
-            logger.info('Saved training log.')
-            """save the training info for post analysis"""
-            training_log = {'iteration': iteration, 'average_feature_difference': np.linalg.norm(human_feature_exp/num_traj - feature_exp/num_traj),
-                            'average_log-likelihood': np.sum(log_like_list)/num_traj, 'average_human_likeness': np.mean(iteration_human_likeness),
-                            'theta': self.theta}
-            with open("training_log.pkl", "wb") as file:
-                pickle.dump(training_log, file)
+        # record info during the training
+        self.training_log['iteration'].append(iteration + 1)
+        self.training_log['average_feature_difference'].append(np.linalg.norm(human_feature_exp / num_traj - feature_exp / num_traj))
+        self.training_log['average_log-likelihood'].append(np.sum(log_like_list) / num_traj)
+        self.training_log['average_human_likeness'].append(np.mean(iteration_human_likeness))
+        self.training_log['theta'].append(self.theta)
 
 
 def main():
@@ -223,14 +228,14 @@ def main():
     # normalize features
     irl_instance.normalize_features()
 
-    # Run MaxEnt IRL
-    iterations = range(IRL.n_iters)
-    with Pool(processes=irl_instance.num_processes) as pool:
-        pool.map(irl_instance.maxent_irl, iterations)
+    # Run MaxEnt IRL, sequential optimization, avoid using multiprocessing
+    for i in range(IRL.n_iters):
+        irl_instance.maxent_irl(i)
 
-    # Further steps for evaluation and testing of the learned model
-    # ...
-    pass
+    if irl_instance.save_training_log:
+        logger.info('Saved training log.')
+        with open("training_log.pkl", "wb") as file:
+            pickle.dump(irl_instance.training_log, file)
 
 
 if __name__ == "__main__":

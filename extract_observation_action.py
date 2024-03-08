@@ -34,13 +34,17 @@ class ExtractObservationAction:
         """
         self._clustered_dataframe = clustered_dataframe
         self._episodes = episodes
-        self._demonstrations = {"observations": [], "actions": []}
+        self._demonstrations = self.reset_demonstrations()
 
         # Create a dataframe with the columns of the demonstrations list
         self._demonstrations_df = pd.DataFrame(columns=['observations', 'actions'])
 
         # save for IRL training
         self._irl_data = {}
+
+    @staticmethod
+    def reset_demonstrations():
+        return {"observations": [], "actions": []}
 
     def extract_demonstrations(self):
         """Extract observations"""
@@ -73,8 +77,6 @@ class ExtractObservationAction:
                     ego_agent_observations['heading'] = agent.psi_vec
                     ego_agent_observations['distance_left_lane_marking'] = agent.distance_left_lane_marking
                     ego_agent_observations['distance_right_lane_marking'] = agent.distance_right_lane_marking
-                    ego_agent_observations['x'] = agent.x_vec
-                    ego_agent_observations['y'] = agent.y_vec
 
                     # todo: explain that ego_agent_observations should be a dataframe where the rows are the timestamps
                     # and the columns are the features. then, we have a list of these dataframes, one for each agent
@@ -139,6 +141,8 @@ class ExtractObservationAction:
                     self._demonstrations["observations"].append(ego_agent_observations)
                     self._demonstrations["actions"].append(ego_agent_actions)
 
+            self.save_trajectory(episode)
+
     @staticmethod
     def extract_steering_angle(agent) -> List:
         """Extract steering_angle here"""
@@ -147,33 +151,35 @@ class ExtractObservationAction:
         # make sure yaw_rate has the same length as time
         theta_dot_vec.insert(0, theta_dot_vec[0])
 
-        # approximate the wheelbase using a vehicle's length (could occur errors)
-        wheel_base = agent.length * 0.6
+        # # approximate the wheelbase using a vehicle's length (could occur errors)
+        # wheel_base = agent.length * 0.6
+        #
+        # # TODO: need to be verified
+        # deltas = []
+        # for inx, theta_dot in enumerate(theta_dot_vec):
+        #     v = np.sqrt(agent.vx_vec[inx] ** 2 + agent.vy_vec[inx] ** 2)
+        #     delta_t = np.arctan2(theta_dot * wheel_base, v)
+        #     deltas.append(delta_t)
 
-        # TODO: need to be verified
-        deltas = []
-        for inx, theta_dot in enumerate(theta_dot_vec):
-            v = np.sqrt(agent.vx_vec[inx] ** 2 + agent.vy_vec[inx] ** 2)
-            delta_t = np.arctan2(theta_dot * wheel_base, v)
-            deltas.append(delta_t)
+        return theta_dot_vec  # TODO:? deltas
 
-        return deltas
-
-    def save_trajectory(self):
+    def save_trajectory(self, episode):
         """Save a list of trajectories, and each trajectory include (state, action) pair"""
         folder_path = 'scenarios/data/trainingdata'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
-        for episode in self._episodes:
-            episode_id = episode.config.recording_id
-            episode_path = os.path.join(folder_path, episode_id)
-            if not os.path.exists(episode_path):
-                os.makedirs(episode_path)
 
-            # Saving the demonstration data to a file
-            with open(episode_path + "/demonstration.pkl", "wb") as file:
-                pickle.dump(self._demonstrations, file)
+        episode_id = episode.config.recording_id
+        episode_path = os.path.join(folder_path, episode_id)
+        if not os.path.exists(episode_path):
+            os.makedirs(episode_path)
 
-            # Saving IRL data to a file
-            with open(episode_path + "/irl.pkl", "wb") as file:
-                pickle.dump(self._irl_data, file)
+        # Saving the demonstration data to a file
+        with open(episode_path + "/demonstration.pkl", "wb") as file:
+            pickle.dump(self._demonstrations, file)
+
+        # Saving IRL data to a file
+        with open(episode_path + "/irl.pkl", "wb") as file:
+            pickle.dump(self._irl_data, file)
+
+        self._demonstrations = self.reset_demonstrations()

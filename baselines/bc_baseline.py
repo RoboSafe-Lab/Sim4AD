@@ -15,6 +15,7 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
 from baselines.dataset import AutomatumDataset
+from baselines.bc_model import LSTMModel
 from sim4ad.opendrive import Map, plot_map
 from sim4ad.path_utils import baseline_path
 
@@ -22,13 +23,14 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-class LSTM(nn.Module):
-    def __init__(self, name='bc'):
-        super(LSTM, self).__init__()
+class BCBaseline:
+    def __init__(self, name='bc', evaluation=False):
 
         self.name = name
 
         expert_data = {"observations": [], "actions": []}
+
+        # TODO: load from the episodes contained in the configs
         for scenario in [
                         'hw-a9-appershofen-001-d8087340-8287-46b6-9612-869b09e68448',
                         'hw-a9-appershofen-002-2234a9ae-2de1-4ad4-9f43-65c2be9696d6',
@@ -43,6 +45,7 @@ class LSTM(nn.Module):
                         'hw-a9-appershofen-012-d696e4f3-70ac-45ac-9de1-79a2c9f6185c',
                         'hw-a9-appershofen-013-7e5d812c-a86f-468c-b9ed-d6888991eeb7',
                         ]:
+
             with open(f'scenarios/data/trainingdata/{scenario}/demonstration.pkl', 'rb') as f:
                 new_expert_data = pickle.load(f)
                 expert_data['observations'] += new_expert_data['observations']
@@ -72,25 +75,30 @@ class LSTM(nn.Module):
         self.LR = 1e-3  # Define your learning rate # TODO: parameterize
         LSTM_HIDDEN_SIZE = 128
         FC_HIDDEN_SIZE = 512
-        DROPOUT = 0.2  # TODO: remember to zero it out during evaluation!
 
-        self.rnn = nn.LSTM(input_size=input_space,  hidden_size=LSTM_HIDDEN_SIZE, num_layers=2, batch_first=True)
-        self.fc = nn.Sequential(nn.Linear(LSTM_HIDDEN_SIZE, FC_HIDDEN_SIZE),
-                                nn.ReLU(),
-                                nn.Dropout(DROPOUT),
-                                nn.Linear(FC_HIDDEN_SIZE, action_space),
-                                nn.Dropout(DROPOUT),
-                                nn.Tanh())  # TODO: check the range of acceleration/steering angle in the dataset
-        self.float()
+        DROPOUT = 0.2 if not evaluation else 0.0
 
-        for layer in self.fc:
-            if isinstance(layer, nn.Linear):
-                nn.init.xavier_normal_(layer.weight)
-                nn.init.constant_(layer.bias, 0.0)
+        self.model = LSTMModel(input_space, action_space, LSTM_HIDDEN_SIZE, FC_HIDDEN_SIZE, DROPOUT)
+
+        # Check cuda, cpu or mps
+        if torch.cuda.is_available():
+            self.device = torch.device('cuda')
+
+            if torch.cuda.device_count() > 1:
+                self.model = nn.DataParallel(self.model)
+
+        elif torch.backends.mps.is_available():
+            self.device = torch.device('mps')
+        else:
+            self.device = torch.device('cpu')
+
+        logger.info(f"Training on {self.device}.")
+        self.model.to(self.device)
 
         # TODO: should be 34 as we should not include x/y
         assert input_space == 34 and action_space == 2  # TODO: just for automatum dataset
-        self.loss_function = nn.MSELoss(reduction="mean") # TODO nn.MSELoss(reduction="mean")  # TODO: is this the correct loss function / reduction?
+        self.loss_function = nn.MSELoss(reduction="mean")
+        self.loss_function.to(self.device)
 
         self.train_loader = DataLoader(AutomatumDataset(expert_states_train, expert_actions_train),
                                        batch_size=self.BATCH_SIZE, shuffle=self.SHUFFLE)
@@ -99,25 +107,18 @@ class LSTM(nn.Module):
 
         self.eval_losses = []
 
-        self.optimizer = optim.Adam(self.parameters(), lr=1e-3)
-
-    def forward(self, history: torch.Tensor):
-        # out contains the hidden state for each time step of the trajectory, after all the layers
-        if isinstance(history, list):
-            history = torch.tensor(history, dtype=torch.float32)
-        out, _ = self.rnn(history)
-
-        return self.fc(out)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.LR)
 
     def load_policy(self, baseline_name='bc'):
         path = baseline_path(baseline_name)
-        self.load_state_dict(torch.load(path))
+        raise NotImplementedError("Propery implemetn loading the policy to not have dropout")
+        self.load_state_dict(torch.load(path)) # TODO: ensure no dropout
 
     def compute_loss(self, trajectory, predicted_actions, actions):
         """ Only compute the loss for the time steps that were not padded """
 
         mask = ~(trajectory == self.PADDING_VALUE).all(dim=-1)
-        loss = self.loss_function(predicted_actions[mask]*10, actions[mask]*10) # TODO: scaling?
+        loss = self.loss_function((predicted_actions[mask]*10).to(self.device), (actions[mask]*10).to(self.device)) # TODO: scaling?
         return loss
 
     def train(self, num_epochs=100, learning_rate=1e-3):
@@ -130,7 +131,10 @@ class LSTM(nn.Module):
             for i, (trajectory, actions) in enumerate(self.train_loader):
                 # Divide the trajectory for each time step and feed the LSTM the history up until that point
                 self.optimizer.zero_grad()
-                predicted_actions = self.forward(trajectory)
+
+                actions = actions.to(self.device)
+                trajectory = trajectory.to(self.device)
+                predicted_actions = self.model(trajectory)
                 loss = self.compute_loss(trajectory, predicted_actions, actions)
                 loss.backward()
 
@@ -138,7 +142,7 @@ class LSTM(nn.Module):
                 ave_grads = []
                 max_grads = []
                 layers = []
-                for name, param in self.named_parameters():
+                for name, param in self.model.named_parameters():
                     if param.requires_grad and ("bias" not in name):
                         layers.append(name)
                         ave_grads.append(param.grad.abs().mean().item())
@@ -151,7 +155,9 @@ class LSTM(nn.Module):
 
             with torch.no_grad():
                 for i, (trajectory, actions) in enumerate(self.eval_loader):
-                    output = self.forward(trajectory)
+                    trajectory = trajectory.to(self.device)
+                    actions = actions.to(self.device)
+                    output = self.model(trajectory)
                     loss = self.compute_loss(trajectory, output, actions)
                     self.writer.add_scalar('Eval Loss', loss.item(), epoch * len(self.eval_loader) + i)
                     self.eval_losses.append(loss.item())
@@ -171,9 +177,9 @@ class LSTM(nn.Module):
         self.writer.close()
 
     def save(self):
-        torch.save(self.state_dict(), baseline_path(self.name))
+        torch.save(self.model.state_dict(), baseline_path(self.name))
 
 
 if __name__ == '__main__':
-    policy_network = LSTM("bc-all-obs")
+    policy_network = BCBaseline("bc-all-obs")
     policy_network.train(num_epochs=policy_network.EPOCHS, learning_rate=policy_network.LR)

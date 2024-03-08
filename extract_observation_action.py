@@ -39,9 +39,6 @@ class ExtractObservationAction:
         # Create a dataframe with the columns of the demonstrations list
         self._demonstrations_df = pd.DataFrame(columns=['observations', 'actions'])
 
-        # save for IRL training
-        self._irl_data = {}
-
     @staticmethod
     def reset_demonstrations():
         return {"observations": [], "actions": []}
@@ -64,10 +61,8 @@ class ExtractObservationAction:
                 for agent_id in agent_ids:
                     agent = episode.agents[agent_id]
 
-                    self._irl_data[agent_id] = agent
-
-                    # calculate steering angle
-                    delta = self.extract_steering_angle(agent)
+                    # calculate yaw rate
+                    yaw_rate = self.extract_yaw_rate(agent)
 
                     speed = combine(agent.vx_vec, agent.vy_vec)
 
@@ -82,7 +77,7 @@ class ExtractObservationAction:
                     # and the columns are the features. then, we have a list of these dataframes, one for each agent
 
                     acceleration = combine(agent.ax_vec, agent.ay_vec)
-                    ego_agent_actions = {'acceleration': acceleration, 'steer_angle': delta}
+                    ego_agent_actions = {'acceleration': acceleration, 'yaw_rate': yaw_rate}
 
                     skip_vehicle = False
                     for inx, t in enumerate(agent.time):
@@ -144,24 +139,14 @@ class ExtractObservationAction:
             self.save_trajectory(episode)
 
     @staticmethod
-    def extract_steering_angle(agent) -> List:
-        """Extract steering_angle here"""
+    def extract_yaw_rate(agent) -> List:
+        """Extract yaw rate here"""
         dt = agent.delta_t
         theta_dot_vec = [(agent.psi_vec[i] - agent.psi_vec[i - 1]) / dt for i in range(1, len(agent.psi_vec))]
         # make sure yaw_rate has the same length as time
         theta_dot_vec.insert(0, theta_dot_vec[0])
 
-        # # approximate the wheelbase using a vehicle's length (could occur errors)
-        # wheel_base = agent.length * 0.6
-        #
-        # # TODO: need to be verified
-        # deltas = []
-        # for inx, theta_dot in enumerate(theta_dot_vec):
-        #     v = np.sqrt(agent.vx_vec[inx] ** 2 + agent.vy_vec[inx] ** 2)
-        #     delta_t = np.arctan2(theta_dot * wheel_base, v)
-        #     deltas.append(delta_t)
-
-        return theta_dot_vec  # TODO:? deltas
+        return theta_dot_vec
 
     def save_trajectory(self, episode):
         """Save a list of trajectories, and each trajectory include (state, action) pair"""
@@ -177,9 +162,3 @@ class ExtractObservationAction:
         # Saving the demonstration data to a file
         with open(episode_path + "/demonstration.pkl", "wb") as file:
             pickle.dump(self._demonstrations, file)
-
-        # Saving IRL data to a file
-        with open(episode_path + "/irl.pkl", "wb") as file:
-            pickle.dump(self._irl_data, file)
-
-        self._demonstrations = self.reset_demonstrations()

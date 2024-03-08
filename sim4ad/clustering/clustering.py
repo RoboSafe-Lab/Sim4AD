@@ -1,5 +1,3 @@
-from overrides import overrides
-
 from sim4ad.path_utils import get_config_path
 from sim4ad.util import parse_args
 import sys

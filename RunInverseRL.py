@@ -1,142 +1,220 @@
 import numpy as np
-import os
+from loguru import logger
 import pickle
-import matplotlib.pyplot as plt
 
-from sim4ad.opendrive import Map, plot_map
+from sim4ad.opendrive import Map
 from sim4ad.irlenv import IRLEnv
+from sim4ad.data.data_loaders import DatasetDataLoader
 
 
-# load clustered trajectories
-def load_data():
-    """Loading the demonstrations for training"""
-    demonstrations = []
-    data_path = 'scenarios/data/trainingdata'
-    folders = [f for f in os.listdir(data_path) if os.path.isdir(os.path.join(data_path, f))]
-    for folder in folders:
-        folder_path = os.path.join(data_path, folder, 'irl.pkl')
-        with open(folder_path, 'rb') as file:
-            # Load the contents from the file
-            data = pickle.load(file)
-        demonstrations.append(data)
-
-    return data
-
-
-def compute_features(data):
-    """Compute the features of each trajectory"""
-    # ego motion
-
-    # feature array
-    features = np.array([ego_speed, abs(ego_longitudial_acc), abs(ego_lateral_acc), abs(ego_longitudial_jerk),
-                         THWF, THWB, collision, social_impact, ego_likeness])
-
-    return features
-
-
-def reward_function(weights, features):
-    return np.dot(weights, features)
-
-
-def maxent_irl(feature_num: int, n_iters: int, scene_trajs, lam, lr):
-    # initialize weights
-    theta = np.random.normal(0, 0.05, size=feature_num)
-
-    # iterations
+class IRL:
+    feature_num = 8
+    n_iters = 200
     beta1 = 0.9
     beta2 = 0.999
     eps = 1e-8
-    pm = None
-    pv = None
-    grad_log = []
-    human_likeness_log = []
+    lam = 0.01
+    lr = 0.05
 
-    for iteration in range(n_iters):
-        feature_exp = np.zeros([feature_num])
-        human_feature_exp = np.zeros([feature_num])
+    def __init__(self):
+        self.buffer = []
+        self.human_traj_features = []
+        self.theta = None
 
-        # calculate probability of each trajectory
-        rewards = [traj[0] for traj in scene_trajs]
-        probs = [np.exp(reward) for reward in rewards]
-        probs = probs / np.sum(probs)
+        self.save_buffer = False
+        self.save_training_log = False
 
-        # calculate feature expectation with respect to the weights
-        traj_features = np.array([traj[1] for traj in scene_trajs])
-        feature_exp += np.dot(probs, traj_features)  # feature expectation
+    @staticmethod
+    def load_dataset():
+        """Loading clustered trajectories"""
+        data_loader = DatasetDataLoader(f"scenarios/configs/automatum.json")
+        data_loader.load()
 
-        # compute gradient
-        grad = human_feature_exp - feature_exp - 2 * lam * theta
-        grad = np.array(grad, dtype=float)
+        episodes = data_loader.scenario.episodes
 
-        # update weights
-        if pm is None:
-            pm = np.zeros_like(grad)
-            pv = np.zeros_like(grad)
+        return episodes
 
-        pm = beta1 * pm + (1 - beta1) * grad
-        pv = beta2 * pv + (1 - beta2) * (grad * grad)
-        mhat = pm / (1 - beta1 ** (iteration + 1))
-        vhat = pv / (1 - beta2 ** (iteration + 1))
-        update_vec = mhat / (np.sqrt(vhat) + eps)
-        theta += lr * update_vec
+    def get_simulated_features(self):
+        """get the features of forward simulations as well as human driver features"""
+        # load the dataset
+        episodes = self.load_dataset()
+
+        for episode in episodes:
+            # load the open drive map
+            scenario_map = Map.parse_from_opendrive(episode.map_file)
+
+            # for each agent
+            for aid, agent in episode.agents.items():
+                if aid != 'b9269de1-cda3-42ee-81de-017002674b4d':
+                    continue
+                logger.info(f"Ego agent: {aid}")
+
+                irl_env = IRLEnv(episode=episode, scenario_map=scenario_map, ego=agent, IDM=False)
+                terminated = False
+                for inx, t in enumerate(agent.time):
+                    if t < 805.4721388054722:
+                        continue
+                    logger.info(f"Simulation time: {t}")
+
+                    irl_env.reset(reset_time=t)
+
+                    # set up buffer of the scene
+                    buffer_scene = []
+
+                    # only one point is alive, continue
+                    if irl_env.interval[1] == irl_env.interval[0]:
+                        continue
+                    lateral_offsets, target_speeds = irl_env.sampling_space()
+                    # for each lateral offset and target_speed combination
+                    for lateral in lateral_offsets:
+                        for target_speed in target_speeds:
+                            action = (lateral, target_speed)
+                            features, terminated, info = irl_env.step(action)
+
+                            # get the features
+                            traj_features = features[:-1]
+                            human_likeness = features[-1]
+
+                            # add scene trajectories to buffer
+                            buffer_scene.append((lateral, target_speed, traj_features, human_likeness))
+
+                            # set back to previous step
+                            irl_env.reset(reset_time=t)
+
+                    # calculate human trajectory feature
+                    logger.info("Compute human driver features.")
+                    irl_env.reset(reset_time=t, human=True)
+                    features, terminated, info = irl_env.step()
+
+                    if terminated or features[-1] > 2.5:
+                        continue
+
+                    # process data
+                    human_traj = features[:-1]
+                    buffer_scene.append([0, 0, features[:-1], features[-1]])
+
+                    # add to buffer
+                    if self.save_buffer:
+                        self.human_traj_features.append(human_traj)
+                        self.buffer.append(buffer_scene)
+
+    def normalize_features(self):
+        """normalize the features"""
+        assert len(self.buffer) > 0, "Buffer is empty."
+
+        features = []
+        for buffer_scene in self.buffer:
+            for traj in buffer_scene:
+                features.append(traj[2])
+        max_v = np.max(features, axis=0)
+        # set maximum collision value to 1 to avoid divided by zero
+        max_v[6] = 1.0
+        # set social impact to 1 to avoid divided by zero
+        if max_v[7] == 0:
+            max_v[7] = 1.0
+
+        for f in features:
+            for i in range(IRL.feature_num):
+                f[i] /= max_v[i]
+
+        # save buffer data to avoid repeated computation
+        if self.save_buffer:
+            logger.info('Saved buffer data.')
+            with open("buffer.pkl", "wb") as file:
+                pickle.dump([self.human_traj_features, self.buffer], file)
+
+    def maxent_irl(self):
+        """training the weights using the buffer"""
+        # initialize weights
+        self.theta = np.random.normal(0, 0.05, size=IRL.feature_num)
+        pm = None
+        pv = None
+
+        # iterations
+        for iteration in range(IRL.n_iters):
+            logger.info(f'interation: {iteration + 1}/{IRL.n_iters}')
+            # fix collision feature's weight
+            self.theta[6] = -10
+
+            feature_exp = np.zeros([IRL.feature_num])
+            human_feature_exp = np.zeros([IRL.feature_num])
+            index = 0
+            log_like_list = []
+            iteration_human_likeness = []
+            num_traj = 0
+
+            for scene in self.buffer:
+                # compute on each scene
+                scene_trajs = []
+                for trajectory in scene:
+                    reward = np.dot(trajectory[2], self.theta)
+                    scene_trajs.append((reward, trajectory[2], trajectory[3]))  # reward, feature vector, human likeness
+
+                # calculate probability of each trajectory
+                rewards = [traj[0] for traj in scene_trajs]
+                probs = [np.exp(reward) for reward in rewards]
+                probs = probs / np.sum(probs)
+
+                # calculate feature expectation with respect to the weights
+                traj_features = np.array([traj[1] for traj in scene_trajs])
+                feature_exp += np.dot(probs, traj_features)  # feature expectation
+
+                # calculate likelihood
+                log_like = np.log(probs[-1] / np.sum(probs))
+                log_like_list.append(log_like)
+
+                # select trajectories to calculate human likeness,
+                # extracting the indices of the top 3 highest values in probs
+                idx = probs.argsort()[-3:][::-1]
+                iteration_human_likeness.append(np.min([scene_trajs[i][-1] for i in idx]))
+
+                # calculate human trajectory feature
+                human_feature_exp += self.human_traj_features[index]
+
+                # go to next trajectory
+                num_traj += 1
+                index += 1
+
+            # compute gradient
+            grad = human_feature_exp - feature_exp - 2 * IRL.lam * self.theta
+            grad = np.array(grad, dtype=float)
+
+            # update weights using Adam optimization
+            if pm is None:
+                pm = np.zeros_like(grad)
+                pv = np.zeros_like(grad)
+
+            pm = IRL.beta1 * pm + (1 - IRL.beta1) * grad
+            pv = IRL.beta2 * pv + (1 - IRL.beta2) * (grad * grad)
+            mhat = pm / (1 - IRL.beta1 ** (iteration + 1))
+            vhat = pv / (1 - IRL.beta2 ** (iteration + 1))
+            update_vec = mhat / (np.sqrt(vhat) + IRL.eps)
+            self.theta += IRL.lr * update_vec
+
+            if self.save_training_log:
+                logger.info('Saved training log.')
+                """save the training info for post analysis"""
+                training_log = {'iteration': iteration + 1, 'average_feature_difference': np.linalg.norm(human_feature_exp/num_traj - feature_exp/num_traj),
+                                'average_log-likelihood': np.sum(log_like_list)/num_traj, 'average_human_likeness': np.mean(iteration_human_likeness),
+                                'theta': self.theta}
+                with open("training_log.pkl", "wb") as file:
+                    pickle.dump(training_log, file)
 
 
 def main():
-    # parameters
-    n_iters = 200
-    lr = 0.05
-    lam = 0.01
-    feature_num = 8
-    period = 0
+    irl_instance = IRL()
+    # compute features
+    irl_instance.get_simulated_features()
 
-    debug = True
-    # load the static map
-    scenario_map = Map.parse_from_opendrive(
-        "scenarios/data/automatum/hw-a9-appershofen-001-d8087340-8287-46b6-9612-869b09e68448/staticWorld.xodr")
-
-    # Extract demonstrations (trajectories) from the data
-    agents = load_data()
-
-    plot_map(scenario_map, markings=True, midline=False, drivable=True, plot_background=False)
-
-    # for each agent
-    for aid, agent in agents.items():
-        sampled_trajectories = []
-
-        # for each time step
-        for inx, t in enumerate(agent.time):
-            irl_agent = IRLEnv(agent=agent, current_inx=inx, scenario_map=scenario_map)
-
-            lateral_offsets, target_speeds = irl_agent.sampling_space()
-            # for each lateral offset and target_speed combination
-            for lateral in lateral_offsets:
-                for target_speed in target_speeds:
-                    # 5 is the horizontal time
-                    action = (lateral, target_speed, 5)
-                    irl_agent.trajectory_planner(*action)
-                    sampled_trajectories.append(irl_agent.planned_trajectory)
-
-            # visualize the planned trajectories
-            if debug:
-                trajectories_local = []
-                for trj in sampled_trajectories:
-                    trj_local = []
-                    for p in trj:
-                        trj_local.append(irl_agent.position_local(s=p[0], d=p[1]))
-                    trajectories_local.append(np.array(trj_local))
-                for trj in trajectories_local:
-                    plt.plot(trj[:, 0], trj[:, 1], linewidth=1)
-
-                plt.show()
-
-    # compute demonstration features
-    demonstration_features = compute_features(agents)
+    # normalize features
+    # irl_instance.normalize_features()
 
     # Run MaxEnt IRL
-    learned_reward_weights = maxent_irl()
+    # irl_instance.maxent_irl()
 
     # Further steps for evaluation and testing of the learned model
     # ...
+    pass
 
 
 if __name__ == "__main__":

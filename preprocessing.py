@@ -1,7 +1,7 @@
 import sys
 from sim4ad.util import parse_args
 from sim4ad.data.data_loaders import DatasetDataLoader
-from clustering import FeatureExtraction, Clustering
+from sim4ad.clustering.clustering import FeatureExtraction, Clustering
 from extract_observation_action import ExtractObservationAction
 
 

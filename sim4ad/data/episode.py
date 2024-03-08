@@ -154,6 +154,7 @@ class DatasetEpisodeLoader(EpisodeLoader):
                 differences = np.abs(time_vec - time)
                 closest_index = np.argmin(differences)
                 frames[closest_index].add_agent_state(agent_id, state)
+                frames[closest_index].time = time
 
         self.xodr_ = path_to_dataset_folder + '/staticWorld.xodr'
         return Episode(config, agents, frames, statWorld, self.xodr_)

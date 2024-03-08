@@ -1,2 +1,2 @@
 from .irlenvsim import IRLEnv
-from .planner import *
+from sim4ad.irlenv.vehicle.planner import *

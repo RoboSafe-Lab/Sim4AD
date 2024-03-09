@@ -1,6 +1,7 @@
 from sim4ad.path_utils import get_config_path
 from sim4ad.util import parse_args
 import sys
+import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -25,12 +26,12 @@ class FeatureExtraction:
     vehicles: Application of unsupervised machine learning"
     """
 
-    def __init__(self, episodes):
+    def __init__(self):
         self.features_one = {'episode_id': [], 'agent_id': [], 'long_acc_max': [], 'long_acc_fc': [], 'lat_acc_sf': [],
-                            'lat_acc_rms': [], 'vel_std': [], 'label': None}
+                             'lat_acc_rms': [], 'vel_std': [], 'label': None}
         self.features_two = {'episode_id': [], 'agent_id': [], 'speed_vf': [], 'speed_dmean': [], 'speed_cv': [],
-                            'speed_qcv': [], 'accx_dmean': [], 'accy_dmean': [], 'label': None}
-        self.episodes = episodes
+                             'speed_qcv': [], 'accx_dmean': [], 'accy_dmean': [], 'label': None}
+
         self.windows_length = 3  # unit: s
 
     @staticmethod
@@ -109,57 +110,56 @@ class FeatureExtraction:
         r_mean = np.mean(r)
         return np.sqrt(sum((r_ - r_mean) ** 2 for r_ in r) / (len(r) - 1))
 
-    def extract_features(self, feature_selection: int = 1) -> pd.DataFrame:
+    def extract_features(self, episode, feature_selection: int = 1) -> pd.DataFrame:
         """Extract feature values from the dataset for clustering"""
         df = None
-        for episode in self.episodes:
-            for agent_id, agent in episode.agents.items():
-                time = agent.time
-                long_acc = agent.ax_vec
-                lat_acc = agent.ay_vec
-                velocity = [np.sqrt(agent.vx_vec[i] ** 2 + agent.vy_vec[i] ** 2) for i in range(len(agent.vx_vec))]
+        for agent_id, agent in episode.agents.items():
+            time = agent.time
+            long_acc = agent.ax_vec
+            lat_acc = agent.ay_vec
+            velocity = [np.sqrt(agent.vx_vec[i] ** 2 + agent.vy_vec[i] ** 2) for i in range(len(agent.vx_vec))]
 
-                if feature_selection == 1:
-                    # get feature values
-                    self.features_one['episode_id'].append(episode.config.recording_id)
-                    self.features_one['agent_id'].append(agent_id)
-                    self.features_one['long_acc_max'].append(self.get_max_value(long_acc))
-                    self.features_one['long_acc_fc'].append(self.get_frequency_centroid(long_acc))
-                    self.features_one['lat_acc_sf'].append(self.get_shape_factor(lat_acc))
-                    self.features_one['lat_acc_rms'].append(self.get_root_mean_square(lat_acc))
-                    self.features_one['vel_std'].append(self.get_standard_deviation(velocity))
+            if feature_selection == 1:
+                # get feature values
+                self.features_one['episode_id'].append(episode.config.recording_id)
+                self.features_one['agent_id'].append(agent_id)
+                self.features_one['long_acc_max'].append(self.get_max_value(long_acc))
+                self.features_one['long_acc_fc'].append(self.get_frequency_centroid(long_acc))
+                self.features_one['lat_acc_sf'].append(self.get_shape_factor(lat_acc))
+                self.features_one['lat_acc_rms'].append(self.get_root_mean_square(lat_acc))
+                self.features_one['vel_std'].append(self.get_standard_deviation(velocity))
 
-                elif feature_selection == 2:
-                    initial_time = time[0]
-                    initial_inx = 0
-                    speed_vf = []
-                    speed_dmean = []
-                    speed_cv = []
-                    speed_qcv = []
-                    accx_dmean = []
-                    accy_dmean = []
-                    for inx, t in enumerate(time):
-                        if t - initial_time >= self.windows_length:
-                            vel = velocity[initial_inx:inx]
-                            speed_vf.append(self.get_time_varying_stochastic_volatility(vel))
-                            speed_dmean.append(self.get_mean_absolute_deviation(vel))
-                            speed_cv.append(self.get_coefficient_variation(vel))
-                            speed_qcv.append(self.get_quartile_coefficient_variation(vel))
-                            accx_dmean.append(self.get_mean_absolute_deviation(long_acc[initial_inx:inx]))
-                            accy_dmean.append((self.get_mean_absolute_deviation(lat_acc[initial_inx:inx])))
-                            # reset the initial time until another windows length
-                            initial_time = t
-                            initial_inx = inx
+            elif feature_selection == 2:
+                initial_time = time[0]
+                initial_inx = 0
+                speed_vf = []
+                speed_dmean = []
+                speed_cv = []
+                speed_qcv = []
+                accx_dmean = []
+                accy_dmean = []
+                for inx, t in enumerate(time):
+                    if t - initial_time >= self.windows_length:
+                        vel = velocity[initial_inx:inx]
+                        speed_vf.append(self.get_time_varying_stochastic_volatility(vel))
+                        speed_dmean.append(self.get_mean_absolute_deviation(vel))
+                        speed_cv.append(self.get_coefficient_variation(vel))
+                        speed_qcv.append(self.get_quartile_coefficient_variation(vel))
+                        accx_dmean.append(self.get_mean_absolute_deviation(long_acc[initial_inx:inx]))
+                        accy_dmean.append((self.get_mean_absolute_deviation(lat_acc[initial_inx:inx])))
+                        # reset the initial time until another windows length
+                        initial_time = t
+                        initial_inx = inx
 
-                    self.features_two['episode_id'].append(episode.config.recording_id)
-                    self.features_two['agent_id'].append(agent_id)
-                    # compute average value for clustering
-                    self.features_two["speed_vf"].append(np.average(speed_vf))
-                    self.features_two["speed_dmean"].append(np.average(speed_dmean))
-                    self.features_two["speed_cv"].append(np.average(speed_cv))
-                    self.features_two["speed_qcv"].append(np.average(speed_qcv))
-                    self.features_two["accx_dmean"].append(np.average(accx_dmean))
-                    self.features_two["accy_dmean"].append(np.average(accy_dmean))
+                self.features_two['episode_id'].append(episode.config.recording_id)
+                self.features_two['agent_id'].append(agent_id)
+                # compute average value for clustering
+                self.features_two["speed_vf"].append(np.average(speed_vf))
+                self.features_two["speed_dmean"].append(np.average(speed_dmean))
+                self.features_two["speed_cv"].append(np.average(speed_cv))
+                self.features_two["speed_qcv"].append(np.average(speed_qcv))
+                self.features_two["accx_dmean"].append(np.average(accx_dmean))
+                self.features_two["accy_dmean"].append(np.average(accy_dmean))
 
         if feature_selection == 1:
             df = pd.DataFrame(self.features_one)
@@ -226,7 +226,13 @@ class Clustering:
     @staticmethod
     def evaluation(clustered_dataframe):
         """Evaluate the clustered trajectories using some metrics
-            Silhouette Score, Davies-Bouldin Index, Calinski-Harabasz Index
+            Silhouette Score: A value close to +1 indicates that the samples are far away from neighboring clusters,
+                              while a value close to 0 indicates that the clusters are overlapping
+                              A negative value indicates that samples might have been assigned to the wrong cluster
+            Davies-Bouldin Index: Lower values mean better separation between clusters.
+                                  A value of 0 indicates the lowest possible score
+            Calinski-Harabasz Index:  Higher scores are better, as they indicate that the clusters are dense
+                                      and well separated, which corresponds to a model with distinct clusters
         """
         silhouette = silhouette_score(clustered_dataframe.iloc[:, 2:-1], clustered_dataframe.iloc[:, -1])
         dbi = davies_bouldin_score(clustered_dataframe.iloc[:, 2:-1], clustered_dataframe.iloc[:, -1])
@@ -251,7 +257,7 @@ def plot_features(y_label, clustered_dataframe):
     plt.ylabel(y_label)
 
 
-def plot_radar_charts(feature_names, cluster_centers):
+def plot_radar_charts(feature_names, inx, cluster_centers):
     """Plot the radar chart for each scaled cluster center"""
     # Compute angle each bar is centered on:
     angles = np.linspace(0, 2 * np.pi, len(feature_names), endpoint=False).tolist()
@@ -266,6 +272,7 @@ def plot_radar_charts(feature_names, cluster_centers):
     ax.set_yticklabels([])
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(feature_names)
+    ax.set_title(f'Cluster {inx}')
 
 
 def plot_clustered_trj_on_map(data_loader, clustered_dataframe):
@@ -280,45 +287,57 @@ def main():
     data_loader = DatasetDataLoader(get_config_path(args.map))
     data_loader.load()
 
-    feature_extractor = FeatureExtraction(data_loader.scenario.episodes)
     # determine which features category is used
-    feature_selection = 1
-    # extract feature values from the dataset
-    df = feature_extractor.extract_features(feature_selection=feature_selection)
-
+    feature_selection = 2
+    feature_extractor = FeatureExtraction()
     # begin the clustering
     cluster = Clustering()
-    if args.clustering == 'kmeans':
-        clustered_dataframe, cluster_centers = cluster.kmeans(df)
-    elif args.clustering == 'hierarchical':
-        clustered_dataframe, cluster_centers = cluster.hierarchical(df)
-    elif args.clustering == 'gmm':
-        clustered_dataframe, cluster_centers = cluster.GMM(df)
-    else:
-        raise 'No clustering method is specified.'
 
-    grouped_cluster = clustered_dataframe.groupby('label')
+    # Traverse all episodes
+    for episode in data_loader.scenario.episodes:
+        # extract feature values from the dataset
+        df = feature_extractor.extract_features(episode=episode, feature_selection=feature_selection)
 
-    # calculate important metrics
-    silhouette, dbi, chi = cluster.evaluation(clustered_dataframe)
-    print('silhouette value is ', silhouette)
-    print('Davies-Bouldin Index is ', dbi)
-    print('Calinski-Harabasz Index is ', chi)
+        if args.clustering == 'kmeans':
+            clustered_dataframe, cluster_centers = cluster.kmeans(df)
+        elif args.clustering == 'hierarchical':
+            clustered_dataframe, cluster_centers = cluster.hierarchical(df)
+        elif args.clustering == 'gmm':
+            clustered_dataframe, cluster_centers = cluster.GMM(df)
+        else:
+            raise 'No clustering method is specified.'
 
-    # visualize each feature values after clustering
-    if feature_selection == 1:
-        feature_names = list(feature_extractor.features_one.keys())
-        feature_names = feature_names[2:-1]
-        for feature_name in feature_names:
-            plot_features(feature_name, clustered_dataframe)
-        plt.show()
+        # calculate important metrics for evaluation
+        silhouette, dbi, chi = cluster.evaluation(clustered_dataframe)
+        print('silhouette value is ', silhouette)
+        print('Davies-Bouldin Index is ', dbi)
+        print('Calinski-Harabasz Index is ', chi)
 
-    elif feature_selection == 2:
-        feature_names = list(feature_extractor.features_two.keys())
-        feature_names = feature_names[2:-1]
-        for cluster_center in cluster_centers:
-            plot_radar_charts(feature_names, cluster_center)
-        plt.show()
+        # visualize each feature values after clustering
+        if feature_selection == 1:
+            feature_names = list(feature_extractor.features_one.keys())
+            feature_names = feature_names[2:-1]
+            for feature_name in feature_names:
+                plot_features(feature_name, clustered_dataframe)
+            plt.show()
+
+        elif feature_selection == 2:
+            feature_names = list(feature_extractor.features_two.keys())
+            feature_names = feature_names[2:-1]
+            for inx, cluster_center in enumerate(cluster_centers):
+                plot_radar_charts(feature_names, inx, cluster_center)
+            plt.show()
+
+        # save clustered data after observing the radar charts
+        grouped_cluster = clustered_dataframe.groupby('label')
+        labeled_aid = {'Aggressive': list(grouped_cluster.get_group(2)['agent_id']),
+                       'Normal': list(grouped_cluster.get_group(1)['agent_id']),
+                       'Conservative': list(grouped_cluster.get_group(0)['agent_id'])}
+
+        json_str = json.dumps(labeled_aid, indent=4)
+        file_path = episode.map_file.split('staticWorld.xodr')[0]
+        with open(file_path + 'drivingStyle.json', 'w') as json_file:
+            json_file.write(json_str)
 
 
 if __name__ == '__main__':

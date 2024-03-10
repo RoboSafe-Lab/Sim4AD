@@ -31,6 +31,9 @@ class FeatureExtraction:
                              'lat_acc_rms': [], 'vel_std': [], 'label': None}
         self.features_two = {'episode_id': [], 'agent_id': [], 'speed_vf': [], 'speed_dmean': [], 'speed_cv': [],
                              'speed_qcv': [], 'accx_dmean': [], 'accy_dmean': [], 'label': None}
+        self.features_custom = {'episode_id': [], 'agent_id': [], 'speed_max': [], 'speed_mean': [], 'speed_cv': [],
+                                'accx_max': [], 'accx_mean': [], 'accx_cv': [],
+                                'accy_max': [], 'accy_mean': [], 'accy_cv': [], 'label': None}
 
         self.windows_length = 3  # unit: s
 
@@ -127,48 +130,71 @@ class FeatureExtraction:
         results_containers[4].append(self.get_mean_absolute_deviation(long_acc))
         results_containers[5].append(self.get_mean_absolute_deviation(lat_acc))
 
-    def extract_features(self, episode, feature_selection: int = 1):
+    def extract_features_one(self, episode):
         """Extract feature values from the dataset for clustering"""
         for agent_id, agent in episode.agents.items():
-            time = agent.time
             long_acc = agent.ax_vec
             lat_acc = agent.ay_vec
             velocity = [np.sqrt(agent.vx_vec[i] ** 2 + agent.vy_vec[i] ** 2) for i in range(len(agent.vx_vec))]
+            # get feature values
+            self.features_one['episode_id'].append(episode.config.recording_id)
+            self.features_one['agent_id'].append(agent_id)
+            self.features_one['long_acc_max'].append(self.get_max_value(long_acc))
+            self.features_one['long_acc_fc'].append(self.get_frequency_centroid(long_acc))
+            self.features_one['lat_acc_sf'].append(self.get_shape_factor(lat_acc))
+            self.features_one['lat_acc_rms'].append(self.get_root_mean_square(lat_acc))
+            self.features_one['vel_std'].append(self.get_standard_deviation(velocity))
 
-            if feature_selection == 1:
-                # get feature values
-                self.features_one['episode_id'].append(episode.config.recording_id)
-                self.features_one['agent_id'].append(agent_id)
-                self.features_one['long_acc_max'].append(self.get_max_value(long_acc))
-                self.features_one['long_acc_fc'].append(self.get_frequency_centroid(long_acc))
-                self.features_one['lat_acc_sf'].append(self.get_shape_factor(lat_acc))
-                self.features_one['lat_acc_rms'].append(self.get_root_mean_square(lat_acc))
-                self.features_one['vel_std'].append(self.get_standard_deviation(velocity))
+    def extract_features_two(self, episode):
+        """Extract feature values from the dataset for clustering"""
+        for agent_id, agent in episode.agents.items():
+            time = agent.time
+            long_acc = [abs(ax) for ax in agent.ax_vec]
+            lat_acc = [abs(ay) for ay in agent.ay_vec]
+            velocity = [np.sqrt(agent.vx_vec[i] ** 2 + agent.vy_vec[i] ** 2) for i in range(len(agent.vx_vec))]
 
-            elif feature_selection == 2:
-                initial_inx = 0
-                speed_vf, speed_dmean, speed_cv, speed_qcv, accx_dmean, accy_dmean = ([] for _ in range(6))
-                results_containers = [speed_vf, speed_dmean, speed_cv, speed_qcv, accx_dmean, accy_dmean]
-                for inx, t in enumerate(time):
-                    if t - time[initial_inx] >= self.windows_length:
-                        self.get_feature_array(velocity[initial_inx:inx], long_acc[initial_inx:inx],
-                                               lat_acc[initial_inx:inx], results_containers)
-                        # reset the initial time until another windows length
-                        initial_inx = inx
+            initial_inx = 0
+            speed_vf, speed_dmean, speed_cv, speed_qcv, accx_dmean, accy_dmean = ([] for _ in range(6))
+            results_containers = [speed_vf, speed_dmean, speed_cv, speed_qcv, accx_dmean, accy_dmean]
+            for inx, t in enumerate(time):
+                if t - time[initial_inx] >= self.windows_length:
+                    self.get_feature_array(velocity[initial_inx:inx], long_acc[initial_inx:inx],
+                                           lat_acc[initial_inx:inx], results_containers)
+                    # reset the initial time until another windows length
+                    initial_inx = inx
 
-                # the total lifetime is smaller than the windows length
-                if initial_inx == 0:
-                    self.get_feature_array(velocity, long_acc, lat_acc, results_containers)
+            # the total lifetime is smaller than the windows length
+            if initial_inx == 0:
+                self.get_feature_array(velocity, long_acc, lat_acc, results_containers)
 
-                self.features_two['episode_id'].append(episode.config.recording_id)
-                self.features_two['agent_id'].append(agent_id)
-                # compute average value for clustering
-                self.features_two["speed_vf"].append(np.average(results_containers[0]))
-                self.features_two["speed_dmean"].append(np.average(results_containers[1]))
-                self.features_two["speed_cv"].append(np.average(results_containers[2]))
-                self.features_two["speed_qcv"].append(np.average(results_containers[3]))
-                self.features_two["accx_dmean"].append(np.average(results_containers[4]))
-                self.features_two["accy_dmean"].append(np.average(results_containers[5]))
+            self.features_two['episode_id'].append(episode.config.recording_id)
+            self.features_two['agent_id'].append(agent_id)
+            # compute average value for clustering
+            self.features_two["speed_vf"].append(np.average(results_containers[0]))
+            self.features_two["speed_dmean"].append(np.average(results_containers[1]))
+            self.features_two["speed_cv"].append(np.average(results_containers[2]))
+            self.features_two["speed_qcv"].append(np.average(results_containers[3]))
+            self.features_two["accx_dmean"].append(np.average(results_containers[4]))
+            self.features_two["accy_dmean"].append(np.average(results_containers[5]))
+
+    def extract_features_custom(self, episode):
+        """Extract feature values from the dataset for clustering"""
+        for agent_id, agent in episode.agents.items():
+            accx = [abs(ax) for ax in agent.ax_vec]
+            accy = [abs(ay) for ay in agent.ay_vec]
+            velocity = [np.sqrt(agent.vx_vec[i] ** 2 + agent.vy_vec[i] ** 2) for i in range(len(agent.vx_vec))]
+            # get feature values
+            self.features_custom['episode_id'].append(episode.config.recording_id)
+            self.features_custom['agent_id'].append(agent_id)
+            self.features_custom['speed_max'].append(self.get_max_value(velocity))
+            self.features_custom['speed_mean'].append(np.mean(velocity))
+            self.features_custom['speed_cv'].append(self.get_coefficient_variation(velocity))
+            self.features_custom['accx_max'].append(self.get_max_value(accx) if accx else 0)
+            self.features_custom['accx_mean'].append(np.mean(accx) if accx else 0)
+            self.features_custom['accx_cv'].append(self.get_coefficient_variation(accx) if accx else 0)
+            self.features_custom['accy_max'].append(self.get_max_value(accy))
+            self.features_custom['accy_mean'].append(np.mean(accy))
+            self.features_custom['accy_cv'].append(self.get_coefficient_variation(accy))
 
 
 class Clustering:
@@ -289,8 +315,6 @@ def main():
     data_loader = DatasetDataLoader(get_config_path(args.map))
     data_loader.load()
 
-    # determine which features category is used
-    feature_selection = 1
     feature_extractor = FeatureExtraction()
     # begin the clustering
     cluster = Clustering()
@@ -298,14 +322,10 @@ def main():
     # Traverse all episodes if they belong to the same map
     for episode in data_loader.scenario.episodes:
         # extract feature values from the dataset
-        feature_extractor.extract_features(episode=episode, feature_selection=feature_selection)
+        feature_extractor.extract_features_two(episode=episode)
 
-    if feature_selection == 1:
-        df = pd.DataFrame(feature_extractor.features_one)
-    elif feature_selection == 2:
-        df = pd.DataFrame(feature_extractor.features_two)
-    else:
-        df = None
+    df = pd.DataFrame(feature_extractor.features_two)
+    feature_names = list(feature_extractor.features_two.keys())
 
     if args.clustering == 'kmeans':
         clustered_dataframe, cluster_centers = cluster.kmeans(df)
@@ -323,19 +343,10 @@ def main():
     print('Calinski-Harabasz Index is ', chi)
 
     # visualize each feature values after clustering
-    if feature_selection == 1:
-        feature_names = list(feature_extractor.features_one.keys())
-        feature_names = feature_names[2:-1]
-        for feature_name in feature_names:
-            plot_features(feature_name, clustered_dataframe)
-        plt.show()
-
-    elif feature_selection == 2:
-        feature_names = list(feature_extractor.features_two.keys())
-        feature_names = feature_names[2:-1]
-        for inx, cluster_center in enumerate(cluster_centers):
-            plot_radar_charts(feature_names, inx, cluster_center)
-        plt.show()
+    feature_names = feature_names[2:-1]
+    for inx, cluster_center in enumerate(cluster_centers):
+        plot_radar_charts(feature_names, inx, cluster_center)
+    plt.show()
 
     # save clustered data after observing the radar charts
     grouped_cluster = clustered_dataframe.groupby('label')

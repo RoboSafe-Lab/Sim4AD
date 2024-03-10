@@ -110,9 +110,25 @@ class FeatureExtraction:
         r_mean = np.mean(r)
         return np.sqrt(sum((r_ - r_mean) ** 2 for r_ in r) / (len(r) - 1))
 
-    def extract_features(self, episode, feature_selection: int = 1) -> pd.DataFrame:
+    def get_feature_array(self, vel, long_acc, lat_acc, results_containers):
+        """
+        Processes a segment of the data and appends the results to the provided containers.
+
+        Parameters:
+        - initial_index: The start index of the segment.
+        - end_index: The end index of the segment.
+        - velocity, long_acc, lat_acc: The data arrays.
+        - results_containers: A list of containers to append the results to.
+        """
+        results_containers[0].append(self.get_time_varying_stochastic_volatility(vel))
+        results_containers[1].append(self.get_mean_absolute_deviation(vel))
+        results_containers[2].append(self.get_coefficient_variation(vel))
+        results_containers[3].append(self.get_quartile_coefficient_variation(vel))
+        results_containers[4].append(self.get_mean_absolute_deviation(long_acc))
+        results_containers[5].append(self.get_mean_absolute_deviation(lat_acc))
+
+    def extract_features(self, episode, feature_selection: int = 1):
         """Extract feature values from the dataset for clustering"""
-        df = None
         for agent_id, agent in episode.agents.items():
             time = agent.time
             long_acc = agent.ax_vec
@@ -130,43 +146,29 @@ class FeatureExtraction:
                 self.features_one['vel_std'].append(self.get_standard_deviation(velocity))
 
             elif feature_selection == 2:
-                initial_time = time[0]
                 initial_inx = 0
-                speed_vf = []
-                speed_dmean = []
-                speed_cv = []
-                speed_qcv = []
-                accx_dmean = []
-                accy_dmean = []
+                speed_vf, speed_dmean, speed_cv, speed_qcv, accx_dmean, accy_dmean = ([] for _ in range(6))
+                results_containers = [speed_vf, speed_dmean, speed_cv, speed_qcv, accx_dmean, accy_dmean]
                 for inx, t in enumerate(time):
-                    if t - initial_time >= self.windows_length:
-                        vel = velocity[initial_inx:inx]
-                        speed_vf.append(self.get_time_varying_stochastic_volatility(vel))
-                        speed_dmean.append(self.get_mean_absolute_deviation(vel))
-                        speed_cv.append(self.get_coefficient_variation(vel))
-                        speed_qcv.append(self.get_quartile_coefficient_variation(vel))
-                        accx_dmean.append(self.get_mean_absolute_deviation(long_acc[initial_inx:inx]))
-                        accy_dmean.append((self.get_mean_absolute_deviation(lat_acc[initial_inx:inx])))
+                    if t - time[initial_inx] >= self.windows_length:
+                        self.get_feature_array(velocity[initial_inx:inx], long_acc[initial_inx:inx],
+                                               lat_acc[initial_inx:inx], results_containers)
                         # reset the initial time until another windows length
-                        initial_time = t
                         initial_inx = inx
+
+                # the total lifetime is smaller than the windows length
+                if initial_inx == 0:
+                    self.get_feature_array(velocity, long_acc, lat_acc, results_containers)
 
                 self.features_two['episode_id'].append(episode.config.recording_id)
                 self.features_two['agent_id'].append(agent_id)
                 # compute average value for clustering
-                self.features_two["speed_vf"].append(np.average(speed_vf))
-                self.features_two["speed_dmean"].append(np.average(speed_dmean))
-                self.features_two["speed_cv"].append(np.average(speed_cv))
-                self.features_two["speed_qcv"].append(np.average(speed_qcv))
-                self.features_two["accx_dmean"].append(np.average(accx_dmean))
-                self.features_two["accy_dmean"].append(np.average(accy_dmean))
-
-        if feature_selection == 1:
-            df = pd.DataFrame(self.features_one)
-        elif feature_selection == 2:
-            df = pd.DataFrame(self.features_two)
-
-        return df
+                self.features_two["speed_vf"].append(np.average(results_containers[0]))
+                self.features_two["speed_dmean"].append(np.average(results_containers[1]))
+                self.features_two["speed_cv"].append(np.average(results_containers[2]))
+                self.features_two["speed_qcv"].append(np.average(results_containers[3]))
+                self.features_two["accx_dmean"].append(np.average(results_containers[4]))
+                self.features_two["accy_dmean"].append(np.average(results_containers[5]))
 
 
 class Clustering:
@@ -182,7 +184,7 @@ class Clustering:
         scaler = StandardScaler()
         scaled_features = scaler.fit_transform(dataframe.iloc[:, 2:-1])
         # replace 3 with your chosen number of clusters
-        kmeans = KMeans(n_init=10, n_clusters=self._n_cluster, random_state=0)
+        kmeans = KMeans(n_init='auto', n_clusters=self._n_cluster, random_state=0)
         kmeans.fit(scaled_features)
         dataframe['label'] = kmeans.labels_
         cluster_centers = kmeans.cluster_centers_
@@ -288,56 +290,68 @@ def main():
     data_loader.load()
 
     # determine which features category is used
-    feature_selection = 2
+    feature_selection = 1
     feature_extractor = FeatureExtraction()
     # begin the clustering
     cluster = Clustering()
 
-    # Traverse all episodes
+    # Traverse all episodes if they belong to the same map
     for episode in data_loader.scenario.episodes:
         # extract feature values from the dataset
-        df = feature_extractor.extract_features(episode=episode, feature_selection=feature_selection)
+        feature_extractor.extract_features(episode=episode, feature_selection=feature_selection)
 
-        if args.clustering == 'kmeans':
-            clustered_dataframe, cluster_centers = cluster.kmeans(df)
-        elif args.clustering == 'hierarchical':
-            clustered_dataframe, cluster_centers = cluster.hierarchical(df)
-        elif args.clustering == 'gmm':
-            clustered_dataframe, cluster_centers = cluster.GMM(df)
-        else:
-            raise 'No clustering method is specified.'
+    if feature_selection == 1:
+        df = pd.DataFrame(feature_extractor.features_one)
+    elif feature_selection == 2:
+        df = pd.DataFrame(feature_extractor.features_two)
+    else:
+        df = None
 
-        # calculate important metrics for evaluation
-        silhouette, dbi, chi = cluster.evaluation(clustered_dataframe)
-        print('silhouette value is ', silhouette)
-        print('Davies-Bouldin Index is ', dbi)
-        print('Calinski-Harabasz Index is ', chi)
+    if args.clustering == 'kmeans':
+        clustered_dataframe, cluster_centers = cluster.kmeans(df)
+    elif args.clustering == 'hierarchical':
+        clustered_dataframe, cluster_centers = cluster.hierarchical(df)
+    elif args.clustering == 'gmm':
+        clustered_dataframe, cluster_centers = cluster.GMM(df)
+    else:
+        raise 'No clustering method is specified.'
 
-        # visualize each feature values after clustering
-        if feature_selection == 1:
-            feature_names = list(feature_extractor.features_one.keys())
-            feature_names = feature_names[2:-1]
-            for feature_name in feature_names:
-                plot_features(feature_name, clustered_dataframe)
-            plt.show()
+    # calculate important metrics for evaluation
+    silhouette, dbi, chi = cluster.evaluation(clustered_dataframe)
+    print('silhouette value is ', silhouette)
+    print('Davies-Bouldin Index is ', dbi)
+    print('Calinski-Harabasz Index is ', chi)
 
-        elif feature_selection == 2:
-            feature_names = list(feature_extractor.features_two.keys())
-            feature_names = feature_names[2:-1]
-            for inx, cluster_center in enumerate(cluster_centers):
-                plot_radar_charts(feature_names, inx, cluster_center)
-            plt.show()
+    # visualize each feature values after clustering
+    if feature_selection == 1:
+        feature_names = list(feature_extractor.features_one.keys())
+        feature_names = feature_names[2:-1]
+        for feature_name in feature_names:
+            plot_features(feature_name, clustered_dataframe)
+        plt.show()
 
-        # save clustered data after observing the radar charts
-        grouped_cluster = clustered_dataframe.groupby('label')
-        labeled_aid = {'Aggressive': list(grouped_cluster.get_group(2)['agent_id']),
-                       'Normal': list(grouped_cluster.get_group(1)['agent_id']),
-                       'Conservative': list(grouped_cluster.get_group(0)['agent_id'])}
+    elif feature_selection == 2:
+        feature_names = list(feature_extractor.features_two.keys())
+        feature_names = feature_names[2:-1]
+        for inx, cluster_center in enumerate(cluster_centers):
+            plot_radar_charts(feature_names, inx, cluster_center)
+        plt.show()
 
-        json_str = json.dumps(labeled_aid, indent=4)
-        file_path = episode.map_file.split('staticWorld.xodr')[0]
-        with open(file_path + 'drivingStyle.json', 'w') as json_file:
-            json_file.write(json_str)
+    # save clustered data after observing the radar charts
+    grouped_cluster = clustered_dataframe.groupby('label')
+    labeled_aid = {'Aggressive': list(grouped_cluster.get_group(2)['agent_id']),
+                   'Normal': list(grouped_cluster.get_group(0)['agent_id']),
+                   'Conservative': list(grouped_cluster.get_group(1)['agent_id'])}
+    num = [len(labeled_aid['Aggressive']), len(labeled_aid['Normal']), len(labeled_aid['Conservative'])]
+    print(f'Aggressive drivers number: {num[0]}')
+    print(f'Normal drivers number: {num[1]}')
+    print(f'Conservative drivers number: {num[2]}')
+
+    json_str = json.dumps(labeled_aid, indent=4)
+    file_path = 'scenarios/configs/'
+    with open(file_path + 'drivingStyle.json', 'w') as json_file:
+        json_file.write(json_str)
+    print('Driving styles saved!')
 
 
 if __name__ == '__main__':

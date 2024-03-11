@@ -161,8 +161,8 @@ class Clustering:
     Normal, cautious, and aggressive drivers are defined here
     """
 
-    def __init__(self):
-        self._n_cluster = 3
+    def __init__(self, n_cluster: int = 3):
+        self._n_cluster = n_cluster
 
     def kmeans(self, dataframe):
         scaler = StandardScaler()
@@ -243,7 +243,7 @@ def plot_features(y_label, clustered_dataframe):
     plt.ylabel(y_label)
 
 
-def plot_radar_charts(feature_names, inx, cluster_centers):
+def plot_radar_charts(feature_names, inx, cluster_centers, driver_style=None):
     """Plot the radar chart for each scaled cluster center"""
     # Compute angle each bar is centered on:
     angles = np.linspace(0, 2 * np.pi, len(feature_names), endpoint=False).tolist()
@@ -258,7 +258,10 @@ def plot_radar_charts(feature_names, inx, cluster_centers):
     ax.set_yticklabels([])
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(feature_names)
-    ax.set_title(f'Cluster {inx}')
+    if driver_style is None:
+        ax.set_title(f'Cluster {inx}')
+    else:
+        ax.set_title(f'Cluster {driver_style[inx]}')
 
 
 def plot_clustered_trj_on_map(data_loader, clustered_dataframe):
@@ -266,6 +269,13 @@ def plot_clustered_trj_on_map(data_loader, clustered_dataframe):
     visual = Visualization()
     # first episode, please change accordingly
     visual.plot_clustered_trj_on_map(data_loader.scenario.episodes[0], clustered_dataframe)
+
+
+def save_clustered_data(labeled_data):
+    """Save clustered results to csv file"""
+    file_path = 'scenarios/configs/'
+    labeled_data.to_csv(file_path + 'drivingStyle.csv', index=False)
+    print('Driving styles saved!')
 
 
 def main():
@@ -308,19 +318,19 @@ def main():
 
     # save clustered data after observing the radar charts
     grouped_cluster = clustered_dataframe.groupby('label')
-    labeled_aid = {'Aggressive': list(grouped_cluster.get_group(2)['agent_id']),
-                   'Normal': list(grouped_cluster.get_group(0)['agent_id']),
-                   'Conservative': list(grouped_cluster.get_group(1)['agent_id'])}
-    num = [len(labeled_aid['Aggressive']), len(labeled_aid['Normal']), len(labeled_aid['Conservative'])]
-    print(f'Aggressive drivers number: {num[0]}')
-    print(f'Normal drivers number: {num[1]}')
-    print(f'Conservative drivers number: {num[2]}')
+    driver_styles = {'Cautious': 1, 'Normal': 0, 'Aggressive': 2}
+    labeled_data = pd.DataFrame()
+    for key, value in driver_styles.items():
+        for label, group in grouped_cluster:
+            if value == label:
+                processed_group = group.iloc[:, [0, 1, -1]].copy()
+                processed_group.iloc[:, -1] = key
+                labeled_data = pd.concat([labeled_data, processed_group], ignore_index=True)
+                print(f'{key} drivers number: {len(group)}')
+                break
 
-    json_str = json.dumps(labeled_aid, indent=4)
-    file_path = 'scenarios/configs/'
-    with open(file_path + 'drivingStyle.json', 'w') as json_file:
-        json_file.write(json_str)
-    print('Driving styles saved!')
+    # save labeled data to csv
+    save_clustered_data(labeled_data)
 
 
 if __name__ == '__main__':

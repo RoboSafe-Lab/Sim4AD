@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import norm, logistic
 import pandas as pd
+from typing import Dict
 
 from sim4ad.util import parse_args
 from sim4ad.data.data_loaders import DatasetDataLoader
@@ -83,20 +84,20 @@ def driving_style_matching(cluster_centers, feature_names):
     return driver_style
 
 
-def post_analysis(driver_style, clustered_dataframe) -> pd.DataFrame:
+def post_analysis(driver_style, clustered_dataframe) -> Dict:
     """Analysis the clustered data"""
-    labeled_data = pd.DataFrame()
+    labeled_data = {}
     grouped_cluster = clustered_dataframe.groupby('label')
     # compute the proportion of different risk levels
     for label, group in grouped_cluster:
-        key = driver_style[label]
-        processed_group = group.iloc[:, [0, 1, -1]].copy()
-        processed_group.iloc[:, -1] = key
-        labeled_data = pd.concat([labeled_data, processed_group], ignore_index=True)
+        ds = driver_style[label]
+        for index, row in group.iterrows():
+            key = row[0] + '/' + row[1]
+            labeled_data[key] = ds
         safe_proportion = group['sp'].mean()
         potential_danger_proportion = group['pdp'].mean()
         high_risk_proportion = group['hrp'].mean()
-        print(f'{key} drivers number: {len(group)}. Safe proportion: {safe_proportion:.2f},'
+        print(f'{ds} drivers number: {len(group)}. Safe proportion: {safe_proportion:.2f},'
               f' potential danger proportion: {potential_danger_proportion:.2f}, '
               f'high risk proportion: {high_risk_proportion:.2f} ')
 
@@ -181,7 +182,7 @@ def main():
     plt.show()
 
     # save labeled data to csv
-    save_clustered_data(labeled_data)
+    save_clustered_data(args.map, labeled_data)
 
 
 if __name__ == '__main__':

@@ -271,10 +271,12 @@ def plot_clustered_trj_on_map(data_loader, clustered_dataframe):
     visual.plot_clustered_trj_on_map(data_loader.scenario.episodes[0], clustered_dataframe)
 
 
-def save_clustered_data(labeled_data):
-    """Save clustered results to csv file"""
+def save_clustered_data(map_name, labeled_data):
+    """Save clustered results to a JSON file"""
+    json_str = json.dumps(labeled_data, indent=4)
     file_path = 'scenarios/configs/'
-    labeled_data.to_csv(file_path + 'drivingStyle.csv', index=False)
+    with open(file_path + map_name + '_drivingStyle.json', 'w') as json_file:
+        json_file.write(json_str)
     print('Driving styles saved!')
 
 
@@ -319,18 +321,18 @@ def main():
     # save clustered data after observing the radar charts
     grouped_cluster = clustered_dataframe.groupby('label')
     driver_styles = {'Cautious': 1, 'Normal': 0, 'Aggressive': 2}
-    labeled_data = pd.DataFrame()
-    for key, value in driver_styles.items():
+    labeled_data = {}
+    for ds, label_ in driver_styles.items():
         for label, group in grouped_cluster:
-            if value == label:
-                processed_group = group.iloc[:, [0, 1, -1]].copy()
-                processed_group.iloc[:, -1] = key
-                labeled_data = pd.concat([labeled_data, processed_group], ignore_index=True)
-                print(f'{key} drivers number: {len(group)}')
+            if label_ == label:
+                for index, row in group.iterrows():
+                    key_ = row[0] + '/' + row[1]
+                    labeled_data[key_] = ds
+                print(f'{ds} drivers number: {len(group)}')
                 break
 
     # save labeled data to csv
-    save_clustered_data(labeled_data)
+    save_clustered_data(args.map, labeled_data)
 
 
 if __name__ == '__main__':

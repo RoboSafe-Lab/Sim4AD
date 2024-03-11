@@ -1,12 +1,11 @@
 import json
 import abc
-import logging
+from loguru import logger
 from typing import List, Dict
 
 from sim4ad.data.episode import EpisodeConfig, EpisodeLoader, Episode
 from sim4ad.opendrive.map import Map
 
-logger = logging.getLogger(__name__)
 
 """
 Code based on: https://github.com/uoe-agents/IGP2/blob/ogrit/igp2/data/scenario.py

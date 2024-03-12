@@ -6,10 +6,10 @@ from typing import List, Dict
 from sim4ad.data.episode import EpisodeConfig, EpisodeLoader, Episode
 from sim4ad.opendrive.map import Map
 
-
 """
 Code based on: https://github.com/uoe-agents/IGP2/blob/ogrit/igp2/data/scenario.py
 """
+
 
 class ScenarioConfig:
     """Metadata about a scenario used for goal recognition"""
@@ -169,4 +169,3 @@ class DatasetScenario(Scenario):
     def load_episode(self, episode_id) -> Episode:
         """ Load specific Episode with the given ID. Does not append episode to member field episode. """
         return self._loader.load(self.config.episodes[episode_id])
-

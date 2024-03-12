@@ -1,13 +1,11 @@
 import abc
-import logging
+from loguru import logger
 import os
 import numpy as np
 from typing import List, Dict, Set
 
 from openautomatumdronedata.dataset import droneDataset
 from sim4ad.agentstate import AgentState, AgentMetadata
-
-logger = logging.getLogger(__name__)
 
 
 class EpisodeConfig:
@@ -156,8 +154,8 @@ class DatasetEpisodeLoader(EpisodeLoader):
                 frames[closest_index].add_agent_state(agent_id, state)
                 frames[closest_index].time = time
 
-        self.xodr_ = path_to_dataset_folder + '/staticWorld.xodr'
-        return Episode(config, agents, frames, statWorld, self.xodr_)
+        xodr = path_to_dataset_folder + '/staticWorld.xodr'
+        return Episode(config, agents, frames, statWorld, xodr)
 
     @staticmethod
     def _state_from_tracks(dynObj, idx, metadata: AgentMetadata = None):

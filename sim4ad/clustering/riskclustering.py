@@ -27,7 +27,7 @@ def plot_distribution(label, data):
 
     # Plot histogram and PDFs
     plt.figure(figsize=(6, 4))
-    plt.hist(data, bins=bins, density=True, alpha=0.6, color='blue', label='ITTC')
+    plt.hist(data, bins=bins, density=True, alpha=0.6, color='blue', label=label)
     plt.plot(bin_centers, fitted_normal_pdf, 'b-', label='N-fitting')
     plt.plot(bin_centers, fitted_logistic_pdf, 'g-', label='Logistic')
 

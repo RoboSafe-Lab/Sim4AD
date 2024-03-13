@@ -37,9 +37,6 @@ def main():
         with open("training_log.pkl", "wb") as file:
             pickle.dump(irl_instance.training_log, file)
 
-    # we do the evaluation here
-    test_data = load_dataset(get_config_path(args.map), ['test'])
-
 
 if __name__ == "__main__":
     main()

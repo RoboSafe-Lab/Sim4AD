@@ -60,28 +60,11 @@ class IRL:
 
             irl_env.reset(reset_time=t)
 
-            # set up buffer of the scene
-            buffer_scene = []
-
             # only one point is alive, continue
             if irl_env.interval[1] == irl_env.interval[0]:
                 continue
-            lateral_offsets, target_speeds = irl_env.sampling_space()
-            # for each lateral offset and target_speed combination
-            for lateral in lateral_offsets:
-                for target_speed in target_speeds:
-                    action = (lateral, target_speed)
-                    features, terminated, info = irl_env.step(action)
 
-                    # get the features
-                    traj_features = features[:-1]
-                    human_likeness = features[-1]
-
-                    # add scene trajectories to buffer
-                    buffer_scene.append((lateral, target_speed, traj_features, human_likeness))
-
-                    # set back to previous step
-                    irl_env.reset(reset_time=t)
+            buffer_scene = irl_env.get_buffer_scene(t)
 
             # calculate human trajectory feature
             logger.info("Compute human driver features.")
@@ -131,16 +114,21 @@ class IRL:
         for buffer_scene in self.buffer:
             for traj in buffer_scene:
                 features.append(traj[2])
-        max_v = np.max(features, axis=0)
+        max_feature = np.max(features, axis=0)
         # set maximum collision value to 1 to avoid divided by zero
-        max_v[6] = 1.0
+        max_feature[6] = 1.0
         # set social impact to 1 to avoid divided by zero
-        if max_v[7] == 0:
-            max_v[7] = 1.0
+        if max_feature[7] == 0:
+            max_feature[7] = 1.0
 
         for f in features:
             for i in range(IRL.feature_num):
-                f[i] /= max_v[i]
+                f[i] /= max_feature[i]
+
+        # save max_v for normalize features during evaluation
+        with open('max_feature.txt', 'w') as f:
+            for item in max_feature:
+                f.write("%s\n" % item)
 
         # save buffer data to avoid repeated computation
         if self.save_buffer:

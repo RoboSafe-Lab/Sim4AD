@@ -310,37 +310,26 @@ class IRLEnv:
 
         return features
 
-    def _features_human(self) -> Optional[np.ndarray]:
-        """Get features of human drivers"""
+    def get_buffer_scene(self, t):
+        """Get the features of sampled trajectories"""
+        # set up buffer of the scene
+        buffer_scene = []
 
-        features = None
-        for frame_inx in range(self.interval[0], self.interval[1] + 1):
-            ego_agent = self.episode.frames[frame_inx].agents[self.ego.UUID]
+        lateral_offsets, target_speeds = self.sampling_space()
+        # for each lateral offset and target_speed combination
+        for lateral in lateral_offsets:
+            for target_speed in target_speeds:
+                action = (lateral, target_speed)
+                features, terminated, info = self.step(action)
 
-            # travel efficiency
-            ego_speed = abs(ego_agent.speed)
+                # get the features
+                traj_features = features[:-1]
+                human_likeness = features[-1]
 
-            # comfort
-            ego_long_acc = ego_agent.acceleration[0]
-            ego_lateral_acc = ego_agent.acceleration[1]
-            if self.reset_inx == 0:
-                ego_long_jerk = 0.0
-            else:
-                ego_long_jerk = self.ego.ax_vec[self.reset_inx + self.run_step] - \
-                                self.ego.ax_vec[self.reset_inx + self.run_step - 1]
+                # add scene trajectories to buffer
+                buffer_scene.append((lateral, target_speed, traj_features, human_likeness))
 
-            # time headway front (thw_front) and time headway behind (thw_rear)
-            thw_front = self.ego.tth_dict_vec[self.reset_inx + self.run_step]['front_ego']
-            thw_rear = self.ego.tth_dict_vec[self.reset_inx + self.run_step]['behind_ego']
+                # set back to previous step
+                self.reset(reset_time=t)
 
-            self.run_step += 1
-            # feature array
-            features = np.array([ego_speed, abs(ego_long_acc), abs(ego_lat_acc), abs(ego_long_jerk),
-                                 thw_front, thw_rear, collision, social_impact, ego_likeness])
-
-        return features
-
-    # @property
-    # def position(self) -> np.ndarray:
-    #     """ Get all LaneBorders of this Lane """
-    #     return self._position
+        return buffer_scene

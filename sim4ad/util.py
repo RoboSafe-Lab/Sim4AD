@@ -1,16 +1,11 @@
 """ A collection of utility methods and classes used throughout the project. """
 import heapq
 import copy
-from typing import Tuple, List, Dict
+from typing import Tuple, List
 
 import numpy as np
 from shapely.geometry import LineString, Point
-import os
-import json
-import logging
 import argparse
-
-logger = logging.getLogger(__name__)
 
 
 def get_curvature(points: np.ndarray) -> np.ndarray:

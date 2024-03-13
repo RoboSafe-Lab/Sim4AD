@@ -75,10 +75,10 @@ class IRL:
                 continue
 
             # process data
-            human_traj = features[:-1]
             buffer_scene.append([0, 0, features[:-1], features[-1]])
 
             # save to buffer
+            human_traj = buffer_scene[-1][2]
             human_traj_features_one_agent.append(human_traj)
             buffer_one_agent.append(buffer_scene)
 
@@ -121,9 +121,10 @@ class IRL:
         if max_feature[7] == 0:
             max_feature[7] = 1.0
 
-        for f in features:
-            for i in range(IRL.feature_num):
-                f[i] /= max_feature[i]
+        for buffer_scene in self.buffer:
+            for traj in buffer_scene:
+                for i in range(IRL.feature_num):
+                    traj[2][i] /= max_feature[i]
 
         # save max_v for normalize features during evaluation
         with open('max_feature.txt', 'w') as f:

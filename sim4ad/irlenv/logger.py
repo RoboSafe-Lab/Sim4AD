@@ -22,9 +22,9 @@ class Loggable(object):
 
 
 def test():
-    from highway_env.vehicle.dynamics import Vehicle
+    from sim4ad.irlenv.vehicle.dynamics import Vehicle
     r = None
-    v = Vehicle(r, [0, 0], 0, 20)
+    v = Vehicle(r, [0, 0], 0, [20, 0])
     v.dump()
     v.dump()
     v.dump()

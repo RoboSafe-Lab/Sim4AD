@@ -326,6 +326,10 @@ def parse_args() -> argparse.Namespace:
                         default=None,
                         help="name of the clustering method",
                         type=str)
+    parser.add_argument('--episode_idx', '-e',
+                        default=None,
+                        help="the index of the episode",
+                        type=int)
 
     args = parser.parse_args()
 

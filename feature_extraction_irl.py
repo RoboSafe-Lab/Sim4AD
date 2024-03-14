@@ -17,26 +17,16 @@ def load_dataset(config_path: str = None, evaluation_data: List[str] = None):
 
 
 def main():
-    """The code can only train on one episode"""
     args = parse_args()
-    train_data = load_dataset(get_config_path(args.map), ['train'])
-
-    irl_instance = IRL(episode=train_data.scenario.episodes[0], multiprocessing=False, num_processes=12,
+    dataset = load_dataset(get_config_path(args.map))
+    episode = dataset.scenario.episodes[args.episode_idx]
+    irl_instance = IRL(episode=episode, multiprocessing=False, num_processes=12,
                        save_buffer=False, save_training_log=False)
     # compute features
     irl_instance.get_simulated_features()
 
     # normalize features
     irl_instance.normalize_features()
-
-    # Run MaxEnt IRL, sequential optimization, avoid using multiprocessing
-    for i in range(IRL.n_iters):
-        irl_instance.maxent_irl(i)
-
-    if irl_instance.save_training_log:
-        logger.info('Saved training log.')
-        with open("training_log.pkl", "wb") as file:
-            pickle.dump(irl_instance.training_log, file)
 
 
 if __name__ == "__main__":

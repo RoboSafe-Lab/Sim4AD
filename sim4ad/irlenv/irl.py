@@ -16,7 +16,7 @@ class IRL:
     lam = 0.01
     lr = 0.05
 
-    def __init__(self, episodes=None,
+    def __init__(self, episode=None,
                  multiprocessing: bool = False,
                  num_processes: int = 12,
                  save_training_log: bool = False,
@@ -25,7 +25,7 @@ class IRL:
         self.human_traj_features = []
         # initialize weights
         self.theta = np.random.normal(0, 0.05, size=IRL.feature_num)
-        self.episode = None
+        self.episode = episode
         self.scenario_map = None
         self.pm = None
         self.pv = None
@@ -40,7 +40,6 @@ class IRL:
 
         self.multiprocessing = multiprocessing
         self.num_processes = num_processes
-        self.episodes = episodes
 
     def get_feature_one_agent(self, item):
         """get the feature for one agent"""
@@ -86,25 +85,23 @@ class IRL:
 
     def get_simulated_features(self):
         """get the features of forward simulations as well as human driver features"""
-        for episode in self.episodes:
-            self.episode = episode
-            # load the open drive map
-            self.scenario_map = Map.parse_from_opendrive(episode.map_file)
+        # load the open drive map
+        self.scenario_map = Map.parse_from_opendrive(self.episode.map_file)
 
-            if self.multiprocessing:
-                with Pool(processes=self.num_processes) as pool:
-                    results = pool.map(self.get_feature_one_agent, episode.agents.items())
+        if self.multiprocessing:
+            with Pool(processes=self.num_processes) as pool:
+                results = pool.map(self.get_feature_one_agent, self.episode.agents.items())
+            if self.save_buffer:
+                for res in results:
+                    if res is not None:
+                        self.human_traj_features.extend(res[0])
+                        self.buffer.extend(res[1])
+        else:
+            for aid, agent in self.episode.agents.items():
+                human_traj_features_one_agent, buffer_one_agent = self.get_feature_one_agent((aid, agent))
                 if self.save_buffer:
-                    for res in results:
-                        if res is not None:
-                            self.human_traj_features.extend(res[0])
-                            self.buffer.extend(res[1])
-            else:
-                for aid, agent in episode.agents.items():
-                    human_traj_features_one_agent, buffer_one_agent = self.get_feature_one_agent((aid, agent))
-                    if self.save_buffer:
-                        self.human_traj_features.extend(human_traj_features_one_agent)
-                        self.buffer.extend(buffer_one_agent)
+                    self.human_traj_features.extend(human_traj_features_one_agent)
+                    self.buffer.extend(buffer_one_agent)
 
     def normalize_features(self):
         """normalize the features"""
@@ -134,7 +131,8 @@ class IRL:
         # save buffer data to avoid repeated computation
         if self.save_buffer:
             logger.info('Saved buffer data.')
-            with open("buffer.pkl", "wb") as file:
+            episode_id = self.episode.config.recording_id
+            with open(episode_id + '_buffer.pkl', "wb") as file:
                 pickle.dump([self.human_traj_features, self.buffer], file)
 
     def maxent_irl(self, iteration):

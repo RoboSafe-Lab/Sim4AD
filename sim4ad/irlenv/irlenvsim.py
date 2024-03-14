@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from loguru import logger
-from typing import Tuple, Optional
+from typing import Tuple
 
 from sim4ad.irlenv.vehicle.humandriving import HumanLikeVehicle, DatasetVehicle
 from sim4ad.opendrive import plot_map
@@ -102,11 +102,11 @@ class IRLEnv:
                                                     velocity=agent[0].velocity)
             self.vehicles.append(dataset_vehicle)
 
-    def step(self, action=None):
+    def step(self, action=None, debug=False):
         """
         Perform an MDP step
         """
-        features = self._simulate(action)
+        features = self._simulate(action, debug)
         terminal = self._is_terminal()
 
         info = {
@@ -119,7 +119,7 @@ class IRLEnv:
 
         return features, terminal, info
 
-    def _simulate(self, action, debug=False) -> np.ndarray:
+    def _simulate(self, action, debug) -> np.ndarray:
         """
         Perform several steps of simulation with the planned trajectory
         """
@@ -130,13 +130,13 @@ class IRLEnv:
         # generate simulated trajectory
         if action is not None:  # sampled goal
             self.vehicle.trajectory_planner(target_point=action[0], target_speed=action[1],
-                                            time_horizon=time_horizon, delta_t=self.ego.delta_t)
+                                            time_horizon=time_horizon, delta_t=self.delta_t)
         # generate human trajectory given initial and final state from the dataset
         else:
             ego_agent = self.episode.frames[self.interval[1]].agents[self.ego.UUID]
             target_point = utils.local2frenet(point=ego_agent.position, reference_line=self.vehicle.lane.midline)
             self.vehicle.trajectory_planner(target_point=target_point[1], target_speed=ego_agent.speed,
-                                            time_horizon=time_horizon, delta_t=self.ego.delta_t)
+                                            time_horizon=time_horizon, delta_t=self.delta_t)
 
         self.run_step = 1
 
@@ -260,7 +260,7 @@ class IRLEnv:
     def _get_thw(self) -> Tuple[float, float]:
         """Determine the thw for front and rear vehicle"""
         front_vehicle, rear_vehicle = DatasetVehicle.get_front_rear_vehicle(self.active_vehicles, self.vehicle)
-        thw_front = front_vehicle[1] / self.vehicle.velocity[0]
+        thw_front = front_vehicle[1] / self.vehicle.velocity[0] if front_vehicle[0] is not None else np.inf
         thw_rear = -rear_vehicle[1] / rear_vehicle[0].velocity[0] if rear_vehicle[0] is not None else np.inf
         thw_front = np.exp(-1 / thw_front)
         thw_rear = np.exp(-1 / thw_rear)
@@ -310,7 +310,7 @@ class IRLEnv:
 
         return features
 
-    def get_buffer_scene(self, t):
+    def get_buffer_scene(self, t, save_next_state=False):
         """Get the features of sampled trajectories"""
         # set up buffer of the scene
         buffer_scene = []
@@ -327,7 +327,10 @@ class IRLEnv:
                 human_likeness = features[-1]
 
                 # add scene trajectories to buffer
-                buffer_scene.append((lateral, target_speed, traj_features, human_likeness))
+                if save_next_state:
+                    buffer_scene.append((self.vehicle.traj[1], None, traj_features, human_likeness))
+                else:
+                    buffer_scene.append((lateral, target_speed, traj_features, human_likeness))
 
                 # set back to previous step
                 self.reset(reset_time=t)

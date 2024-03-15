@@ -13,17 +13,19 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class PolicyAgent:
-    def __init__(self, agent: Any, policy, initial_state: State):
+    def __init__(self, agent: Any, policy, initial_state: State, original_initial_time: float):
         """
         Initialize a new PolicyAgent with the given policy.
 
         :param agent: The agent as loaded from the episode.
         :param policy: A function that takes history of observations and returns acceleration and steering angle.
+
+        :param original_initial_time: The time at which the corresponding agent was created in the DATASET.
         """
 
         self._agent_id = agent.UUID
-        self._alive = True
         self._metadata = AgentMetadata(length=agent.length, width=agent.width, agent_type=agent.type,
                                        front_overhang=0.91, rear_overhang=1.094,  # TODO: front and rear overhang are arbitrary
                                        wheelbase=agent.length*0.6,  # TODO: arbitrary wheelbase
@@ -36,8 +38,8 @@ class PolicyAgent:
         self._obs_trajectory = []
         self._action_trajectory = []
         self.__evaluation_features_trajectory = defaultdict(list)  # List of all the features used for evaluation at each time step.
-        self._step = 0
         self._initial_state = initial_state
+        self._original_initial_time = original_initial_time
 
         # For the bicycle model
         correction = (self._metadata.rear_overhang - self._metadata.front_overhang) / 2  # Correction for cg
@@ -54,7 +56,6 @@ class PolicyAgent:
         acceleration, delta = self.policy(history)[0].tolist()
 
         action = Action(acceleration=acceleration, steer_angle=delta)
-        self._step += 1
 
         return action
 
@@ -71,8 +72,8 @@ class PolicyAgent:
             # The agent went out of the road.
             return False
 
-        reached_end_lane = state.lane.distance_at(state.position) > 0.98 * state.lane.length
-        if reached_end_lane is True:
+        reached_end_lane = state.lane.distance_at(state.position) > 0.97 * state.lane.length
+        if reached_end_lane:
             # TODO: adapt for other scenarios
             logger.warning("This only works for AUTOMATUM where is there is only one lane")
         return reached_end_lane
@@ -86,6 +87,8 @@ class PolicyAgent:
         """
         return self.next_action(history)
 
+    def terminated(self, max_steps: int) -> bool:
+        return len(self._state_trajectory) >= max_steps
     @property
     def agent_id(self) -> str:
         """
@@ -99,15 +102,6 @@ class PolicyAgent:
     def metadata(self) -> AgentMetadata:
         """ Metadata describing the physical properties of the agent. """
         return self._metadata
-
-    @property
-    def alive(self) -> bool:
-        """ Whether the agent is alive in the simulation. """
-        return self._alive
-
-    @alive.setter
-    def alive(self, value: bool):
-        self._alive = value
 
     def add_state(self, state: State):
         """
@@ -194,6 +188,11 @@ class PolicyAgent:
     def initial_state(self) -> State:
         """ The initial state of the agent. """
         return self._initial_state
+
+    @property
+    def original_initial_time(self) -> float:
+        """ The time at which the agent was created in the DATASET (i.e., not when spawned in the simulator). """
+        return self._original_initial_time
 
     @property
     def state(self) -> State:

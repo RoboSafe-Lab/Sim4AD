@@ -502,7 +502,7 @@ class Lane:
 
         if self.link.successor is not None:
 
-            if return_lfr_order is True:
+            if return_lfr_order:
                 raise NotImplementedError("We need to test how these lanes fit in within the context of finding"
                                           "the nearby vehicles in the feature extraction. also consider the successor a"
                                           "predecessors of the right/left lanes if the closes vehicle may be there")
@@ -515,12 +515,12 @@ class Lane:
             left_lane = self.lane_section.get_lane(self.id - (1 * invert_sign))
 
             if left_lane.type != LaneTypes.DRIVING:
-                if return_lfr_order is True:
+                if return_lfr_order:
                     neighbours.append(None)
             elif left_lane is not None:
                 neighbours.append(left_lane)
 
-        if return_lfr_order is True:
+        if return_lfr_order:
             # TODO: we have yet to code the case in which the lane has successors/predecessors to consider
             neighbours.append(self)
 
@@ -528,7 +528,7 @@ class Lane:
             right_lane = self.lane_section.get_lane(self.id + (1 * invert_sign))
 
             if right_lane.type != LaneTypes.DRIVING:
-                if return_lfr_order is True:
+                if return_lfr_order:
                     neighbours.append(None)
             elif right_lane is not None:
                 neighbours.append(right_lane)

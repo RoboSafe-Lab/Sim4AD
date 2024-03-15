@@ -168,4 +168,12 @@ class DatasetScenario(Scenario):
 
     def load_episode(self, episode_id) -> Episode:
         """ Load specific Episode with the given ID. Does not append episode to member field episode. """
+        # Find the index of the episode with the given ID
+        if isinstance(episode_id, str):
+            episode_idx = None
+            for idx, episode in enumerate(self.config.episodes):
+                if episode.recording_id == episode_id:
+                    episode_idx = idx
+                    break
+            episode_id = episode_idx
         return self._loader.load(self.config.episodes[episode_id])

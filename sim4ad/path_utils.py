@@ -7,7 +7,7 @@ def get_base_dir():
 
 
 def get_config_path(scenario_name):
-    config_path = f"{get_base_dir()}scenarios/configs/{scenario_name}.json"
+    config_path = f"{get_base_dir()}/scenarios/configs/{scenario_name}.json"
     return config_path
 
 
@@ -48,3 +48,11 @@ def write_common_property(property_name, value):
 
     with open(_common_elements_path(), 'w') as f:
         json.dump(common_elements, f, indent=4)
+
+
+def get_path_to_automatum_scenario(scenario_name):
+    return f"{get_base_dir()}/scenarios/data/automatum/{scenario_name}"
+
+
+def get_path_to_automatum_map(scenario_name):
+    return f"{get_path_to_automatum_scenario(scenario_name)}/staticWorld.xodr"

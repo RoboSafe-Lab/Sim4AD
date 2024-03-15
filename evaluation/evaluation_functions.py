@@ -32,8 +32,11 @@ class EvaluationFeaturesExtractor:
         states = states[:-1]  # Remove the last state, as it is the one where the agent died.
         obs = agent.observation_trajectory
         actions = agent.action_trajectory
-        agent.alive = False
 
+        if death_cause == DeathCause.TIMEOUT:
+            # The agent didn't have a chance to complete the episode before the simulator ended. We therefore have
+            # one more observation than action and state.
+            obs = obs[:-1]
         assert len(states) == len(obs) == len(actions)
 
         self.agents[agent.agent_id]["death_cause"] = death_cause.value
@@ -175,13 +178,15 @@ class EvaluationFeaturesExtractor:
 
         if ground_truth is not None:
             # TODO: Implement this method.
+            raise NotImplementedError("This method is not implemented yet.")
             rmse_speed = self.rmse_speed(real_speeds=ground_truth.agents)
-            rmse_position = self.rmse_position()
+            rmse_position = self.rmse_position(real_position=gro)
 
         collision_rate = self.compute_collision_rate()
         out_of_road_rate = self.compute_out_of_road_rate()
 
-        raise NotImplementedError("This method is not implemented yet.")
+        print(f"Collision rate: {collision_rate}")
+        print(f"Out of road rate: {out_of_road_rate}")
 
 
     @property

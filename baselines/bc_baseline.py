@@ -16,6 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from baselines.dataset import AutomatumDataset
 from baselines.bc_model import LSTMModel
+from sim4ad.data import DatasetDataLoader
 from sim4ad.opendrive import Map, plot_map
 from sim4ad.path_utils import baseline_path
 
@@ -24,95 +25,82 @@ logger.setLevel(logging.DEBUG)
 
 
 class BCBaseline:
-    def __init__(self, name='bc', evaluation=False):
+    def __init__(self, name: str, evaluation=False):
 
         self.name = name
-
-        expert_data = {"observations": [], "actions": []}
-
-        # TODO: load from the episodes contained in the configs
-        for scenario in [
-                        'hw-a9-appershofen-001-d8087340-8287-46b6-9612-869b09e68448',
-                        'hw-a9-appershofen-002-2234a9ae-2de1-4ad4-9f43-65c2be9696d6',
-                        'hw-a9-appershofen-003-6d6e3378-df9b-4130-8cbf-3437a77a309d',
-                        'hw-a9-appershofen-004-e7ee10c6-a428-4416-bd84-cebb0476f565',
-                        'hw-a9-appershofen-005-dc8c9357-291c-4b27-8c3d-98a048818efd',
-                        'hw-a9-appershofen-006-7e386963-33f2-4e71-a750-76cc66791d43',
-                        'hw-a9-appershofen-007-55244cc7-f80a-49dc-a29d-ed707b6ea4fb',
-                        'hw-a9-appershofen-008-44cb097b-ce86-4d2d-b509-0e0c5b5b7ad5',
-                        'hw-a9-appershofen-009-2caba3d6-ef31-48c8-b8e1-d9c6a300a68a',
-                        'hw-a9-appershofen-011-b932653c-ea9c-424a-a8cc-51fb75ad9d59',
-                        'hw-a9-appershofen-012-d696e4f3-70ac-45ac-9de1-79a2c9f6185c',
-                        'hw-a9-appershofen-013-7e5d812c-a86f-468c-b9ed-d6888991eeb7',
-                        ]:
-
-            with open(f'scenarios/data/trainingdata/{scenario}/demonstration.pkl', 'rb') as f:
-                new_expert_data = pickle.load(f)
-                expert_data['observations'] += new_expert_data['observations']
-                expert_data['actions'] += new_expert_data['actions']
-
-        self.PADDING_VALUE = -1  # used to pad the LSTM input to the same length
-
-        expert_states_all = pad_sequence(
-                [torch.as_tensor(seq, dtype=torch.float32) for seq in expert_data['observations']],
-                batch_first=True,
-                padding_value=self.PADDING_VALUE)
-        expert_actions_all = pad_sequence([torch.as_tensor(seq, dtype=torch.float32) for seq in expert_data['actions']],
-                                          batch_first=True,
-                                          padding_value=self.PADDING_VALUE)
-
-        expert_states_train, expert_states_test, expert_actions_train, expert_actions_test = train_test_split(
-            expert_states_all, expert_actions_all, test_size=0.2)
-
-        # TODO: should we normalize the data?
-
-        input_space = expert_states_train.shape[-1]
-        action_space = expert_actions_train.shape[-1]
-
         self.BATCH_SIZE = 128  # Define your batch size # TODO: parameterize
         self.SHUFFLE = True  # shuffle your data
         self.EPOCHS = 10000  # Define the number of epochs # TODO: parameterize
         self.LR = 1e-3  # Define your learning rate # TODO: parameterize
         LSTM_HIDDEN_SIZE = 128
         FC_HIDDEN_SIZE = 512
-
         DROPOUT = 0.2 if not evaluation else 0.0
+        INPUT_SPACE = 34  # TODO: parameterize
+        ACTION_SPACE = 2  # TODO: parameterize
 
-        self.model = LSTMModel(input_space, action_space, LSTM_HIDDEN_SIZE, FC_HIDDEN_SIZE, DROPOUT)
+        self.model = LSTMModel(INPUT_SPACE, ACTION_SPACE, LSTM_HIDDEN_SIZE, FC_HIDDEN_SIZE, DROPOUT)
 
-        # Check cuda, cpu or mps
-        if torch.cuda.is_available():
-            self.device = torch.device('cuda')
-
-            if torch.cuda.device_count() > 1:
-                self.model = nn.DataParallel(self.model)
-
-        elif torch.backends.mps.is_available():
-            self.device = torch.device('mps')
+        if evaluation:
+            self.model.load_state_dict(torch.load(baseline_path(self.name)))
+            self.model.eval()
         else:
-            self.device = torch.device('cpu')
+            # We are training
+            expert_data = {"observations": [], "actions": []}
 
-        logger.info(f"Training on {self.device}.")
-        self.model.to(self.device)
+            data_loader = DatasetDataLoader(f"scenarios/configs/appershofen.json")
+            data_loader.load()
 
-        # TODO: should be 34 as we should not include x/y
-        assert input_space == 34 and action_space == 2  # TODO: just for automatum dataset
-        self.loss_function = nn.MSELoss(reduction="mean")
-        self.loss_function.to(self.device)
+            for episode in data_loader.scenario.episodes:
 
-        self.train_loader = DataLoader(AutomatumDataset(expert_states_train, expert_actions_train),
-                                       batch_size=self.BATCH_SIZE, shuffle=self.SHUFFLE)
-        self.eval_loader = DataLoader(AutomatumDataset(expert_states_test, expert_actions_test),
-                                      batch_size=self.BATCH_SIZE, shuffle=self.SHUFFLE)
+                with open(f'scenarios/data/trainingdata/{episode}/demonstration.pkl', 'rb') as f:
+                    new_expert_data = pickle.load(f)
+                    expert_data['observations'] += new_expert_data['observations']
+                    expert_data['actions'] += new_expert_data['actions']
 
-        self.eval_losses = []
+            self.PADDING_VALUE = -1  # used to pad the LSTM input to the same length
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.LR)
+            expert_states_all = pad_sequence(
+                    [torch.as_tensor(seq, dtype=torch.float32) for seq in expert_data['observations']],
+                    batch_first=True,
+                    padding_value=self.PADDING_VALUE)
+            expert_actions_all = pad_sequence([torch.as_tensor(seq, dtype=torch.float32) for seq in expert_data['actions']],
+                                              batch_first=True,
+                                              padding_value=self.PADDING_VALUE)
 
-    def load_policy(self, baseline_name='bc'):
-        path = baseline_path(baseline_name)
-        raise NotImplementedError("Propery implemetn loading the policy to not have dropout")
-        self.load_state_dict(torch.load(path)) # TODO: ensure no dropout
+            expert_states_train, expert_states_test, expert_actions_train, expert_actions_test = train_test_split(
+                expert_states_all, expert_actions_all, test_size=0.2)
+
+            # TODO: should we normalize the data?
+
+            assert expert_states_train.shape[-1] == INPUT_SPACE
+            assert expert_actions_train.shape[-1] == ACTION_SPACE
+
+            self.loss_function = nn.MSELoss(reduction="mean")
+            self.loss_function.to(self.device)
+
+            self.train_loader = DataLoader(AutomatumDataset(expert_states_train, expert_actions_train),
+                                           batch_size=self.BATCH_SIZE, shuffle=self.SHUFFLE)
+            self.eval_loader = DataLoader(AutomatumDataset(expert_states_test, expert_actions_test),
+                                          batch_size=self.BATCH_SIZE, shuffle=self.SHUFFLE)
+
+            self.eval_losses = []
+
+            self.optimizer = optim.Adam(self.model.parameters(), lr=self.LR)
+
+            # Check cuda, cpu or mps
+            if torch.cuda.is_available():
+                self.device = torch.device('cuda')
+
+                if torch.cuda.device_count() > 1:
+                    self.model = nn.DataParallel(self.model)
+
+            elif torch.backends.mps.is_available():
+                self.device = torch.device('mps')
+            else:
+                self.device = torch.device('cpu')
+
+            self.model.to(self.device)
+            logger.info(f"The model is on device = {self.device}.")
 
     def compute_loss(self, trajectory, predicted_actions, actions):
         """ Only compute the loss for the time steps that were not padded """
@@ -178,6 +166,9 @@ class BCBaseline:
 
     def save(self):
         torch.save(self.model.state_dict(), baseline_path(self.name))
+
+    def __call__(self, trajectory):
+        return self.model(trajectory)
 
 
 if __name__ == '__main__':

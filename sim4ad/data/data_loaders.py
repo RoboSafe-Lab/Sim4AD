@@ -91,7 +91,7 @@ class DatasetDataLoader(DataLoader):
                 if s not in self.splits:
                     raise ValueError(f"Split type {s} is not in the valid loaded splits: {self.splits}!")
                 indices.extend(self._scenario.config.dataset_split[s])
-            return list(compress(self._scenario.episodes, indices))
+            return list(self._scenario.episodes[i] for i in indices)
 
     def train(self) -> List[Episode]:
         return self.get_split(["train"])

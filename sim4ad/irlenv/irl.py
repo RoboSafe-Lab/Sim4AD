@@ -1,11 +1,10 @@
 import numpy as np
 from loguru import logger
-import pickle
 from multiprocessing import Pool
+import pickle
 
 from sim4ad.opendrive import Map
 from sim4ad.irlenv import IRLEnv
-from sim4ad.data.data_loaders import DatasetDataLoader
 
 
 class IRL:
@@ -17,35 +16,30 @@ class IRL:
     lam = 0.01
     lr = 0.05
 
-    num_processes = 12
-
-    def __init__(self):
+    def __init__(self, episode=None,
+                 multiprocessing: bool = False,
+                 num_processes: int = 12,
+                 save_training_log: bool = False,
+                 save_buffer: bool = False):
         self.buffer = []
         self.human_traj_features = []
         # initialize weights
         self.theta = np.random.normal(0, 0.05, size=IRL.feature_num)
-        self.episode = None
+        self.episode = episode
         self.scenario_map = None
         self.pm = None
         self.pv = None
 
         self.training_log = {'iteration': [], 'average_feature_difference': [],
-                        'average_log-likelihood': [],
-                        'average_human_likeness': [],
-                        'theta': []}
+                             'average_log-likelihood': [],
+                             'average_human_likeness': [],
+                             'theta': []}
 
-        self.save_buffer = True
-        self.save_training_log = True
+        self.save_buffer = save_buffer
+        self.save_training_log = save_training_log
 
-    @staticmethod
-    def load_dataset():
-        """Loading clustered trajectories"""
-        data_loader = DatasetDataLoader(f"scenarios/configs/automatum.json")
-        data_loader.load()
-
-        episodes = data_loader.scenario.episodes
-
-        return episodes
+        self.multiprocessing = multiprocessing
+        self.num_processes = num_processes
 
     def get_feature_one_agent(self, item):
         """get the feature for one agent"""
@@ -56,7 +50,6 @@ class IRL:
         logger.info(f"Ego agent: {aid}")
 
         irl_env = IRLEnv(episode=self.episode, scenario_map=self.scenario_map, ego=agent, IDM=False)
-        terminated = False
         for inx, t in enumerate(agent.time):
             # if the agents is reaching its life end, continue, because the planned trajectory is not complete and few
             # points exist
@@ -66,28 +59,11 @@ class IRL:
 
             irl_env.reset(reset_time=t)
 
-            # set up buffer of the scene
-            buffer_scene = []
-
             # only one point is alive, continue
             if irl_env.interval[1] == irl_env.interval[0]:
                 continue
-            lateral_offsets, target_speeds = irl_env.sampling_space()
-            # for each lateral offset and target_speed combination
-            for lateral in lateral_offsets:
-                for target_speed in target_speeds:
-                    action = (lateral, target_speed)
-                    features, terminated, info = irl_env.step(action)
 
-                    # get the features
-                    traj_features = features[:-1]
-                    human_likeness = features[-1]
-
-                    # add scene trajectories to buffer
-                    buffer_scene.append((lateral, target_speed, traj_features, human_likeness))
-
-                    # set back to previous step
-                    irl_env.reset(reset_time=t)
+            buffer_scene = irl_env.get_buffer_scene(t)
 
             # calculate human trajectory feature
             logger.info("Compute human driver features.")
@@ -98,10 +74,10 @@ class IRL:
                 continue
 
             # process data
-            human_traj = features[:-1]
             buffer_scene.append([0, 0, features[:-1], features[-1]])
 
             # save to buffer
+            human_traj = buffer_scene[-1][2]
             human_traj_features_one_agent.append(human_traj)
             buffer_one_agent.append(buffer_scene)
 
@@ -109,21 +85,23 @@ class IRL:
 
     def get_simulated_features(self):
         """get the features of forward simulations as well as human driver features"""
-        # load the dataset
-        episodes = self.load_dataset()
+        # load the open drive map
+        self.scenario_map = Map.parse_from_opendrive(self.episode.map_file)
 
-        with Pool(processes=IRL.num_processes) as pool:
-            for episode in episodes:
-                self.episode = episode
-                # load the open drive map
-                self.scenario_map = Map.parse_from_opendrive(episode.map_file)
-
-                results = pool.map(self.get_feature_one_agent, episode.agents.items())
+        if self.multiprocessing:
+            with Pool(processes=self.num_processes) as pool:
+                results = pool.map(self.get_feature_one_agent, self.episode.agents.items())
+            if self.save_buffer:
+                for res in results:
+                    if res is not None:
+                        self.human_traj_features.extend(res[0])
+                        self.buffer.extend(res[1])
+        else:
+            for aid, agent in self.episode.agents.items():
+                human_traj_features_one_agent, buffer_one_agent = self.get_feature_one_agent((aid, agent))
                 if self.save_buffer:
-                    for res in results:
-                        if res is not None:
-                            self.human_traj_features.extend(res[0])
-                            self.buffer.extend(res[1])
+                    self.human_traj_features.extend(human_traj_features_one_agent)
+                    self.buffer.extend(buffer_one_agent)
 
     def normalize_features(self):
         """normalize the features"""
@@ -133,21 +111,28 @@ class IRL:
         for buffer_scene in self.buffer:
             for traj in buffer_scene:
                 features.append(traj[2])
-        max_v = np.max(features, axis=0)
+        max_feature = np.max(features, axis=0)
         # set maximum collision value to 1 to avoid divided by zero
-        max_v[6] = 1.0
+        max_feature[6] = 1.0
         # set social impact to 1 to avoid divided by zero
-        if max_v[7] == 0:
-            max_v[7] = 1.0
+        if max_feature[7] == 0:
+            max_feature[7] = 1.0
 
-        for f in features:
-            for i in range(IRL.feature_num):
-                f[i] /= max_v[i]
+        for buffer_scene in self.buffer:
+            for traj in buffer_scene:
+                for i in range(IRL.feature_num):
+                    traj[2][i] /= max_feature[i]
+
+        # save max_v for normalize features during evaluation
+        with open('max_feature.txt', 'w') as f:
+            for item in max_feature:
+                f.write("%s\n" % item)
 
         # save buffer data to avoid repeated computation
         if self.save_buffer:
             logger.info('Saved buffer data.')
-            with open("buffer.pkl", "wb") as file:
+            episode_id = self.episode.config.recording_id
+            with open(episode_id + '_buffer.pkl', "wb") as file:
                 pickle.dump([self.human_traj_features, self.buffer], file)
 
     def maxent_irl(self, iteration):
@@ -214,29 +199,8 @@ class IRL:
 
         # record info during the training
         self.training_log['iteration'].append(iteration + 1)
-        self.training_log['average_feature_difference'].append(np.linalg.norm(human_feature_exp / num_traj - feature_exp / num_traj))
+        self.training_log['average_feature_difference'].append(
+            np.linalg.norm(human_feature_exp / num_traj - feature_exp / num_traj))
         self.training_log['average_log-likelihood'].append(np.sum(log_like_list) / num_traj)
         self.training_log['average_human_likeness'].append(np.mean(iteration_human_likeness))
         self.training_log['theta'].append(self.theta)
-
-
-def main():
-    irl_instance = IRL()
-    # compute features
-    irl_instance.get_simulated_features()
-
-    # normalize features
-    irl_instance.normalize_features()
-
-    # Run MaxEnt IRL, sequential optimization, avoid using multiprocessing
-    for i in range(IRL.n_iters):
-        irl_instance.maxent_irl(i)
-
-    if irl_instance.save_training_log:
-        logger.info('Saved training log.')
-        with open("training_log.pkl", "wb") as file:
-            pickle.dump(irl_instance.training_log, file)
-
-
-if __name__ == "__main__":
-    main()

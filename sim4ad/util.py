@@ -1,16 +1,11 @@
 """ A collection of utility methods and classes used throughout the project. """
 import heapq
 import copy
-from typing import Tuple, List, Dict
+from typing import Tuple, List
 
 import numpy as np
 from shapely.geometry import LineString, Point
-import os
-import json
-import logging
 import argparse
-
-logger = logging.getLogger(__name__)
 
 
 def get_curvature(points: np.ndarray) -> np.ndarray:
@@ -324,13 +319,17 @@ def parse_args() -> argparse.Namespace:
 
     # --------General arguments-------------#
     parser.add_argument('--map', '-m',
-                        default='automatum',
+                        default='appershofen',
                         help="name of the map to be processed",
                         type=str)
     parser.add_argument('--clustering', '-c',
                         default=None,
                         help="name of the clustering method",
                         type=str)
+    parser.add_argument('--episode_idx', '-e',
+                        default=None,
+                        help="the index of the episode",
+                        type=int)
 
     args = parser.parse_args()
 

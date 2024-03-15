@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from loguru import logger
-from typing import Tuple, Optional
+from typing import Tuple
 
 from sim4ad.irlenv.vehicle.humandriving import HumanLikeVehicle, DatasetVehicle
 from sim4ad.opendrive import plot_map
@@ -102,11 +102,11 @@ class IRLEnv:
                                                     velocity=agent[0].velocity)
             self.vehicles.append(dataset_vehicle)
 
-    def step(self, action=None):
+    def step(self, action=None, debug=False):
         """
         Perform an MDP step
         """
-        features = self._simulate(action)
+        features = self._simulate(action, debug)
         terminal = self._is_terminal()
 
         info = {
@@ -119,7 +119,7 @@ class IRLEnv:
 
         return features, terminal, info
 
-    def _simulate(self, action, debug=False) -> np.ndarray:
+    def _simulate(self, action, debug) -> np.ndarray:
         """
         Perform several steps of simulation with the planned trajectory
         """
@@ -130,13 +130,13 @@ class IRLEnv:
         # generate simulated trajectory
         if action is not None:  # sampled goal
             self.vehicle.trajectory_planner(target_point=action[0], target_speed=action[1],
-                                            time_horizon=time_horizon, delta_t=self.ego.delta_t)
+                                            time_horizon=time_horizon, delta_t=self.delta_t)
         # generate human trajectory given initial and final state from the dataset
         else:
             ego_agent = self.episode.frames[self.interval[1]].agents[self.ego.UUID]
             target_point = utils.local2frenet(point=ego_agent.position, reference_line=self.vehicle.lane.midline)
             self.vehicle.trajectory_planner(target_point=target_point[1], target_speed=ego_agent.speed,
-                                            time_horizon=time_horizon, delta_t=self.ego.delta_t)
+                                            time_horizon=time_horizon, delta_t=self.delta_t)
 
         self.run_step = 1
 
@@ -260,7 +260,7 @@ class IRLEnv:
     def _get_thw(self) -> Tuple[float, float]:
         """Determine the thw for front and rear vehicle"""
         front_vehicle, rear_vehicle = DatasetVehicle.get_front_rear_vehicle(self.active_vehicles, self.vehicle)
-        thw_front = front_vehicle[1] / self.vehicle.velocity[0]
+        thw_front = front_vehicle[1] / self.vehicle.velocity[0] if front_vehicle[0] is not None else np.inf
         thw_rear = -rear_vehicle[1] / rear_vehicle[0].velocity[0] if rear_vehicle[0] is not None else np.inf
         thw_front = np.exp(-1 / thw_front)
         thw_rear = np.exp(-1 / thw_rear)
@@ -310,37 +310,29 @@ class IRLEnv:
 
         return features
 
-    def _features_human(self) -> Optional[np.ndarray]:
-        """Get features of human drivers"""
+    def get_buffer_scene(self, t, save_next_state=False):
+        """Get the features of sampled trajectories"""
+        # set up buffer of the scene
+        buffer_scene = []
 
-        features = None
-        for frame_inx in range(self.interval[0], self.interval[1] + 1):
-            ego_agent = self.episode.frames[frame_inx].agents[self.ego.UUID]
+        lateral_offsets, target_speeds = self.sampling_space()
+        # for each lateral offset and target_speed combination
+        for lateral in lateral_offsets:
+            for target_speed in target_speeds:
+                action = (lateral, target_speed)
+                features, terminated, info = self.step(action)
 
-            # travel efficiency
-            ego_speed = abs(ego_agent.speed)
+                # get the features
+                traj_features = features[:-1]
+                human_likeness = features[-1]
 
-            # comfort
-            ego_long_acc = ego_agent.acceleration[0]
-            ego_lateral_acc = ego_agent.acceleration[1]
-            if self.reset_inx == 0:
-                ego_long_jerk = 0.0
-            else:
-                ego_long_jerk = self.ego.ax_vec[self.reset_inx + self.run_step] - \
-                                self.ego.ax_vec[self.reset_inx + self.run_step - 1]
+                # add scene trajectories to buffer
+                if save_next_state:
+                    buffer_scene.append((self.vehicle.traj[1], None, traj_features, human_likeness))
+                else:
+                    buffer_scene.append((lateral, target_speed, traj_features, human_likeness))
 
-            # time headway front (thw_front) and time headway behind (thw_rear)
-            thw_front = self.ego.tth_dict_vec[self.reset_inx + self.run_step]['front_ego']
-            thw_rear = self.ego.tth_dict_vec[self.reset_inx + self.run_step]['behind_ego']
+                # set back to previous step
+                self.reset(reset_time=t)
 
-            self.run_step += 1
-            # feature array
-            features = np.array([ego_speed, abs(ego_long_acc), abs(ego_lat_acc), abs(ego_long_jerk),
-                                 thw_front, thw_rear, collision, social_impact, ego_likeness])
-
-        return features
-
-    # @property
-    # def position(self) -> np.ndarray:
-    #     """ Get all LaneBorders of this Lane """
-    #     return self._position
+        return buffer_scene

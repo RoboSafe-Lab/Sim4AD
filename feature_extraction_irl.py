@@ -20,6 +20,7 @@ def main():
     args = parse_args()
     dataset = load_dataset(get_config_path(args.map))
     episode = dataset.scenario.episodes[args.episode_idx]
+    logger.info(f'Computing {episode.config.recording_id}')
     irl_instance = IRL(episode=episode, multiprocessing=False, num_processes=12,
                        save_buffer=False, save_training_log=False)
     # compute features

@@ -30,8 +30,7 @@ def main():
     irl_instance.normalize_features()
 
     # Run MaxEnt IRL, sequential optimization, avoid using multiprocessing
-    for i in range(IRL.n_iters):
-        irl_instance.maxent_irl(i)
+    irl_instance.maxent_irl()
 
     if irl_instance.save_training_log:
         logger.info('Saved training log.')

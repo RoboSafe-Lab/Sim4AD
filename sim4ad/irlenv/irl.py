@@ -135,72 +135,80 @@ class IRL:
             with open(episode_id + '_buffer.pkl', "wb") as file:
                 pickle.dump([self.human_traj_features, self.buffer], file)
 
-    def maxent_irl(self, iteration):
+    def maxent_irl(self, buffer=None):
         """training the weights under each iteration"""
+        if buffer is None:
+            buffer_scenes = self.buffer
+            human_features = self.human_traj_features
+        # feature extracting and training are seperated, first save, then training
+        else:
+            human_features = buffer[0]
+            buffer_scenes = buffer[1]
 
-        logger.info(f'interation: {iteration + 1}/{IRL.n_iters}')
-        # fix collision feature's weight
-        self.theta[6] = -10
+        for i in range(IRL.n_iters):
+            logger.info(f'interation: {i + 1}/{IRL.n_iters}')
+            # fix collision feature's weight
+            self.theta[6] = -10
 
-        feature_exp = np.zeros([IRL.feature_num])
-        human_feature_exp = np.zeros([IRL.feature_num])
-        index = 0
-        log_like_list = []
-        iteration_human_likeness = []
-        num_traj = 0
+            feature_exp = np.zeros([IRL.feature_num])
+            human_feature_exp = np.zeros([IRL.feature_num])
+            index = 0
+            log_like_list = []
+            iteration_human_likeness = []
+            num_traj = 0
 
-        for scene in self.buffer:
-            # compute on each scene
-            scene_trajs = []
-            for trajectory in scene:
-                reward = np.dot(trajectory[2], self.theta)
-                scene_trajs.append((reward, trajectory[2], trajectory[3]))  # reward, feature vector, human likeness
+            for scene in buffer_scenes:
+                # compute on each scene
+                scene_trajs = []
+                for trajectory in scene:
+                    reward = np.dot(trajectory[2], self.theta)
+                    scene_trajs.append((reward, trajectory[2], trajectory[3]))  # reward, feature vector, human likeness
 
-            # calculate probability of each trajectory
-            rewards = [traj[0] for traj in scene_trajs]
-            probs = [np.exp(reward) for reward in rewards]
-            probs = probs / np.sum(probs)
+                # calculate probability of each trajectory
+                rewards = [traj[0] for traj in scene_trajs]
+                probs = [np.exp(reward) for reward in rewards]
+                probs = probs / np.sum(probs)
 
-            # calculate feature expectation with respect to the weights
-            traj_features = np.array([traj[1] for traj in scene_trajs])
-            feature_exp += np.dot(probs, traj_features)  # feature expectation
+                # calculate feature expectation with respect to the weights
+                traj_features = np.array([traj[1] for traj in scene_trajs])
+                feature_exp += np.dot(probs, traj_features)  # feature expectation
 
-            # calculate likelihood
-            log_like = np.log(probs[-1] / np.sum(probs))
-            log_like_list.append(log_like)
+                # calculate likelihood
+                log_like = np.log(probs[-1] / np.sum(probs))
+                log_like_list.append(log_like)
 
-            # select trajectories to calculate human likeness
-            # extracting the indices of the top 3 highest values in probs
-            idx = probs.argsort()[-3:][::-1]
-            iteration_human_likeness.append(np.min([scene_trajs[i][-1] for i in idx]))
+                # select trajectories to calculate human likeness
+                # extracting the indices of the top 3 highest values in probs
+                idx = probs.argsort()[-3:][::-1]
+                iteration_human_likeness.append(np.min([scene_trajs[i][-1] for i in idx]))
 
-            # calculate human trajectory feature
-            human_feature_exp += self.human_traj_features[index]
+                # calculate human trajectory feature
+                human_feature_exp += human_features[index]
 
-            # go to next trajectory
-            num_traj += 1
-            index += 1
+                # go to next trajectory
+                num_traj += 1
+                index += 1
 
-        # compute gradient
-        grad = human_feature_exp - feature_exp - 2 * IRL.lam * self.theta
-        grad = np.array(grad, dtype=float)
+            # compute gradient
+            grad = human_feature_exp - feature_exp - 2 * IRL.lam * self.theta
+            grad = np.array(grad, dtype=float)
 
-        # update weights using Adam optimization
-        if self.pm is None:
-            self.pm = np.zeros_like(grad)
-            self.pv = np.zeros_like(grad)
+            # update weights using Adam optimization
+            if self.pm is None:
+                self.pm = np.zeros_like(grad)
+                self.pv = np.zeros_like(grad)
 
-        self.pm = IRL.beta1 * self.pm + (1 - IRL.beta1) * grad
-        self.pv = IRL.beta2 * self.pv + (1 - IRL.beta2) * (grad * grad)
-        mhat = self.pm / (1 - IRL.beta1 ** (iteration + 1))
-        vhat = self.pv / (1 - IRL.beta2 ** (iteration + 1))
-        update_vec = mhat / (np.sqrt(vhat) + IRL.eps)
-        self.theta += IRL.lr * update_vec
+            self.pm = IRL.beta1 * self.pm + (1 - IRL.beta1) * grad
+            self.pv = IRL.beta2 * self.pv + (1 - IRL.beta2) * (grad * grad)
+            mhat = self.pm / (1 - IRL.beta1 ** (i + 1))
+            vhat = self.pv / (1 - IRL.beta2 ** (i + 1))
+            update_vec = mhat / (np.sqrt(vhat) + IRL.eps)
+            self.theta += IRL.lr * update_vec
 
-        # record info during the training
-        self.training_log['iteration'].append(iteration + 1)
-        self.training_log['average_feature_difference'].append(
-            np.linalg.norm(human_feature_exp / num_traj - feature_exp / num_traj))
-        self.training_log['average_log-likelihood'].append(np.sum(log_like_list) / num_traj)
-        self.training_log['average_human_likeness'].append(np.mean(iteration_human_likeness))
-        self.training_log['theta'].append(self.theta)
+            # record info during the training
+            self.training_log['iteration'].append(i + 1)
+            self.training_log['average_feature_difference'].append(
+                np.linalg.norm(human_feature_exp / num_traj - feature_exp / num_traj))
+            self.training_log['average_log-likelihood'].append(np.sum(log_like_list) / num_traj)
+            self.training_log['average_human_likeness'].append(np.mean(iteration_human_likeness))
+            self.training_log['theta'].append(self.theta)

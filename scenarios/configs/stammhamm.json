@@ -1,0 +1,33 @@
+{
+    "data_format": "automatum",
+    "data_root": "scenarios/data/automatum",
+    "episodes": [
+        {"recording_id": "hw-a9-stammhamm-001-c9180c3a-c643-4efe-803d-eb93fa8382af"},
+        {"recording_id": "hw-a9-stammhamm-002-a0b2a3cf-1f01-46b6-90ef-44352f95d942"},
+        {"recording_id": "hw-a9-stammhamm-005-478f99b8-4e10-46fb-9fdc-3b03c1d28624"},
+        {"recording_id": "hw-a9-stammhamm-006-33a00c80-bd6b-4ccf-8fde-348fbb48fdea"},
+        {"recording_id": "hw-a9-stammhamm-007-f0c141fe-2881-4c9b-96d1-ccdc02c6126c"},
+        {"recording_id": "hw-a9-stammhamm-008-2d77e236-1728-4492-99f7-4582ecaa6bee"},
+        {"recording_id": "hw-a9-stammhamm-012-f5820908-4c14-4e7b-8deb-c278157f0617"},
+        {"recording_id": "hw-a9-stammhamm-013-6440a903-6722-42a9-bb4c-03eff1bc4927"},
+        {"recording_id": "hw-a9-stammhamm-014-df63e498-6313-4cd6-8495-c612dbc541ab"},
+        {"recording_id": "hw-a9-stammhamm-015-39f0066a-28f0-4a68-b4e8-5d5024720c4e"},
+        {"recording_id": "hw-a9-stammhamm-016-eb79c4ad-eda3-4129-a8b6-e0fe209ba894"},
+        {"recording_id": "hw-a9-stammhamm-020-e2c1164d-198b-4aff-9ff0-cb39bab92a4b"},
+        {"recording_id": "hw-a9-stammhamm-021-3d17c4f2-33bd-479a-9049-1b9f0db31c92"},
+        {"recording_id": "hw-a9-stammhamm-022-5d50ae13-7526-43af-a18c-d64e4c09679d"},
+        {"recording_id": "hw-a9-stammhamm-023-2622d4b7-267b-4a01-81a0-470ab286e20c"},
+        {"recording_id": "hw-a9-stammhamm-025-7b0e687a-0cf5-48d0-a710-883373e8f335"}
+    ],
+    "dataset_split": {
+        "train": [
+             0
+         ],
+        "valid": [
+             0
+        ],
+        "test": [
+            0
+        ]
+    }
+}

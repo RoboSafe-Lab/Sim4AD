@@ -1,0 +1,20 @@
+{
+    "data_format": "automatum",
+    "data_root": "scenarios/data/automatum",
+    "episodes": [
+        {"recording_id": "hw-a9-heppbergpark-002-2f4bbc0c-b4f4-4f1e-aea0-95c25603ca34"},
+        {"recording_id": "hw-a9-heppbergpark-003-81e8160b-66bf-4cd9-bd62-b5a7eeab0375"},
+        {"recording_id": "hw-a9-heppbergpark-006-eabe6201-0090-49e0-a93a-128c3a34c6ac"}
+    ],
+    "dataset_split": {
+        "train": [
+             0
+         ],
+        "valid": [
+             0
+        ],
+        "test": [
+            0
+        ]
+    }
+}

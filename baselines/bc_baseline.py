@@ -16,9 +16,9 @@ from torch.utils.tensorboard import SummaryWriter
 
 from baselines.dataset import AutomatumDataset
 from baselines.bc_model import LSTMModel
-from sim4ad.data import DatasetDataLoader
+from sim4ad.data import DatasetDataLoader, ScenarioConfig
 from sim4ad.opendrive import Map, plot_map
-from sim4ad.path_utils import baseline_path
+from sim4ad.path_utils import baseline_path, get_config_path
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -30,7 +30,7 @@ class BCBaseline:
         self.name = name
         self.BATCH_SIZE = 128  # Define your batch size # TODO: parameterize
         self.SHUFFLE = True  # shuffle your data
-        self.EPOCHS = 10000  # Define the number of epochs # TODO: parameterize
+        self.EPOCHS = 1000  # Define the number of epochs # TODO: parameterize
         self.LR = 1e-3  # Define your learning rate # TODO: parameterize
         LSTM_HIDDEN_SIZE = 128
         FC_HIDDEN_SIZE = 512
@@ -47,11 +47,11 @@ class BCBaseline:
             # We are training
             expert_data = {"observations": [], "actions": []}
 
-            data_loader = DatasetDataLoader(f"scenarios/configs/appershofen.json")
-            data_loader.load()
+            configs = ScenarioConfig.load(get_config_path("appershofen"))
+            idx = configs.dataset_split["train"]
+            episode_names = [x.recording_id for i, x in enumerate(configs.episodes) if i in idx]
 
-            for episode in data_loader.scenario.episodes:
-
+            for episode in episode_names:
                 with open(f'scenarios/data/trainingdata/{episode}/demonstration.pkl', 'rb') as f:
                     new_expert_data = pickle.load(f)
                     expert_data['observations'] += new_expert_data['observations']
@@ -75,18 +75,6 @@ class BCBaseline:
             assert expert_states_train.shape[-1] == INPUT_SPACE
             assert expert_actions_train.shape[-1] == ACTION_SPACE
 
-            self.loss_function = nn.MSELoss(reduction="mean")
-            self.loss_function.to(self.device)
-
-            self.train_loader = DataLoader(AutomatumDataset(expert_states_train, expert_actions_train),
-                                           batch_size=self.BATCH_SIZE, shuffle=self.SHUFFLE)
-            self.eval_loader = DataLoader(AutomatumDataset(expert_states_test, expert_actions_test),
-                                          batch_size=self.BATCH_SIZE, shuffle=self.SHUFFLE)
-
-            self.eval_losses = []
-
-            self.optimizer = optim.Adam(self.model.parameters(), lr=self.LR)
-
             # Check cuda, cpu or mps
             if torch.cuda.is_available():
                 self.device = torch.device('cuda')
@@ -101,6 +89,18 @@ class BCBaseline:
 
             self.model.to(self.device)
             logger.info(f"The model is on device = {self.device}.")
+
+            self.loss_function = nn.MSELoss(reduction="mean")
+            self.loss_function.to(self.device)
+
+            self.train_loader = DataLoader(AutomatumDataset(expert_states_train, expert_actions_train),
+                                           batch_size=self.BATCH_SIZE, shuffle=self.SHUFFLE)
+            self.eval_loader = DataLoader(AutomatumDataset(expert_states_test, expert_actions_test),
+                                          batch_size=self.BATCH_SIZE, shuffle=self.SHUFFLE)
+
+            self.eval_losses = []
+
+            self.optimizer = optim.Adam(self.model.parameters(), lr=self.LR)
 
     def compute_loss(self, trajectory, predicted_actions, actions):
         """ Only compute the loss for the time steps that were not padded """
@@ -172,5 +172,5 @@ class BCBaseline:
 
 
 if __name__ == '__main__':
-    policy_network = BCBaseline("bc-all-obs")
+    policy_network = BCBaseline("bc-all-obs-1.5_pi")
     policy_network.train(num_epochs=policy_network.EPOCHS, learning_rate=policy_network.LR)

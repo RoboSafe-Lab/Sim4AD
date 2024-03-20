@@ -49,7 +49,7 @@ class IRL:
 
         logger.info(f"Ego agent: {aid}")
 
-        irl_env = IRLEnv(episode=self.episode, scenario_map=self.scenario_map, ego=agent, IDM=False)
+        irl_env = IRLEnv(episode=self.episode, scenario_map=self.scenario_map, ego=agent, idm=False)
         for inx, t in enumerate(agent.time):
             # if the agents is reaching its life end, continue, because the planned trajectory is not complete and few
             # points exist

@@ -12,11 +12,11 @@ class IRLEnv:
     forward_simulation_time = 5  # time_horizon
     delta_t = 0.033366700033366704
 
-    def __init__(self, episode, scenario_map, ego, IDM):
+    def __init__(self, episode, scenario_map, ego=None, idm=False):
         self.human = False
         self.episode = episode
         self.scenario_map = scenario_map
-        self.IDM = IDM
+        self.IDM = idm
         self.ego = ego
         self.reset_inx = None
         self.time = 0
@@ -310,7 +310,7 @@ class IRLEnv:
 
         return features
 
-    def get_buffer_scene(self, t, save_next_state=False):
+    def get_buffer_scene(self, t, save_planned_tra=False):
         """Get the features of sampled trajectories"""
         # set up buffer of the scene
         buffer_scene = []
@@ -327,8 +327,8 @@ class IRLEnv:
                 human_likeness = features[-1]
 
                 # add scene trajectories to buffer
-                if save_next_state:
-                    buffer_scene.append((self.vehicle.traj[1], None, traj_features, human_likeness))
+                if save_planned_tra:
+                    buffer_scene.append((self.vehicle.traj, None, traj_features, human_likeness))
                 else:
                     buffer_scene.append((lateral, target_speed, traj_features, human_likeness))
 

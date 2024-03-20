@@ -59,10 +59,6 @@ class IRL:
 
             irl_env.reset(reset_time=t)
 
-            # only one point is alive, continue
-            if irl_env.interval[1] == irl_env.interval[0]:
-                continue
-
             buffer_scene = irl_env.get_buffer_scene(t)
 
             # calculate human trajectory feature

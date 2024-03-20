@@ -126,8 +126,6 @@ def main():
                     continue
 
                 # TODO: if replan frequency is too large, replan occurs a discrepancy
-                # generate planner for each agent
-
                 agent = episode.agents[aid]
                 irl_eva.ego = agent
 

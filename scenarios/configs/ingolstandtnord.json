@@ -1,0 +1,18 @@
+{
+    "data_format": "automatum",
+    "data_root": "scenarios/data/automatum",
+    "episodes": [
+        {"recording_id": "hw-a9-ingolstadtnord-002-52a68945-d3be-4128-847c-138715d7e9b9"}
+    ],
+    "dataset_split": {
+        "train": [
+             0
+         ],
+        "valid": [
+             0
+        ],
+        "test": [
+            0
+        ]
+    }
+}

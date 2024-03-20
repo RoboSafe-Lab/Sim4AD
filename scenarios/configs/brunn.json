@@ -2,8 +2,14 @@
     "data_format": "automatum",
     "data_root": "scenarios/data/automatum",
     "episodes": [
-        {
-            "recording_id": "hw-a9-brunn-002-30250d63-e5d7-44b4-9e56-4a29534a9b09"
-        }
+        {"recording_id": "hw-a9-brunn-001-b0ff8032-cc0c-49f8-9f62-b468e7034287"},
+        {"recording_id": "hw-a9-brunn-002-30250d63-e5d7-44b4-9e56-4a29534a9b09"},
+        {"recording_id": "hw-a9-brunn-003-c50fba22-c92e-43cb-92d3-c856b78f77b4"},
+        {"recording_id": "hw-a9-brunn-004-90f5df2e-cee7-430b-8339-1d280f2ba35e"},
+        {"recording_id": "hw-a9-brunn-005-8b45f56f-d38f-4633-b357-29385e871031"},
+        {"recording_id": "hw-a9-brunn-007-e87cec60-66cd-4da6-9be6-483cc088fd67"},
+        {"recording_id": "hw-a9-brunn-008-a164dd52-795d-4b47-9b37-093a601c0fa4"},
+        {"recording_id": "hw-a9-brunn-009-a65fa0da-5bc5-4d9d-80b5-7afd86d6704d"},
+        {"recording_id": "hw-a9-brunn-010-08ee8216-ee20-4589-a468-290c2ecc723b"}
     ]
 }

@@ -139,7 +139,9 @@ class DatasetEpisodeLoader(EpisodeLoader):
             if dynObj.get_first_time() < min_time:
                 min_time = dynObj.get_first_time()
         time_vec = np.arange(min_time, dynWorld.maxTime, dynWorld.delta_t)
-        time_vec = np.append(time_vec, dynWorld.maxTime)
+        # time_vec[-1] is smaller than dynWorld.maxTime, but could be vey very close to it
+        if dynWorld.maxTime - time_vec[-1] >= 0.03:
+            time_vec = np.append(time_vec, dynWorld.maxTime)
         frames = [Frame(t) for t in time_vec]
 
         for dynObj in dynObjectList:

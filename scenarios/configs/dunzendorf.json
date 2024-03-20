@@ -1,0 +1,28 @@
+{
+    "data_format": "automatum",
+    "data_root": "scenarios/data/automatum",
+    "episodes": [
+        {"recording_id": "hw-a9-dunzendorf-001-2eacde43-2475-4b0e-8a75-51174b2890f4"},
+        {"recording_id": "hw-a9-dunzendorf-002-5fb0a155-fd7b-4aa5-bc03-ead5d2e16bce"},
+        {"recording_id": "hw-a9-dunzendorf-003-e113cd9f-a0cf-4693-a20e-6b9254a054cd"},
+        {"recording_id": "hw-a9-dunzendorf-004-4821830a-87d7-4f2d-ab8b-fa5ba4bc9bf1"},
+        {"recording_id": "hw-a9-dunzendorf-005-73a4aa3a-a287-4b60-9482-6d45224b03ed"},
+        {"recording_id": "hw-a9-dunzendorf-006-55788231-6ca8-43a5-9a9a-abcc316e476b"},
+        {"recording_id": "hw-a9-dunzendorf-007-2ecc3fd8-b9a0-4eff-b817-556e4ace4f1b"},
+        {"recording_id": "hw-a9-dunzendorf-008-aa61d6ee-2db3-45d4-9ce0-098a34743366"},
+        {"recording_id": "hw-a9-dunzendorf-010-37c5fcab-77bd-4323-a332-995a76a99928"},
+        {"recording_id": "hw-a9-dunzendorf-011-7f5292de-08d0-415b-8a0e-668c38a17671"},
+        {"recording_id": "hw-a9-dunzendorf-012-238ffda9-9bc2-41f8-b4e8-63eeef38b192"}
+    ],
+    "dataset_split": {
+        "train": [
+             0
+         ],
+        "valid": [
+             0
+        ],
+        "test": [
+            0
+        ]
+    }
+}

@@ -1,0 +1,23 @@
+{
+    "data_format": "automatum",
+    "data_root": "scenarios/data/automatum",
+    "episodes": [
+        {"recording_id": "hw-a9-untermaessing-001-a55a8c27-14c0-4d5a-a9a5-edf10e18f2f8"},
+        {"recording_id": "hw-a9-untermaessing-002-17b2453f-c017-46d2-8039-46e0d20fa188"},
+        {"recording_id": "hw-a9-untermaessing-004-63f9163b-8609-47ae-b76c-31f9df010830"},
+        {"recording_id": "hw-a9-untermaessing-005-2bf77d20-9ce8-4aa2-97a1-bc46fa0c9fba"},
+        {"recording_id": "hw-a9-untermaessing-006-a76d984b-b821-40a3-a4bc-4e7f2f2798bb"},
+        {"recording_id": "hw-a9-untermaessing-007-52b857cf-170f-444e-b6cd-3db28add9535"}
+    ],
+    "dataset_split": {
+        "train": [
+             0
+         ],
+        "valid": [
+             0
+        ],
+        "test": [
+            0
+        ]
+    }
+}

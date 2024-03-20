@@ -1,0 +1,19 @@
+{
+    "data_format": "automatum",
+    "data_root": "scenarios/data/automatum",
+    "episodes": [
+        {"recording_id": "hw-a9-apperszell-010-5a04160f-c961-4d9a-8f78-1dd6cc3956e4"},
+        {"recording_id": "hw-a9-apperszell-012-0329f7e1-2575-4da5-b0c9-36fa7b33280f"}
+    ],
+    "dataset_split": {
+        "train": [
+             0
+         ],
+        "valid": [
+             0
+        ],
+        "test": [
+            0
+        ]
+    }
+}

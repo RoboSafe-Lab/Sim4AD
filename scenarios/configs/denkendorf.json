@@ -1,0 +1,54 @@
+{
+    "data_format": "automatum",
+    "data_root": "scenarios/data/automatum",
+    "episodes": [
+        {"recording_id": "hw-a9-denkendorf-002-806f9df5-3599-4f69-94c3-92ee327992e7"},
+        {"recording_id": "hw-a9-denkendorf-003-2c3aa05f-c5c9-4b88-a156-391e8434858b"},
+        {"recording_id": "hw-a9-denkendorf-005-d2c2e9bd-6500-4efd-a451-eca9492cd82a"},
+        {"recording_id": "hw-a9-denkendorf-006-a1fb9f3f-8263-45b4-bb74-2b62523e48b6"},
+        {"recording_id": "hw-a9-denkendorf-007-5f3dc8c3-73f3-4a6a-8083-86f69d3e20e2"},
+        {"recording_id": "hw-a9-denkendorf-008-eb2d8139-baa7-4834-a7c6-9fe76e38e153"},
+        {"recording_id": "hw-a9-denkendorf-009-3dc891bb-f8d4-4ce4-bfbe-e88bd8ace2f4"},
+        {"recording_id": "hw-a9-denkendorf-011-c52c1b2a-f7e2-4292-95eb-4c5c3cd66bb4"},
+        {"recording_id": "hw-a9-denkendorf-012-bb2e9076-b23c-4993-a8dd-87ce5f587875"},
+        {"recording_id": "hw-a9-denkendorf-013-90a772f1-f750-40e0-a34c-23c57981de35"},
+        {"recording_id": "hw-a9-denkendorf-035-de265ba6-96d4-431f-a91c-b25de3f9fd69"},
+        {"recording_id": "hw-a9-denkendorf-037-67b77921-b0e0-4a41-8f55-9e3d5b50f98a"},
+        {"recording_id": "hw-a9-denkendorf-038-2168e1be-1e64-4138-9f21-5fe8664d6409"},
+        {"recording_id": "hw-a9-denkendorf-039-e6de42a6-763e-46b4-bbc0-560938dda9e7"},
+        {"recording_id": "hw-a9-denkendorf-040-3560728d-6b82-4e0b-bcfa-ec0724528c23"},
+        {"recording_id": "hw-a9-denkendorf-041-61fe91c6-ce5d-46ba-ab86-4a8b6cbde0e7"},
+        {"recording_id": "hw-a9-denkendorf-042-3ee22827-7150-4b41-bbc8-134e4b8c3b9f"},
+        {"recording_id": "hw-a9-denkendorf-043-ea62b201-33c7-4ed6-bbbf-69aa2bb7add3"},
+        {"recording_id": "hw-a9-denkendorf-044-43d3b645-9f53-4d12-a302-9169e8a00f81"},
+        {"recording_id": "hw-a9-denkendorf-045-e2152022-abc8-4f94-ac35-c2792bcb82df"},
+        {"recording_id": "hw-a9-denkendorf-046-6195d882-9610-4200-a6fa-5a2663d3e8e1"},
+        {"recording_id": "hw-a9-denkendorf-047-cf164056-877e-464a-9da2-6b725de7fcee"},
+        {"recording_id": "hw-a9-denkendorf-048-bef98cde-3e5b-4c2f-ba9c-727455fd7bd6"},
+        {"recording_id": "hw-a9-denkendorf-049-0bddc4d7-7377-4c53-b70d-d331ed3b114c"},
+        {"recording_id": "hw-a9-denkendorf-050-455a7607-fa37-40ae-85a3-47d41671e32b"},
+        {"recording_id": "hw-a9-denkendorf-051-9cf607ab-5495-4e53-9bd6-add5904fbb85"},
+        {"recording_id": "hw-a9-denkendorf-052-21d311ac-2156-4db5-8baf-36a76095a2df"},
+        {"recording_id": "hw-a9-denkendorf-053-09f7d1ee-6a99-4430-941f-255e0f69f92a"},
+        {"recording_id": "hw-a9-denkendorf-054-b7070020-701a-4ee1-9413-4b318f8b8db0"},
+        {"recording_id": "hw-a9-denkendorf-055-f9c73583-05b5-4c28-aeca-f60d53bd4b33"},
+        {"recording_id": "hw-a9-denkendorf-056-d06e7cc0-633e-4da6-9c78-05bd32e894a5"},
+        {"recording_id": "hw-a9-denkendorf-057-b0d5f340-3ac9-4c34-b13b-5d6ca0e367a4"},
+        {"recording_id": "hw-a9-denkendorf-058-74a2d848-4fb5-4a8c-86a2-9f1e760584c1"},
+        {"recording_id": "hw-a9-denkendorf-059-ed6acefc-5068-4006-8ff9-56ab3eb93496"},
+        {"recording_id": "hw-a9-denkendorf-060-f1784562-bb7d-482c-b3ed-1b5ad82dfbc0"},
+        {"recording_id": "hw-a9-denkendorf-062-1666b1ea-ab1a-494a-b8b1-333b03ca72f9"}
+
+    ],
+    "dataset_split": {
+        "train": [
+             0
+         ],
+        "valid": [
+             0
+        ],
+        "test": [
+            0
+        ]
+    }
+}

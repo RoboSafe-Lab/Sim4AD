@@ -85,7 +85,7 @@ class IRLEnv:
             # select the other agents which appear at the same time as the ego and have the same driving direction
             for aid, agent in frame.agents.items():
                 agent_lane = self.scenario_map.best_lane_at(point=agent.position, heading=agent.heading)
-                if aid != self.vehicle.vehicle_id and agent_lane.id * self.vehicle.lane.id > 0:
+                if aid != self.vehicle.vehicle_id and agent_lane is not None and agent_lane.id * self.vehicle.lane.id > 0:
                     if aid not in self.other_agents:
                         self.other_agents[aid] = []
                     self.other_agents[aid].append(agent)

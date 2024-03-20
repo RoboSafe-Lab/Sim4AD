@@ -241,7 +241,9 @@ class Box:
             heading: Rotation (radians) of the box from the reference frame of the box's center using counter-clockwise
                 orientation.
         """
-        self.center = np.array(center)
+        if isinstance(center, Point):
+            center = np.array(center.coords[0])
+        self.center = center
         self.length = length
         self.width = width
         self.heading = heading

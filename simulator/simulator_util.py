@@ -193,7 +193,7 @@ def get_nearby_vehicles(agent: PolicyAgent, state: State, all_agents: dict):
     return nearby_vehicles_features, vehicles_nearby
 
 
-def collision_check(agent_state: State, nearby_vehicles: dict):
+def collision_check(agent_state: State, nearby_vehicles: dict) -> Tuple[bool, PolicyAgent]:
     """
     Check if the agent is colliding with a nearby vehicle.
 

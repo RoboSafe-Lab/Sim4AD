@@ -9,6 +9,7 @@ from gymnasium.spaces import Box
 import numpy as np
 from openautomatumdronedata.dataset import droneDataset
 
+from RunInverseRL import load_dataset
 from sim4ad.data import DatasetScenario, ScenarioConfig
 from sim4ad.opendrive import Map
 from sim4ad.path_utils import get_path_to_automatum_scenario, get_config_path, get_path_to_automatum_map
@@ -32,27 +33,15 @@ class SimulatorEnv(gym.Env):
         """
 
         if config is None:
-            self.episode_name = "hw-a9-appershofen-001-d8087340-8287-46b6-9612-869b09e68448"
-            self.scenario_name = self.episode_name.split("-")[2]
+            # Load all episodes in the training dataset
+            configs = ScenarioConfig.load(get_config_path("appershofen"))
+            idx = configs.dataset_split["train"]
+            self.episode_names = [x.recording_id for i, x in enumerate(configs.episodes) if i in idx]
         else:
             raise NotImplementedError
 
-        # Load the ATOMATUM dataset to get the delta_t of the episode
-        # TODO: we could add this to the config file of the scenario when we first load them or something.
-        path_to_dataset_folder = get_path_to_automatum_scenario(self.episode_name)
-        dataset = droneDataset(path_to_dataset_folder)
-        dyn_world = dataset.dynWorld
-        dt = dyn_world.delta_t
-
-        scenario_name = self.episode_name.split("-")[2]
-        config = ScenarioConfig.load(get_config_path(scenario_name))
-        data_loader = DatasetScenario(config)
-        episode = data_loader.load_episode(episode_id=self.episode_name)
-
-        scenario_map = Map.parse_from_opendrive(get_path_to_automatum_map(self.episode_name))
-
-        self.simulation = Sim4ADSimulation(scenario_map=scenario_map, dt=dt, episode_agents=episode.agents,
-                                           policy_type="rl", simulation_name=f"gym_sim_{self.episode_name}",
+        self.simulation = Sim4ADSimulation(episode_name=self.episode_names, policy_type="rl",
+                                           simulation_name=f"gym_sim_{self.episode_names}",
                                            spawn_method=self.SPAWN_METHOD)
 
         # At each step, the agent must choose the acceleration and steering angle.
@@ -61,10 +50,10 @@ class SimulatorEnv(gym.Env):
             high=np.array([1, np.pi])
         )
 
-        # The observation will be a set of 35 features.
+        # The observation will be a set of 34 features.
         self.observation_space = Box(
-            low=np.array([-np.nan] * 35), # TODO: change the nan?
-            high=np.array([np.nan] * 35)
+            low=np.array([-np.nan] * 34), # TODO: change the nan?
+            high=np.array([np.nan] * 34)
         )
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]

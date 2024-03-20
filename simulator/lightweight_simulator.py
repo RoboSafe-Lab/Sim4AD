@@ -8,7 +8,7 @@ import logging
 import random
 from collections import defaultdict
 from copy import deepcopy
-from typing import Tuple, List, Dict, Any
+from typing import Tuple, List, Dict, Any, Union
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -34,9 +34,7 @@ logger = logging.getLogger(__name__)
 class Sim4ADSimulation:
 
     def __init__(self,
-                 scenario_map: Map,
-                 dt: float = 0.1,
-                 episode_agents: Dict[str, Any] = None,
+                 episode_name: Union[List[str], str],
                  policy_type: str = "bc",
                  simulation_name: str = "sim4ad_simulation",
                  spawn_method: str = "dataset",
@@ -45,28 +43,21 @@ class Sim4ADSimulation:
         """ Initialise new simulation.
 
         Args:
-            scenario_map: The current road layout.
-            dt: Time difference between two time steps.
-            episode_agents: The agents in the episode. As a dictionary (agent_id, agent).
             policy_type: The type of policy to use.
             simulation_name: The name of the simulation.
             spawn_method: The method to spawn the vehicles in the simulation. Either "dataset_all", "dataset_one" or "random".
         """
-        self.__scenario_map = scenario_map
-        self.__dt = dt
-        self.__fps = np.round(1 / dt)
 
-        self.__time = 0
-        self.__state = {}
-        self.__agents = {}
-        self.__episode_agents = episode_agents
-        self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
-        self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
-        self.__simulation_name = simulation_name
-        self.__eval = EvaluationFeaturesExtractor(sim_name=simulation_name)
-        self.__last_agent_id = 0  # ID when creating a new random agent
+        self.episode_idx = 0  # Index of the episode we are currently evaluating
+        self.__all_episode_names = episode_name
+        self.__load_datasets()
+        self.__fps = np.round(1 / self.__dt)
+
         self.evaluation = evaluation
         self.SPAWN_PROBABILITY = 0.02
+
+        self.__simulation_name = simulation_name
+        self.__eval = EvaluationFeaturesExtractor(sim_name=simulation_name)
 
         # dataset_all: agents are spawned at the time they appear in the dataset, but are controlled by the policy.
         # random: agents are spawned at random times and positions.
@@ -82,6 +73,13 @@ class Sim4ADSimulation:
 
         self.__policy_type = policy_type
 
+        # Also in load_dataset
+        self.__time = 0
+        self.__state = {}
+        self.__agents = {}
+        self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
+        self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
+        self.__last_agent_id = 0  # ID when creating a new random agent
         # Dictionary (agent_id, DeathCause) of agents that have been removed from the simulation.
         self.__dead_agents = {}
         self.__agent_evaluated = None  # If we spawn_method is "dataset_one", then this is the agent we are evaluating.
@@ -96,8 +94,6 @@ class Sim4ADSimulation:
                 and self.__agents[new_agent.agent_id] is not None:
             raise ValueError(f"Agent with ID {new_agent.agent_id} already exists.")
 
-        self.__agents[new_agent.agent_id] = new_agent
-
         if self.__spawn_method in ["dataset_all", "random"] or new_agent.agent_id == self.__agent_evaluated:
             self.__state[new_agent.agent_id] = new_agent.initial_state
         elif self.__spawn_method == "dataset_one":
@@ -106,10 +102,18 @@ class Sim4ADSimulation:
             new_agent_original = self.__episode_agents[new_agent.agent_id]
             current_state = self.__get_original_current_state(new_agent_original)
 
-            # Add it to the current state
-            self.__state[new_agent.agent_id] = current_state
+            safe_to_spawn = self.__safe_to_spawn(position=current_state.position, width=new_agent.meta.width,
+                                                 length=new_agent.meta.length, heading=current_state.heading)
+
+            if safe_to_spawn:
+                # Add it to the current state
+                self.__state[new_agent.agent_id] = current_state
+            else:
+                self.__dead_agents[new_agent.agent_id] = DeathCause.COLLISION
         else:
             raise ValueError(f"Spawn method {self.__spawn_method} not found.")
+
+        self.__agents[new_agent.agent_id] = new_agent
 
         if self.__spawn_method == "dataset_all":
             self.__agents_to_add.pop(new_agent.agent_id)
@@ -120,7 +124,6 @@ class Sim4ADSimulation:
             pass
 
         logger.debug(f"Added Agent {new_agent.agent_id}")
-
 
     @staticmethod
     def _get_policy(policy):
@@ -149,7 +152,7 @@ class Sim4ADSimulation:
         """
 
         if isinstance(agent, PolicyAgent):
-            initial_time = agent.original_initial_time
+            raise ValueError("Agent should be a dataset agent, not a PolicyAgent.")
         else:
             initial_time = agent.time[0]
 
@@ -210,12 +213,16 @@ class Sim4ADSimulation:
         """
 
         self.__simulation_history = []
-        initial_obs = self.__update_vehicles(soft_reset=True)
+
+        initial_obs = None
+        if len(self.__agents_to_add.keys()) > 0:
+            initial_obs, info = self.__update_vehicles(soft_reset=True)
 
         if initial_obs is None:
-            raise ValueError("We ran out of episodes to simulate! We need to change episode/reuse previous one.")
+            self.__change_episode()
+            initial_obs, info = self.__update_vehicles(soft_reset=True)
 
-        return initial_obs, {}
+        return initial_obs, info
 
     def step(self, action: Tuple[float, float] = None):
         """
@@ -243,17 +250,7 @@ class Sim4ADSimulation:
         :param soft_reset: If True, get the new observation for the agent being evaluated.
         """
 
-        # REMOVE DEAD AGENTS
-        for agent_id, death_cause in self.__dead_agents.items():
-            self.remove_agent(agent_id, death_cause)
-            logger.debug(f"Agent {agent_id} has been removed from the simulation for {death_cause} at t={self.time}.")
-
-        # If we removed the agent we are evaluating, and we are in "dataset_one" mode, then we need to remove all.
-        if self.__spawn_method == "dataset_one" and self.__agent_evaluated in self.__dead_agents:
-            self.__agents = {}
-            self.__agent_evaluated = None
-
-        self.__dead_agents = {}
+        self.__remove_dead_agents()
 
         # SELECT AGENTS TO ADD
         add_agents = {}
@@ -278,8 +275,8 @@ class Sim4ADSimulation:
             # remove it and add the next one, starting the time of the simulator back to the spawn time of the agent.
 
             if self.__agent_evaluated is None:
-                a = self.__agents_to_add.keys() # TODO
-                assert soft_reset , "Agent evaluated is None, but soft_reset (we want a new RL episode) is False"
+                if self.__policy_type == "rl":
+                    assert soft_reset, "Agent evaluated is None, but soft_reset (we want a new RL episode) is False"
 
                 # Get the first agent in the dataset
                 self.__agent_evaluated = list(self.__agents_to_add.keys())[0]
@@ -301,15 +298,36 @@ class Sim4ADSimulation:
             self._add_agent(self._create_policy_agent(agent, policy=policy))
 
         # Generate the first observation for the new agents
-        obs_to_return = None
+        obs_to_return = None, None
         for agent_id, _ in add_agents.items():
+
+            if agent_id in self.__dead_agents:
+                assert agent_id != self.__agent_evaluated, "Agent evaluated is dead, but it should not be."
+                continue
+
             agent = self.__agents[agent_id]
             obs = self._get_observation(agent, self.__state[agent_id])
 
-            if soft_reset  and agent_id == self.__agent_evaluated:
+            if soft_reset and agent_id == self.__agent_evaluated:
                 obs_to_return = obs
+
+        # Remove any agents that couldn't be added due to collisions at spawn.
+        self.__remove_dead_agents()
+
         return obs_to_return
 
+    def __remove_dead_agents(self):
+        # REMOVE DEAD AGENTS
+        for agent_id, death_cause in self.__dead_agents.items():
+            self.remove_agent(agent_id, death_cause)
+            logger.debug(f"Agent {agent_id} has been removed from the simulation for {death_cause} at t={self.time}.")
+
+        # If we removed the agent we are evaluating, and we are in "dataset_one" mode, then we need to remove all.
+        if self.__spawn_method == "dataset_one" and self.__agent_evaluated in self.__dead_agents:
+            self.__agents = {}
+            self.__agent_evaluated = None
+
+        self.__dead_agents = {}
 
     def _get_vehicle_to_spawn(self):
 
@@ -328,14 +346,8 @@ class Sim4ADSimulation:
 
             spawn_position = spawn_lane.point_at(spawn_distance)
 
-            # Check if the position is free
-            bbox = Box(center=spawn_position, length=spawn_length, width=spawn_width, heading=spawn_heading)
-
-            safe_to_spawn = True
-            for agent in self.__agents.values():
-                if agent.state.bbox.overlaps(bbox):
-                    safe_to_spawn = False
-                    break
+            safe_to_spawn = self.__safe_to_spawn(position=spawn_position, width=spawn_width, length=spawn_length,
+                                                 heading=spawn_heading)
 
             if safe_to_spawn is False:
                 continue
@@ -351,6 +363,17 @@ class Sim4ADSimulation:
             return agent
 
         raise ValueError("Could not spawn a vehicle after 1000 attempts.")
+
+    def __safe_to_spawn(self, position: np.array, width: float, length: float, heading:float) -> bool:
+        # Check if the position is free
+        bbox = Box(center=position, length=length, width=width, heading=heading)
+
+        safe_to_spawn = True
+        for agent in self.__agents.values():
+            if agent.state.bbox.overlaps(bbox):
+                safe_to_spawn = False
+                break
+        return safe_to_spawn
 
     def _get_spawn_positions(self):
         """
@@ -563,8 +586,10 @@ class Sim4ADSimulation:
             else:
                 raise ValueError(f"Death cause {death_cause} not found.")
 
+        if state.lane is None:
+            assert off_road, f"Agent {agent.agent_id} went off the road but off_road is False."
+
         done = collision or off_road or truncated or reached_goal
-        assert done or state.lane is not None, f"Agent {agent.agent_id} went off the road."
 
         if not done:
             front_ego = nearby_agents_features[PNA.CENTER_IN_FRONT]
@@ -614,10 +639,16 @@ class Sim4ADSimulation:
             obs = Observation(state=observation)
 
             # Compute the evaluation features for the agent
+            assert self.evaluation or self.policy_type != "rl", "We need these features to use the IRL reward"
             if self.evaluation:
                 agent.add_nearby_vehicles(vehicles_nearby)
                 agent.add_distance_right_lane_marking(obs.get_feature("distance_right_lane_marking"))
                 agent.add_distance_left_lane_marking(obs.get_feature("distance_left_lane_marking"))
+
+                # Compute the features needed to use the IRL reward (and evaluation)
+                ax, ay = agent.compute_current_lat_lon_acceleration()
+                long_jerk = agent.compute_current_long_jerk()
+
 
             # Put the observation in a tuple, as the policy expects it
             obs = obs.get_tuple()
@@ -660,7 +691,6 @@ class Sim4ADSimulation:
                     time_idx = int((time - initial_time) / self.__dt)
                     ax.plot(original_agent.x_vec[time_idx], original_agent.y_vec[time_idx], marker=",", color=color)
 
-                # TODO: could use the initial=l_time above to get the start position for plotting the trajectory
                 position = np.array([state.position.x, state.position.y])
                 ax.plot(*position, marker=".", color=color)
 
@@ -675,6 +705,42 @@ class Sim4ADSimulation:
         ani = FuncAnimation(fig, update, frames=self.__simulation_history, repeat=True,
                             interval=self.__fps)  # TODO: interval=self.__fps
         plt.show()
+
+    def __load_datasets(self):
+
+        if isinstance(self.__all_episode_names, list):
+            episode_name = self.__all_episode_names[self.episode_idx]
+            self.episode_idx += 1
+            if self.episode_idx == len(self.__all_episode_names):
+                self.episode_idx = 0
+        else:
+            episode_name = self.__all_episode_names
+
+        path_to_dataset_folder = get_path_to_automatum_scenario(episode_name)
+        dataset = droneDataset(path_to_dataset_folder)
+        dyn_world = dataset.dynWorld
+        self.__dt = dyn_world.delta_t
+
+        self.__scenario_name = episode_name.split("-")[2]
+        config = ScenarioConfig.load(get_config_path(self.__scenario_name))
+        data_loader = DatasetScenario(config)
+        episode = data_loader.load_episode(episode_id=episode_name)
+
+        self.__scenario_map = Map.parse_from_opendrive(get_path_to_automatum_map(episode_name))
+        self.__episode_agents = episode.agents
+
+        self.__time = 0
+        self.__state = {}
+        self.__agents = {}
+        self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
+        self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
+        self.__last_agent_id = 0  # ID when creating a new random agent
+        # Dictionary (agent_id, DeathCause) of agents that have been removed from the simulation.
+        self.__dead_agents = {}
+        self.__agent_evaluated = None  # If we spawn_method is "dataset_one", then this is the agent we are evaluating.
+
+    def __change_episode(self):
+        self.__load_datasets()
 
     @property
     def dt(self):
@@ -691,33 +757,15 @@ class Sim4ADSimulation:
 
 if __name__ == "__main__":
 
-    # TODO: loop over episodes
-    # data_loader = DatasetDataLoader(f"scenarios/configs/appershofen.json")
-    # data_loader.load()
-    # episodes = data_loader.scenario.episodes
-    # episode = episodes[0]
+    ep_name = "hw-a9-appershofen-001-d8087340-8287-46b6-9612-869b09e68448"
 
-    episode_name = "hw-a9-appershofen-001-d8087340-8287-46b6-9612-869b09e68448"
-    path_to_dataset_folder = get_path_to_automatum_scenario(episode_name)
-    dataset = droneDataset(path_to_dataset_folder)
-    dyn_world = dataset.dynWorld
-    dt = dyn_world.delta_t
-
-    scenario_name = episode_name.split("-")[2]
-    config = ScenarioConfig.load(get_config_path(scenario_name))
-    data_loader = DatasetScenario(config)
-    episode = data_loader.load_episode(episode_id=episode_name)
-
-    scenario_map = Map.parse_from_opendrive(get_path_to_automatum_map(episode_name))
-
-    sim = Sim4ADSimulation(scenario_map, episode_agents=episode.agents, dt=dt, spawn_method="dataset_one",
-                           policy_type="bc-all-obs")
+    sim = Sim4ADSimulation(episode_name=ep_name, spawn_method="dataset_one", policy_type="bc-all-obs-1.5_pi")
     sim.full_reset()
 
     simulation_length = 100  # seconds
 
     # TODO: use tqdm
-    for _ in range(int(np.floor(simulation_length / dt))):
+    for _ in range(int(np.floor(simulation_length / sim.dt))):
         sim.step()
 
     # Remove all agents left in the simulation.

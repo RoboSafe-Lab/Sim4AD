@@ -12,4 +12,15 @@
         {"recording_id": "hw-a9-brunn-009-a65fa0da-5bc5-4d9d-80b5-7afd86d6704d"},
         {"recording_id": "hw-a9-brunn-010-08ee8216-ee20-4589-a468-290c2ecc723b"}
     ]
+    "dataset_split": {
+        "train": [
+             0, 1, 2, 3, 5, 6
+         ],
+        "valid": [
+             0
+        ],
+        "test": [
+            7, 8
+        ]
+    }
 }

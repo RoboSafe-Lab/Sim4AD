@@ -9,7 +9,7 @@ from sim4ad.data.data_loaders import DatasetDataLoader
 from sim4ad.util import parse_args
 from sim4ad.path_utils import get_config_path
 from sim4ad.opendrive import Map
-from sim4ad.irlenv import IRLEnv, IRL
+from sim4ad.irlenv import IRLEnv
 from sim4ad.opendrive import plot_map
 
 
@@ -21,13 +21,6 @@ def load_dataset(config_path: str = None, evaluation_data: List[str] = None):
     return data_loader
 
 
-def load_max_feature():
-    """Load the maximum feature values for training"""
-    with open('results/max_feature.txt', 'r') as f:
-        max_feature = [float(line) for line in f.read().splitlines()]
-    return max_feature
-
-
 def load_theta():
     """Load the optimized theta from IRL"""
     with open('results/training_log.pkl', 'rb') as f:
@@ -37,24 +30,15 @@ def load_theta():
 
 
 class IRLEva(IRLEnv):
-    def __init__(self, episode, scenario_map, ego, IDM):
-        self._max_feature = load_max_feature()
+    def __init__(self, episode, scenario_map):
         self._theta = load_theta()
-        super().__init__(episode, scenario_map, ego, IDM)
+        super().__init__(episode, scenario_map)
 
     def get_trajectory_one_timestep(self, time):
         """generate the trajectory for one agent"""
         self.reset(reset_time=time)
 
-        buffer_scene = self.get_buffer_scene(time, save_next_state=True)
-
-        # Normalize the feature
-        for traj in buffer_scene:
-            for i in range(IRL.feature_num):
-                if self._max_feature[i] == 0:
-                    traj[2][i] = 0
-                else:
-                    traj[2][i] /= self._max_feature[i]
+        buffer_scene = self.get_buffer_scene(time, save_planned_tra=True)
 
         # evaluate trajectories
         reward_hl = []
@@ -73,9 +57,9 @@ class IRLEva(IRLEnv):
         hl = np.min([reward_hl[i][-1] for i in idx])
 
         # the first value of idx indicates the highest probability
-        next_position = buffer_scene[idx[0]][0]
+        tra = buffer_scene[idx[0]]
 
-        return next_position
+        return tra
 
 
 class CreateAnimation:
@@ -85,16 +69,19 @@ class CreateAnimation:
                  plot_background=False)
         self.vehicles = {}
 
-    def update_and_show(self, agents_states, time):
+    def update_and_show(self, agents_states, time, delta_t):
         # Update each vehicle's trajectory based on the current states
         for vehicle_id, agent_states in agents_states.items():
-            agent_states = np.array(agent_states)  # Unpack positions into x and y coordinates
+            tra = np.array(agent_states[1][0])  # Unpack positions into x and y coordinates
+
             if vehicle_id not in self.vehicles:
                 # If this vehicle hasn't been plotted yet, create a Line2D object for it
                 self.vehicles[vehicle_id] = Line2D([], [], linestyle='-', marker='o')
                 self.ax.add_line(self.vehicles[vehicle_id])
 
-            self.vehicles[vehicle_id].set_data(agent_states[:, 0], agent_states[:, 1])
+            # plot current position
+            inx = min(round((time - agent_states[0]) / delta_t), len(tra) - 1)
+            self.vehicles[vehicle_id].set_data([tra[inx, 0]], [tra[inx, 1]])
 
         self.ax.set_title(f'T = {time}')
         plt.draw()
@@ -111,18 +98,24 @@ def main():
         scenario_map = Map.parse_from_opendrive(episode.map_file)
         animation = CreateAnimation(scenario_map)
         agents_states = {}
+        irl_eva = IRLEva(episode=episode, scenario_map=scenario_map)
+
+        # define the trajectory replan frequency, counted by num * delta_t
+        replan_frequency = 1 * irl_eva.delta_t
+        replan_frequency = min(replan_frequency, irl_eva.forward_simulation_time)
         for frame in episode.frames:
             # for each agent generate trajectory using the weights from IRL.
             for aid, agent_state in frame.agents.items():
+                if aid in agents_states and frame.time - agents_states[aid][0] <= replan_frequency:
+                    continue
+
                 agent = episode.agents[aid]
-                irl_eva = IRLEva(episode=episode, scenario_map=scenario_map, ego=agent, IDM=False)
-                next_position = irl_eva.get_trajectory_one_timestep(frame.time)
+                irl_eva.ego = agent
 
-                if aid not in agents_states:
-                    agents_states[aid] = []
-                agents_states[aid].append(next_position)
+                tra = irl_eva.get_trajectory_one_timestep(frame.time)
+                agents_states[aid] = (frame.time, tra)
 
-            animation.update_and_show(agents_states, frame.time)
+            animation.update_and_show(agents_states, frame.time, irl_eva.delta_t)
             pass
 
 

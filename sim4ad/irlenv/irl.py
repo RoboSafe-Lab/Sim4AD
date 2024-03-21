@@ -49,7 +49,7 @@ class IRL:
 
         logger.info(f"Ego agent: {aid}")
 
-        irl_env = IRLEnv(episode=self.episode, scenario_map=self.scenario_map, ego=agent, IDM=False)
+        irl_env = IRLEnv(episode=self.episode, scenario_map=self.scenario_map, ego=agent, idm=False)
         for inx, t in enumerate(agent.time):
             # if the agents is reaching its life end, continue, because the planned trajectory is not complete and few
             # points exist
@@ -58,10 +58,6 @@ class IRL:
             logger.info(f"Simulation time: {t}")
 
             irl_env.reset(reset_time=t)
-
-            # only one point is alive, continue
-            if irl_env.interval[1] == irl_env.interval[0]:
-                continue
 
             buffer_scene = irl_env.get_buffer_scene(t)
 
@@ -128,6 +124,7 @@ class IRL:
             for item in max_feature:
                 f.write("%s\n" % item)
 
+    def save_buffer_data(self):
         # save buffer data to avoid repeated computation
         if self.save_buffer:
             logger.info('Saved buffer data.')
@@ -148,7 +145,7 @@ class IRL:
         for i in range(IRL.n_iters):
             logger.info(f'interation: {i + 1}/{IRL.n_iters}')
             # fix collision feature's weight
-            self.theta[6] = -10
+            # self.theta[6] = -10
 
             feature_exp = np.zeros([IRL.feature_num])
             human_feature_exp = np.zeros([IRL.feature_num])

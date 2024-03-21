@@ -20,7 +20,6 @@ class IRLEnv:
         self.ego = ego
         self.time = 0
         self.run_step = 0
-        self.vehicles = []
         self.active_vehicles = []
         self.reset_time = None
         self.start_frame = None
@@ -29,12 +28,12 @@ class IRLEnv:
         """
         Reset the environment at a given time (scene) and specify whether to use human target
         """
-        self.vehicles.clear()
+        self.reset_time = reset_time
+        self.active_vehicles.clear()
         self.human = human
         self._create_vehicles(reset_time)
         self.run_step = 0
         self.time = 0
-        self.reset_time = reset_time
 
     @staticmethod
     def process_raw_trajectory(agent):
@@ -50,17 +49,20 @@ class IRLEnv:
         aid, state = agent
         agent_lane = self.scenario_map.best_lane_at(point=state.position, heading=state.heading)
         dataset_vehicle = None
-        if aid != self.vehicle.vehicle_id and agent_lane is not None and agent_lane.id * self.vehicle.lane.id > 0:
+        if agent_lane is not None and agent_lane.id * self.vehicle.lane.id > 0:
             heading = state.heading
             length = state.metadata.length
             width = state.metadata.width
+
+            # get the dataset trajectory from the reset_index
             agent = self.episode.agents[aid]
             reset_inx = agent.next_index_of_specific_time(self.reset_time)
             whole_trajectory = self.process_raw_trajectory(agent)
             other_trajectory = whole_trajectory[reset_inx:]
-            dataset_vehicle = DatasetVehicle.create(self.scenario_map, aid, agent[0].position,
+
+            dataset_vehicle = DatasetVehicle.create(self.scenario_map, aid, state.position,
                                                     length, width, other_trajectory, heading=heading,
-                                                    velocity=agent[0].velocity)
+                                                    velocity=state.velocity)
 
         return dataset_vehicle
 
@@ -88,7 +90,7 @@ class IRLEnv:
                                                ego_trajectory, heading=heading, acceleration=ego_acc,
                                                velocity=ego_state.velocity,
                                                human=self.human, IDM=self.IDM)
-        self.vehicles.append(self.vehicle)
+        self.active_vehicles.append(self.vehicle)
 
         # create a set for other vehicles which are existing during the time horizon
         logger.error("No living length is found for ego!") if self.start_frame is None else None
@@ -96,9 +98,10 @@ class IRLEnv:
 
         # select the other agents which appear at the same time as the ego and have the same driving direction
         for aid, state in frame.agents.items():
-            dataset_vehicle = self._create_dataset_vehicle((aid, state))
-            if dataset_vehicle is not None:
-                self.vehicles.append(dataset_vehicle)
+            if aid != self.vehicle.vehicle_id:
+                dataset_vehicle = self._create_dataset_vehicle((aid, state))
+                if dataset_vehicle is not None:
+                    self.active_vehicles.append(dataset_vehicle)
 
     def step(self, action=None, debug=False):
         """
@@ -154,7 +157,6 @@ class IRLEnv:
         # forward simulation
         features = None
         while not self._is_terminal() and self.run_step < len(self.vehicle.planned_trajectory):
-            self.active_vehicles.clear()
             self.act(step=self.run_step)
             self.step_forward(self.delta_t)
 
@@ -195,17 +197,19 @@ class IRLEnv:
         Decide the actions of each entity on the road.
         """
         # determine active vehicle in current scene
-        for aid, agent in self.episode.frames[self.start_frame + self.run_step].agents:
-            new_agent = True
-            for inx, vehicle in enumerate(self.vehicles):
-                if aid == vehicle.vehicle_id:
-                    self.active_vehicles.append(self.vehicles[inx])
-                    new_agent = False
+        previous_active_vehicle_ids = [vehicle.vehicle_id for vehicle in self.active_vehicles]
+        current_active_vehicle_ids = []
+        for aid, agent in self.episode.frames[self.start_frame + self.run_step].agents.items():
             # create a new dataset vehicle
-            if new_agent:
+            if aid not in previous_active_vehicle_ids:
                 dataset_vehicle = self._create_dataset_vehicle((aid, agent))
                 if dataset_vehicle is not None:
                     self.active_vehicles.append(dataset_vehicle)
+            current_active_vehicle_ids.append(aid)
+
+        # delete inactive vehicles
+        self.active_vehicles = [vehicle for vehicle in self.active_vehicles if
+                                vehicle.vehicle_id in current_active_vehicle_ids]
 
         # determine act for each vehicle
         for vehicle in self.active_vehicles:
@@ -286,18 +290,18 @@ class IRLEnv:
         ego_lateral_accs = (ego_lateral_speeds[1:] - ego_lateral_speeds[:-1]) / self.delta_t if self.time >= 3 else [0]
 
         # travel efficiency
-        ego_speed = abs(ego_long_speeds[-1])
+        ego_speed = np.exp(-1/abs(ego_long_speeds[-1])) if ego_long_speeds[-1] != 0 else 0
 
         # comfort
-        ego_long_acc = ego_long_accs[-1]
-        ego_lat_acc = ego_lateral_accs[-1]
-        ego_long_jerk = ego_long_jerks[-1]
+        ego_long_acc = np.exp(-abs(ego_long_accs[-1]))
+        ego_lat_acc = np.exp(-abs(ego_lateral_accs[-1]))
+        ego_long_jerk = np.exp(-abs(ego_long_jerks[-1]))
 
         # time headway front (thw_front) and time headway behind (thw_rear)
         thw_front, thw_rear = self._get_thw()
 
         # avoid collision
-        collision = 1 if self.vehicle.crashed or not self.vehicle.on_road else 0
+        collision = -1 if self.vehicle.crashed or not self.vehicle.on_road else 0
 
         # interaction (social) impact
         social_impact = 0
@@ -306,11 +310,13 @@ class IRLEnv:
                 social_impact += np.abs(v.velocity[0] - v.velocity_history[-1][0]) / self.delta_t \
                     if v.velocity[0] - v.velocity_history[-1][0] < 0 else 0
 
+        social_impact = np.exp(-abs(social_impact))
+
         # ego vehicle human-likeness
         ego_likeness = self.vehicle.calculate_human_likeness()
 
         # feature array
-        features = np.array([ego_speed, abs(ego_long_acc), abs(ego_lat_acc), abs(ego_long_jerk),
+        features = np.array([ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk,
                              thw_front, thw_rear, collision, social_impact, ego_likeness])
 
         return features

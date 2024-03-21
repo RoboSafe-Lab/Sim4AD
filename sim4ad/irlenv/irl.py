@@ -124,6 +124,7 @@ class IRL:
             for item in max_feature:
                 f.write("%s\n" % item)
 
+    def save_buffer_data(self):
         # save buffer data to avoid repeated computation
         if self.save_buffer:
             logger.info('Saved buffer data.')
@@ -144,7 +145,7 @@ class IRL:
         for i in range(IRL.n_iters):
             logger.info(f'interation: {i + 1}/{IRL.n_iters}')
             # fix collision feature's weight
-            self.theta[6] = -10
+            # self.theta[6] = -10
 
             feature_exp = np.zeros([IRL.feature_num])
             human_feature_exp = np.zeros([IRL.feature_num])

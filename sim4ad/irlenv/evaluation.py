@@ -9,7 +9,7 @@ from sim4ad.data.data_loaders import DatasetDataLoader
 from sim4ad.util import parse_args
 from sim4ad.path_utils import get_config_path
 from sim4ad.opendrive import Map
-from sim4ad.irlenv import IRLEnv, IRL
+from sim4ad.irlenv import IRLEnv
 from sim4ad.opendrive import plot_map
 
 
@@ -19,13 +19,6 @@ def load_dataset(config_path: str = None, evaluation_data: List[str] = None):
     data_loader.load()
 
     return data_loader
-
-
-def load_max_feature():
-    """Load the maximum feature values for training"""
-    with open('results/max_feature.txt', 'r') as f:
-        max_feature = [float(line) for line in f.read().splitlines()]
-    return max_feature
 
 
 def load_theta():
@@ -38,7 +31,6 @@ def load_theta():
 
 class IRLEva(IRLEnv):
     def __init__(self, episode, scenario_map):
-        self._max_feature = load_max_feature()
         self._theta = load_theta()
         super().__init__(episode, scenario_map)
 
@@ -47,14 +39,6 @@ class IRLEva(IRLEnv):
         self.reset(reset_time=time)
 
         buffer_scene = self.get_buffer_scene(time, save_planned_tra=True)
-
-        # Normalize the feature
-        for traj in buffer_scene:
-            for i in range(IRL.feature_num):
-                if self._max_feature[i] == 0:
-                    traj[2][i] = 0
-                else:
-                    traj[2][i] /= self._max_feature[i]
 
         # evaluate trajectories
         reward_hl = []
@@ -125,7 +109,6 @@ def main():
                 if aid in agents_states and frame.time - agents_states[aid][0] <= replan_frequency:
                     continue
 
-                # TODO: if replan frequency is too large, replan occurs a discrepancy
                 agent = episode.agents[aid]
                 irl_eva.ego = agent
 

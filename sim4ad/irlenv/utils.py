@@ -3,9 +3,8 @@ from __future__ import division, print_function
 import importlib
 
 import numpy as np
-from shapely.affinity import rotate, translate
 from shapely.geometry import Point
-
+from math import atan2, cos, sin, radians
 EPSILON = 0.01
 
 
@@ -109,76 +108,62 @@ def class_from_path(path):
     return class_object
 
 
-def compute_angle(point1, point2):
+def compute_tangent_angle(reference_line, s):
     """
-    Compute the angle (in degrees) from horizontal for the line defined by two points.
+    Compute the angle of the tangent at the current point in radians.
+    The angle is measured from the x-axis in the counter-clockwise direction.
     """
-    dx = point2.x - point1.x
-    dy = point2.y - point1.y
-    return np.degrees(np.arctan2(dy, dx))
+    point_on_path = reference_line.interpolate(s)
 
-
-def frenet2local(reference_lane, s: float, d: float):
-    """
-    Convert Frenet coordinates (s, d) to local Cartesian coordinates on a curved road using Shapely.
-
-    :param reference_lane: the reference lane
-    :param s: Longitudinal distance along the path.
-    :param d: Lateral offset from the path, positive to the left, negative to the right.
-    :return: Tuple representing the Cartesian coordinates (x, y) on the curved road.
-    """
-    # Create a LineString from the path points
-    path = reference_lane.midline
-
-    # Interpolate the point at distance 's' along the path
-    point_on_path = path.interpolate(s)
-
-    # Compute the angle of the tangent at the interpolated point
-    if s < path.length:
-        # Compute tangent by looking ahead by a small distance
-        look_ahead_distance = min(1.0, path.length - s)
-        look_ahead_point = path.interpolate(s + look_ahead_distance)
-        angle_degrees = compute_angle(point_on_path, look_ahead_point)
-    else:
-        # Handle the case where 's' is at the end of the path by looking backward
-        look_back_point = path.interpolate(s - 1.0)
-        angle_degrees = compute_angle(look_back_point, point_on_path)
-
-    # Calculate the offset point by rotating and translating the original point
-    # Note: Shapely's rotate function uses counter-clockwise rotation, so 'd' is positive to the left
-    rotated_point = rotate(point_on_path, angle_degrees, origin=point_on_path, use_radians=False)
-
-    # left lanes
-    if reference_lane.id > 0:
-        offset_point = translate(rotated_point, d, 0)
-    else:
-        offset_point = translate(rotated_point, -d, 0)
-
-    return offset_point.x, offset_point.y
-
-
-def local2frenet(point: np.ndarray, reference_line):
-    """Get the s and d values along the lane midline"""
-    p = Point(point)
-    s = reference_line.project(p)
-    closest_point = reference_line.interpolate(s)
-
-    # Compute tangent vector at the closest point
+    # Compute the angle of the tangent at the closest point
     if s < reference_line.length:
         look_ahead_distance = min(1.0, reference_line.length - s)
         look_ahead_point = reference_line.interpolate(s + look_ahead_distance)
-        tangent_vector = np.array([look_ahead_point.x - closest_point.x, look_ahead_point.y - closest_point.y])
     else:
-        look_back_point = reference_line.interpolate(s - 1.0)
-        tangent_vector = np.array([closest_point.x - look_back_point.x, closest_point.y - look_back_point.y])
+        look_ahead_point = reference_line.interpolate(s - 1.0)
 
-    # Compute vector from the closest point to p
-    point_vector = np.array([p.x - closest_point.x, p.y - closest_point.y])
+    dy = look_ahead_point.y - point_on_path.y
+    dx = look_ahead_point.x - point_on_path.x
+    angle = atan2(dy, dx)
+    return point_on_path, angle
 
-    # Cross product to determine the side
-    cross_product = np.cross(tangent_vector, point_vector)
-    side = np.sign(cross_product)
 
-    d = p.distance(closest_point) * side
+def frenet2local(reference_line, s: float, d: float):
+    """
+    Convert Frenet coordinates (s, d) to local Cartesian coordinates on a curved road.
+
+    :param reference_line: the reference line as a LineString.
+    :param s: Longitudinal distance along the path.
+    :param d: Lateral offset from the path, positive to the left, negative to the right.
+    :return: Tuple representing the Cartesian coordinates (x, y).
+    """
+    point_on_path, angle = compute_tangent_angle(reference_line, s)
+
+    # Calculate the offset point
+    dx = d * cos(angle + radians(90))
+    dy = d * sin(angle + radians(90))
+    offset_x = point_on_path.x + dx
+    offset_y = point_on_path.y + dy
+
+    return offset_x, offset_y
+
+
+def local2frenet(point, reference_line):
+    """
+    Convert local Cartesian coordinates to Frenet coordinates on a curved road.
+
+    :param reference_line: The reference line as a LineString.
+    :param point: The local Cartesian coordinates as a Point.
+    :return: Tuple representing the Frenet coordinates (s, d).
+    """
+    # Project point onto the reference line to find 's'
+    point = Point(point)
+    s = reference_line.project(point)
+    closest_point, angle = compute_tangent_angle(reference_line, s)
+
+    # Compute 'd' using the angle
+    dx = point.x - closest_point.x
+    dy = point.y - closest_point.y
+    d = dx * cos(angle + radians(90)) + dy * sin(angle + radians(90))
 
     return s, d

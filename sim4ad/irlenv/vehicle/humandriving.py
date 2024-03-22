@@ -269,7 +269,7 @@ class HumanLikeVehicle(IDMVehicle):
         for p in planned_trajectory_frenet:
             if p[0] > self.lane.length:
                 continue
-            point_x, point_y = utils.frenet2local(reference_lane=self.lane, s=p[0], d=p[1])
+            point_x, point_y = utils.frenet2local(reference_line=self.lane.midline, s=p[0], d=p[1])
             planned_trajectory.append([point_x, point_y])
         self.planned_trajectory = np.array(planned_trajectory)
 

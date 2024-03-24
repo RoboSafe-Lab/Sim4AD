@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from loguru import logger
-from typing import Tuple
+from typing import Tuple, Optional
 
 from sim4ad.irlenv.vehicle.humandriving import HumanLikeVehicle, DatasetVehicle
 from sim4ad.opendrive import plot_map
@@ -23,6 +23,7 @@ class IRLEnv:
         self.active_vehicles = []
         self.reset_time = None
         self.start_frame = None
+        self.reset_ego_state = None
 
     def reset(self, reset_time, human=False):
         """
@@ -82,14 +83,18 @@ class IRLEnv:
         ego_trajectory = whole_trajectory[reset_inx:]
 
         # get position, velocity and acceleration at the reset time
-        ego_state = self.episode.frames[self.start_frame].agents[self.ego.UUID]
+        # evaluation: state from previous state; training: state from dataset
+        if self.reset_ego_state is not None:
+            ego_state = self.reset_ego_state
+        else:
+            ego_state = self.episode.frames[self.start_frame].agents[self.ego.UUID]
         ego_acc = ego_state.acceleration
         heading = ego_state.heading
         self.vehicle = HumanLikeVehicle.create(self.scenario_map, self.ego.UUID, ego_state.position, self.ego.length,
                                                self.ego.width,
                                                ego_trajectory, heading=heading, acceleration=ego_acc,
                                                velocity=ego_state.velocity,
-                                               human=self.human, IDM=self.IDM)
+                                               human=self.human, idm=self.IDM)
         self.active_vehicles.append(self.vehicle)
 
         # create a set for other vehicles which are existing during the time horizon
@@ -127,7 +132,7 @@ class IRLEnv:
                     self.episode.frames[inx].time - self.reset_time >= self.forward_simulation_time:
                 return self.episode.frames[inx].agents[self.ego.UUID]
 
-    def _simulate(self, action, debug) -> np.ndarray:
+    def _simulate(self, action, debug) -> Optional[np.ndarray]:
         """
         Perform several steps of simulation with the planned trajectory
         """
@@ -150,7 +155,7 @@ class IRLEnv:
 
         # the first point of simulated trajectory should be close to the planned trajectory
         if len(self.vehicle.traj) == 1:
-            dis = np.subtract(self.vehicle.traj[0], self.vehicle.planned_trajectory[0])
+            dis = np.subtract(self.vehicle.traj[0][0], self.vehicle.planned_trajectory[0])
             dis = np.sqrt(dis[0] ** 2 + dis[1] ** 2)
             assert dis < 0.2, "Simulated trajectory does not match the planned trajectory."
 
@@ -171,7 +176,7 @@ class IRLEnv:
                 plt.plot(self.vehicle.planned_trajectory[:, 0], self.vehicle.planned_trajectory[:, 1], 'b',
                          linewidth=1)
                 for vehicle in self.active_vehicles:
-                    ego_traj = np.array(vehicle.traj)
+                    ego_traj = np.array([trj[0] for trj in vehicle.traj])
                     if isinstance(vehicle, HumanLikeVehicle):
                         plt.scatter(ego_traj[:, 0], ego_traj[:, 1], color='#ADD8E6', s=10)
                     else:
@@ -185,6 +190,10 @@ class IRLEnv:
                     plt.title(f't={self.episode.frames[self.start_frame + self.run_step].time}')
                     # plt.savefig(f"frame_{self.run_step}.png")  # Save each frame as an image
                 plt.show()
+
+        if features is None:
+            logger.warning(f'features is None, length of planned tra is {len(self.vehicle.planned_trajectory)}')
+            return None
 
         human_likeness = features[-1]
         trajectory_features = np.sum(trajectory_features, axis=0)
@@ -332,6 +341,10 @@ class IRLEnv:
             for target_speed in target_speeds:
                 action = (lateral, target_speed)
                 features, terminated, info = self.step(action)
+
+                if features is None:
+                    self.reset(reset_time=t)
+                    return buffer_scene
 
                 # get the features
                 traj_features = features[:-1]

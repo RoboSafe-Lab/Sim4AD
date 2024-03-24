@@ -1,7 +1,5 @@
 from __future__ import division, print_function
 
-from loguru import logger
-
 import numpy as np
 from typing import Optional
 
@@ -42,7 +40,7 @@ class DatasetVehicle(IDMVehicle):
                                              route, enable_lane_change, timer, vehicle_id)
 
         self.dataset_traj = dataset_traj
-        self.traj = [self.position.copy()]
+        self.traj = [[position, velocity, self.acceleration, heading]]
         self.vehicle_id = vehicle_id
         self.sim_steps = 0
         self.overtaken = False
@@ -148,7 +146,7 @@ class DatasetVehicle(IDMVehicle):
 
             super(DatasetVehicle, self).step(dt)
 
-        self.traj.append(self.position.copy())
+        self.traj.append([self.position.copy(), self.velocity.copy(), self.acceleration, self.heading])
 
     def check_collision(self, other):
         """
@@ -196,17 +194,17 @@ class HumanLikeVehicle(IDMVehicle):
                  target_velocity=None,  # Speed reference
                  route=None,
                  timer=None,
-                 vehicle_id=None, v_length=None, v_width=None, dataset_traj=None, human=False, IDM=False):
+                 vehicle_id=None, v_length=None, v_width=None, dataset_traj=None, human=False, idm=False):
         super(HumanLikeVehicle, self).__init__(scenario_map, position, heading, velocity, target_lane, target_velocity,
                                                route, timer)
 
         self.dataset_traj = dataset_traj
-        self.traj = [self.position.copy()]
+        self.traj = [[position, velocity, acceleration, heading]]
         self.sim_steps = 0
         self.vehicle_id = vehicle_id
         self.planned_trajectory = None
         self.human = human
-        self.IDM = IDM
+        self.IDM = idm
         self.velocity_history = []
         self.heading_history = []
         self.crash_history = []
@@ -219,13 +217,13 @@ class HumanLikeVehicle(IDMVehicle):
 
     @classmethod
     def create(cls, scenario_map, vehicle_id, position, v_length, v_width, dataset_traj, heading, velocity,
-               acceleration, target_velocity=None, human=False, IDM=False):
+               acceleration, target_velocity=None, human=False, idm=False):
         """
         Create a human-like (IRL) driving vehicle in replace of a dataset vehicle.
         """
         v = cls(scenario_map, position, heading, velocity, acceleration, target_velocity=target_velocity,
                 vehicle_id=vehicle_id, v_length=v_length, v_width=v_width, dataset_traj=dataset_traj, human=human,
-                IDM=IDM)
+                idm=idm)
 
         return v
 
@@ -357,11 +355,11 @@ class HumanLikeVehicle(IDMVehicle):
         self.crash_history.append(self.crashed)
         super(HumanLikeVehicle, self).step(dt)
 
-        self.traj.append(self.position.copy())
+        self.traj.append([self.position.copy(), self.velocity.copy(), self.acceleration.copy(), self.heading])
 
     def calculate_human_likeness(self):
         original_traj = self.dataset_traj[:self.sim_steps + 1, :2]
-        ego_traj = self.traj
+        ego_traj = [trj[0] for trj in self.traj]
         ADE = np.mean([np.linalg.norm(original_traj[i] - ego_traj[i]) for i in
                        range(len(ego_traj))])  # Average Displacement Error (ADE)
         FDE = np.linalg.norm(original_traj[-1] - ego_traj[-1])  # Final Displacement Error (FDE)

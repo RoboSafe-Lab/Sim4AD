@@ -60,6 +60,8 @@ class IRL:
             irl_env.reset(reset_time=t)
 
             buffer_scene = irl_env.get_buffer_scene(t)
+            if not buffer_scene:
+                continue
 
             # calculate human trajectory feature
             logger.info("Compute human driver features.")

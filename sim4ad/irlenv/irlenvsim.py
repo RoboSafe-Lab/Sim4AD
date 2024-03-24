@@ -128,25 +128,24 @@ class IRLEnv:
     def _get_target_state(self):
         """get the target state for human trajectories"""
         for inx in range(len(self.episode.frames) - 1):
-            if self.episode.frames[inx].time >= self.ego.time[-1] or \
-                    self.episode.frames[inx].time - self.reset_time >= self.forward_simulation_time:
-                return self.episode.frames[inx].agents[self.ego.UUID]
+            if self.episode.frames[inx].time >= self.ego.time[-1]:
+                return self.episode.frames[inx].agents[self.ego.UUID], self.ego.time[-1] - self.reset_time
+            elif self.episode.frames[inx].time - self.reset_time >= self.forward_simulation_time:
+                return self.episode.frames[inx].agents[self.ego.UUID], self.forward_simulation_time
 
     def _simulate(self, action, debug) -> Optional[np.ndarray]:
         """
         Perform several steps of simulation with the planned trajectory
         """
         trajectory_features = []
-        # adjust the forward simulation time according the distance to road end
-        time_horizon = self.forward_simulation_time
 
         # generate simulated trajectory
         if action is not None:  # sampled goal
             self.vehicle.trajectory_planner(target_point=action[0], target_speed=action[1],
-                                            time_horizon=time_horizon, delta_t=self.delta_t)
+                                            time_horizon=self.forward_simulation_time, delta_t=self.delta_t)
         # generate human trajectory given initial and final state from the dataset
         else:
-            ego_agent = self._get_target_state()
+            ego_agent, time_horizon = self._get_target_state()
             target_point = utils.local2frenet(point=ego_agent.position, reference_line=self.vehicle.lane.midline)
             self.vehicle.trajectory_planner(target_point=target_point[1], target_speed=ego_agent.speed,
                                             time_horizon=time_horizon, delta_t=self.delta_t)

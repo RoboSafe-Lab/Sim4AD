@@ -160,7 +160,8 @@ class IRLEnv:
 
         # forward simulation
         features = None
-        while not self._is_terminal() and self.run_step < len(self.vehicle.planned_trajectory):
+        total_steps = min(len(self.vehicle.planned_trajectory), len(self.episode.frames) - self.start_frame)
+        while not self._is_terminal() and self.run_step < total_steps:
             self.act(step=self.run_step)
             self.step_forward(self.delta_t)
 

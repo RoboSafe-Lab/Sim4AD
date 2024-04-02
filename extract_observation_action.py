@@ -8,6 +8,7 @@ import pickle
 
 from sim4ad.path_utils import write_common_property
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
+from sim4ad.irlenv.vehicle.behavior import IDMVehicle
 
 
 @dataclass
@@ -54,7 +55,52 @@ class ExtractObservationAction:
     def combine(x, y):
         return np.sqrt(np.array(x) ** 2 + np.array(y) ** 2)
 
+    @staticmethod
+    def desired_gap(ego_v: float, ego_length: float, rear_agent_v: float, rear_agent_length: float):
+        """
+        Compute the desired distance between a vehicle and its leading vehicle.
+
+        :param ego_v: the velocity of the ego
+        :param ego_length: length
+        :param rear_agent_v: the velocity of the rear agent
+        :param rear_agent_length: length
+        :return: the desired distance between the two vehicles
+        """
+        d0 = IDMVehicle.DISTANCE_WANTED + ego_length / 2 + rear_agent_length / 2
+        tau = IDMVehicle.TIME_WANTED
+        ab = -IDMVehicle.COMFORT_ACC_MAX * IDMVehicle.COMFORT_ACC_MIN
+        dv = rear_agent_v - ego_v
+        d_star = d0 + rear_agent_v * tau + rear_agent_v * dv / (2 * np.sqrt(ab))
+
+        return d_star
+
+    @staticmethod
+    def extract_features(inx, agent) -> List:
+        """Using the same features from inverse RL"""
+        # travel efficiency
+        ego_speed = np.exp(-1/abs(agent.vx_vec[inx])) if agent.vx_vec[inx] != 0 else 0
+
+        # comfort
+        ego_long_acc = np.exp(-abs(agent.ax_vec[inx]))
+        ego_lat_acc = np.exp(-abs(agent.ay_vec[inx]))
+        ego_long_jerk = np.exp(-abs(agent.jerk_x_vec[inx]))
+
+        # time headway front (thw_front) and time headway behind (thw_rear)
+        thw_front = agent.tth_dict_vec[inx]['front_ego']
+        thw_rear = agent.tth_dict_vec[inx]['behind_ego']
+        thw_front = np.exp(-1 / thw_front)
+        thw_rear = np.exp(-1 / thw_rear)
+
+        # no collision in the dataset
+        collision = -1
+
+        # feature array
+        features = [ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk, thw_front, thw_rear, collision]
+
+        return features
+
     def extract_mdp(self, episode, aid, agent):
+        """Extract mdp values for one agent"""
         # calculate yaw rate
         yaw_rate = self.extract_yaw_rate(agent)
 
@@ -72,9 +118,11 @@ class ExtractObservationAction:
 
         acceleration = self.combine(agent.ax_vec, agent.ay_vec)
         ego_agent_actions = {'acceleration': acceleration, 'yaw_rate': yaw_rate}
+        ego_agent_features = []
 
         skip_vehicle = False
         for inx, t in enumerate(agent.time):
+            social_impact = 0
             # get surrounding agent's information
             try:
                 surrounding_agents = agent.object_relation_dict_list[inx]
@@ -98,6 +146,15 @@ class ExtractObservationAction:
                                                       surrounding_agent.ay_vec[surrounding_agent_inx])
                                          - acceleration[inx])
                     surrounding_heading = surrounding_agent.psi_vec[surrounding_agent_inx]
+
+                    # for computing social impact
+                    if surrounding_agent_relation == 'behind_ego':
+                        desired_gap = self.desired_gap(agent.vx_vec[inx], agent.length,
+                                                       surrounding_agent.vx_vec[surrounding_agent_inx],
+                                                       surrounding_agent.length)
+                        if long_distance < desired_gap and surrounding_agent.ax_vec[surrounding_agent_inx] < 0:
+                            social_impact = surrounding_agent.ax_vec[surrounding_agent_inx]
+
                 else:
                     # Set to invalid value if there is no surrounding agent
                     surrounding_rel_dx = surrounding_rel_dy = surrounding_rel_speed = surrounding_rel_a \
@@ -108,6 +165,11 @@ class ExtractObservationAction:
                 ego_agent_observations[f'{surrounding_agent_relation}_rel_speed'].append(surrounding_rel_speed)
                 ego_agent_observations[f'{surrounding_agent_relation}_rel_a'].append(surrounding_rel_a)
                 ego_agent_observations[f'{surrounding_agent_relation}_heading'].append(surrounding_heading)
+
+            # extract features to compute rewards
+            features = self.extract_features(inx, agent)
+            features.append(social_impact)
+            ego_agent_features.append(features)
 
         if not skip_vehicle:
             ego_agent_observations = pd.DataFrame(ego_agent_observations, index=agent.time)
@@ -124,7 +186,8 @@ class ExtractObservationAction:
 
             observations = ego_agent_observations.values
             actions = ego_agent_actions.values
-            rewards = None
+            # TODO: load the theta from inverse RL
+            rewards = [np.dot(feature, self.theta) for feature in ego_agent_features]
             terminals = [False for _ in range(len(agent.time)-1)] + [True]
 
             return observations, actions, rewards, terminals

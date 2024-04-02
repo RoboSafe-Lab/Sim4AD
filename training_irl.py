@@ -1,11 +1,9 @@
 from loguru import logger
 import pickle
-from typing import List
 
 from sim4ad.irlenv.irl import IRL
-from sim4ad.util import parse_args
+from sim4ad.util import parse_args, load_dataset
 from sim4ad.path_utils import get_config_path
-from sim4ad.data.data_loaders import DatasetDataLoader
 
 
 def load_pkl(file_name: str):
@@ -14,14 +12,6 @@ def load_pkl(file_name: str):
         buffer = pickle.load(file)
 
     return buffer
-
-
-def load_dataset(config_path: str = None, evaluation_data: List[str] = None):
-    """Loading clustered trajectories"""
-    data_loader = DatasetDataLoader(config_path, evaluation_data)
-    data_loader.load()
-
-    return data_loader
 
 
 def main():

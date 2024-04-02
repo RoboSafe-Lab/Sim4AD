@@ -7,6 +7,8 @@ import numpy as np
 from shapely.geometry import LineString, Point
 import argparse
 
+from sim4ad.data.data_loaders import DatasetDataLoader
+
 
 def get_curvature(points: np.ndarray) -> np.ndarray:
     """
@@ -314,6 +316,14 @@ class Circle:
         return dist_from_centre <= self.radius
 
 
+def load_dataset(config_path: str = None, evaluation_data: List[str] = None):
+    """Loading clustered trajectories"""
+    data_loader = DatasetDataLoader(config_path, evaluation_data)
+    data_loader.load()
+
+    return data_loader
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="""
     This script runs the sim4ad code for modeling driving behavior.
@@ -325,9 +335,9 @@ def parse_args() -> argparse.Namespace:
                         help="name of the map to be processed",
                         type=str)
     parser.add_argument('--clustering', '-c',
-                        default=None,
-                        help="name of the clustering method",
-                        type=str)
+                        default=False,
+                        help="whether using clustered data",
+                        type=bool)
     parser.add_argument('--episode_idx', '-e',
                         default=None,
                         help="the index of the episode",

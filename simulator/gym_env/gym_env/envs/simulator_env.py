@@ -9,7 +9,7 @@ from gymnasium.spaces import Box
 import numpy as np
 from openautomatumdronedata.dataset import droneDataset
 
-from RunInverseRL import load_dataset
+from sim4ad.util import load_dataset
 from sim4ad.data import DatasetScenario, ScenarioConfig
 from sim4ad.opendrive import Map
 from sim4ad.path_utils import get_path_to_automatum_scenario, get_config_path, get_path_to_automatum_map

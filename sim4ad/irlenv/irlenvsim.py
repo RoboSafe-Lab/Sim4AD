@@ -134,6 +134,8 @@ class IRLEnv:
             elif self.episode.frames[inx].time - self.reset_time >= self.forward_simulation_time:
                 return self.episode.frames[inx].agents[self.ego.UUID], self.forward_simulation_time
 
+        logger.error(f"aid: {self.ego.UUID}, ego_time: {self.ego.time[-1]}, frame_time: {self.episode.frames[-1].time}")
+
     def _simulate(self, action, debug) -> Optional[np.ndarray]:
         """
         Perform several steps of simulation with the planned trajectory

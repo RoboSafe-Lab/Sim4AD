@@ -217,6 +217,12 @@ class IRLEnv:
                 dataset_vehicle = self._create_dataset_vehicle((aid, agent))
                 if dataset_vehicle is not None:
                     self.active_vehicles.append(dataset_vehicle)
+
+            # remove the previous active vehicle which has reached the last step
+            else:
+                index = previous_active_vehicle_ids.index(aid)
+                if self.active_vehicles[index].sim_steps >= len(self.active_vehicles[index].dataset_traj) - 1:
+                    continue
             current_active_vehicle_ids.append(aid)
 
         # delete inactive vehicles

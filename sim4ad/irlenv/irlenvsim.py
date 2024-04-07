@@ -127,7 +127,7 @@ class IRLEnv:
 
     def _get_target_state(self):
         """get the target state for human trajectories"""
-        for inx in range(len(self.episode.frames) - 1):
+        for inx in range(len(self.episode.frames)):
             # smaller than the delta_t, it means they are very close
             if self.ego.time[-1] - self.episode.frames[inx].time < 0.03:
                 return self.episode.frames[inx].agents[self.ego.UUID], self.ego.time[-1] - self.reset_time

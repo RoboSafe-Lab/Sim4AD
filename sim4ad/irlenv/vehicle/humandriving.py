@@ -133,6 +133,7 @@ class DatasetVehicle(IDMVehicle):
             self.position = self.dataset_traj[self.sim_steps][:2].copy()
             self.velocity = self.dataset_traj[self.sim_steps][2:4].copy()
             self.heading = self.dataset_traj[self.sim_steps][-1]
+            # target velocity for IDM
             self.target_velocity = self.velocity
             self.lane = self.scenario_map.best_lane_at(point=self.position, heading=self.heading)
             self.s, self.d = utils.local2frenet(point=self.position, reference_line=self.lane.midline)
@@ -141,8 +142,8 @@ class DatasetVehicle(IDMVehicle):
             if self.overtaken and not self.overtaken_history[-1]:
                 self.overtaken_inx = self.sim_steps
 
-            # keep driving on the current lane
-            self.target_lane = self.lane
+            # target lane for lane changing, if equals to self.lane, will keep current lane
+            # self.target_lane = self.lane
 
             super(DatasetVehicle, self).step(dt)
 

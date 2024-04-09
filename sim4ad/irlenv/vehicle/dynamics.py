@@ -1,6 +1,6 @@
 from __future__ import division, print_function
 
-import logging
+from loguru import logger
 
 import numpy as np
 import pandas as pd
@@ -40,6 +40,8 @@ class Vehicle(Loggable):
         self.log = []
         self.history = deque(maxlen=50)
         self.record_history = False
+        if self.lane is None:
+            raise AttributeError(f'lane is None for position: {position}, heading: {heading}.')
         self.s, self.d = utils.local2frenet(point=self.position, reference_line=self.lane.midline)
 
     @classmethod

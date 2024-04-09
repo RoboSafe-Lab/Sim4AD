@@ -56,28 +56,31 @@ class IRL:
             if agent.time[-1] - t < 1:
                 continue
             logger.info(f"Simulation time: {t}")
+            try:
+                irl_env.reset(reset_time=t)
 
-            irl_env.reset(reset_time=t)
+                buffer_scene = irl_env.get_buffer_scene(t)
+                if not buffer_scene:
+                    continue
 
-            buffer_scene = irl_env.get_buffer_scene(t)
-            if not buffer_scene:
+                # calculate human trajectory feature
+                logger.info("Compute human driver features.")
+                irl_env.reset(reset_time=t, human=True)
+                features, terminated, info = irl_env.step()
+
+                if terminated or features[-1] > 2.5:
+                    continue
+
+                # process data
+                buffer_scene.append([0, 0, features[:-1], features[-1]])
+
+                # save to buffer
+                human_traj = buffer_scene[-1][2]
+                human_traj_features_one_agent.append(human_traj)
+                buffer_one_agent.append(buffer_scene)
+            except AttributeError as e:
+                logger.warning(f"Caught an error: {e}")
                 continue
-
-            # calculate human trajectory feature
-            logger.info("Compute human driver features.")
-            irl_env.reset(reset_time=t, human=True)
-            features, terminated, info = irl_env.step()
-
-            if terminated or features[-1] > 2.5:
-                continue
-
-            # process data
-            buffer_scene.append([0, 0, features[:-1], features[-1]])
-
-            # save to buffer
-            human_traj = buffer_scene[-1][2]
-            human_traj_features_one_agent.append(human_traj)
-            buffer_one_agent.append(buffer_scene)
 
         return human_traj_features_one_agent, buffer_one_agent
 

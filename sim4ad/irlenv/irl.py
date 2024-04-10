@@ -149,8 +149,8 @@ class IRL:
 
         for i in range(IRL.n_iters):
             logger.info(f'interation: {i + 1}/{IRL.n_iters}')
-            # fix collision feature's weight
-            # self.theta[6] = -10
+            # fix collision feature's weight, because no collision in the dataset
+            self.theta[6] = -10
 
             feature_exp = np.zeros([IRL.feature_num])
             human_feature_exp = np.zeros([IRL.feature_num])

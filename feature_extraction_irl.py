@@ -4,7 +4,6 @@ from preprocessing import load_clustering
 from sim4ad.irlenv.irl import IRL
 from sim4ad.path_utils import get_config_path
 from sim4ad.util import parse_args, load_dataset
-from sim4ad.data.episode import Episode
 
 
 def episode_split(episode, clustering):

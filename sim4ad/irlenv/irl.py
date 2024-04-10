@@ -217,4 +217,4 @@ class IRL:
                 np.linalg.norm(human_feature_exp / num_traj - feature_exp / num_traj))
             self.training_log['average_log-likelihood'].append(np.sum(log_like_list) / num_traj)
             self.training_log['average_human_likeness'].append(np.mean(iteration_human_likeness))
-            self.training_log['theta'].append(self.theta)
+            self.training_log['theta'].append(self.theta.copy())

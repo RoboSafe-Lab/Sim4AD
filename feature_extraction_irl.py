@@ -38,7 +38,7 @@ def feature_extraction_irl(episode, driving_style=''):
 
 def main():
     args = parse_args()
-    dataset = load_dataset(get_config_path(args.map), ['valid'])
+    dataset = load_dataset(get_config_path(args.map))
     episode = dataset.scenario.episodes[args.episode_idx]
 
     # whether using clustered data or the entire data without clustering

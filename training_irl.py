@@ -26,6 +26,7 @@ def main():
 
         # load the buffered features
         buffer = load_pkl(episode_id)
+        logger.info(f'Loading {episode_id} for training.')
 
         # Run MaxEnt IRL, sequential optimization, avoid using multiprocessing
         irl_instance.maxent_irl(buffer=buffer)

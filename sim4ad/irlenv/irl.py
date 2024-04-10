@@ -129,12 +129,12 @@ class IRL:
             for item in max_feature:
                 f.write("%s\n" % item)
 
-    def save_buffer_data(self):
+    def save_buffer_data(self, driving_style=''):
         # save buffer data to avoid repeated computation
         if self.save_buffer:
             logger.info('Saved buffer data.')
             episode_id = self.episode.config.recording_id
-            with open(episode_id + '_buffer.pkl', "wb") as file:
+            with open(driving_style + '_' + episode_id + '_buffer.pkl', "wb") as file:
                 pickle.dump([self.human_traj_features, self.buffer], file)
 
     def maxent_irl(self, buffer=None):

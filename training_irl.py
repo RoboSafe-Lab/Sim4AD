@@ -31,10 +31,10 @@ def main():
         # Run MaxEnt IRL, sequential optimization, avoid using multiprocessing
         irl_instance.maxent_irl(buffer=buffer)
 
-        if irl_instance.save_training_log:
-            logger.info('Saved training log.')
-            with open("training_log.pkl", "wb") as file:
-                pickle.dump(irl_instance.training_log, file)
+    if irl_instance.save_training_log:
+        logger.info('Saved training log.')
+        with open("training_log.pkl", "wb") as file:
+            pickle.dump(irl_instance.training_log, file)
 
 
 if __name__ == "__main__":

@@ -10,27 +10,24 @@ from sim4ad.data.episode import Episode
 def episode_split(episode, clustering):
     """Split the episode according to the three different driving styles"""
     episode_splits = {
-        'Aggressive': Episode(config=episode.config, agents={}, frames=episode.frames, statWorld=episode.statWorld,
-                              opendrive_map=episode.map_file),
-        'Normal': Episode(config=episode.config, agents={}, frames=episode.frames, statWorld=episode.statWorld,
-                          opendrive_map=episode.map_file),
-        'Cautious': Episode(config=episode.config, agents={}, frames=episode.frames, statWorld=episode.statWorld,
-                            opendrive_map=episode.map_file)
+        'Aggressive': {},
+        'Normal': {},
+        'Cautious': {}
     }
     episode_id = episode.config.recording_id
     for aid, agent in episode.agents.items():
         driving_style = clustering[episode_id + '/' + aid]
-        episode_splits[driving_style].agents[aid] = agent
+        episode_splits[driving_style][aid] = agent
 
     return episode_splits
 
 
-def feature_extraction_irl(episode, driving_style=''):
+def feature_extraction_irl(episode, agents=None, driving_style=''):
     """Extracting the features for IRL in the dataset"""
     irl_instance = IRL(episode=episode, multiprocessing=False, num_processes=12,
                        save_buffer=False, save_training_log=False)
     # compute features
-    irl_instance.get_simulated_features()
+    irl_instance.get_simulated_features(agents)
 
     # save buffered features
     irl_instance.save_buffer_data(driving_style)
@@ -51,9 +48,9 @@ def main():
         clustering = load_clustering(f"scenarios/configs/{args.map}_drivingStyle.json")
         # split the episode
         episode_splits = episode_split(episode, clustering)
-        for driving_style, episode in episode_splits.items():
+        for driving_style, agents in episode_splits.items():
             logger.info(f'Computing {episode.config.recording_id} with {driving_style} cluster.')
-            feature_extraction_irl(episode, driving_style)
+            feature_extraction_irl(episode, agents, driving_style)
 
 
 if __name__ == "__main__":

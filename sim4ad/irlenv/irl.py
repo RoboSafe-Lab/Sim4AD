@@ -84,21 +84,25 @@ class IRL:
 
         return human_traj_features_one_agent, buffer_one_agent
 
-    def get_simulated_features(self):
+    def get_simulated_features(self, split_agents=None):
         """get the features of forward simulations as well as human driver features"""
         # load the open drive map
         self.scenario_map = Map.parse_from_opendrive(self.episode.map_file)
+        # determine whether the data is clustered
+        agents = self.episode.agents
+        if split_agents is not None:
+            agents = split_agents
 
         if self.multiprocessing:
             with Pool(processes=self.num_processes) as pool:
-                results = pool.map(self.get_feature_one_agent, self.episode.agents.items())
+                results = pool.map(self.get_feature_one_agent, agents.items())
             if self.save_buffer:
                 for res in results:
                     if res is not None:
                         self.human_traj_features.extend(res[0])
                         self.buffer.extend(res[1])
         else:
-            for aid, agent in self.episode.agents.items():
+            for aid, agent in agents.items():
                 human_traj_features_one_agent, buffer_one_agent = self.get_feature_one_agent((aid, agent))
                 if self.save_buffer:
                     self.human_traj_features.extend(human_traj_features_one_agent)

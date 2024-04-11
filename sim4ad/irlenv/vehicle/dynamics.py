@@ -157,7 +157,7 @@ class Vehicle(Loggable):
             if lane is not None:
                 self.lane = lane
             else:
-                logging.warning(f'No lane found at position {self.position} and heading {self.heading}.')
+                logger.warning(f'No lane found at position {self.position} and heading {self.heading}.')
             self.s, self.d = utils.local2frenet(point=self.position, reference_line=self.lane.midline)
             if self.record_history:
                 self.history.appendleft(self.create_from(self))

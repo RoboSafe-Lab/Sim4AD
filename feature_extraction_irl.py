@@ -48,6 +48,8 @@ def main():
         # split the episode
         episode_splits = episode_split(episode, clustering)
         for driving_style, agents in episode_splits.items():
+            if agents == {}:
+                continue
             logger.info(f'Computing {episode.config.recording_id} with {driving_style} cluster.')
             feature_extraction_irl(episode, agents, driving_style)
 

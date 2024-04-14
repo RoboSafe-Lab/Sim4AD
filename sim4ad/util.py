@@ -334,14 +334,22 @@ def parse_args() -> argparse.Namespace:
                         default='appershofen',
                         help="name of the map to be processed",
                         type=str)
-    parser.add_argument('--clustering', '-c',
-                        default=False,
-                        help="whether using clustered data",
-                        type=bool)
     parser.add_argument('--episode_idx', '-e',
                         default=None,
                         help="the index of the episode",
                         type=int)
+
+    # defined for preprocessing
+    parser.add_argument('--clustering', '-c',
+                        default=False,
+                        help="whether using clustered data",
+                        type=bool)
+
+    # defined for training IRL
+    parser.add_argument('--driving_style', '-d',
+                        default='',
+                        help="which clustered driving style is used",
+                        type=str)
 
     args = parser.parse_args()
 

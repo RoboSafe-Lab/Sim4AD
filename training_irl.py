@@ -28,7 +28,7 @@ def main():
     driving_styles = {0: 'Cautious', 1: 'Normal', 2: 'Aggressive', -1: ''}
 
     for episode in config.episodes:
-        episode_id = episode.config.recording_id
+        episode_id = episode.recording_id
 
         if args.driving_style_idx < 0:
             # load the buffered features

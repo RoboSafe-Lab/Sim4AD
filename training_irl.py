@@ -30,18 +30,26 @@ def main():
     for episode in config.episodes:
         episode_id = episode.recording_id
 
+        # load all buffered features
         if args.driving_style_idx < 0:
-            # load the buffered features
-            buffer = load_pkl(episode_id)
+            logger.info(f'Loading {episode_id} for training.')
+            for key, value in driving_styles.items():
+                if key > 0:
+                    buffer = load_pkl(driving_styles[args.driving_style_idx] + '_' + episode_id)
+                    if buffer is None:
+                        continue
+                    irl_instance.maxent_irl(buffer=buffer)
+
+        # load buffered features for a specific driving style
         else:
             buffer = load_pkl(driving_styles[args.driving_style_idx] + '_' + episode_id)
-        # file not existing
-        if buffer is None:
-            continue
-        logger.info(f'Loading {driving_styles[args.driving_style_idx]} {episode_id} for training.')
+            # file not existing
+            if buffer is None:
+                continue
+            logger.info(f'Loading {driving_styles[args.driving_style_idx]} {episode_id} for training.')
 
-        # Run MaxEnt IRL, sequential optimization, avoid using multiprocessing
-        irl_instance.maxent_irl(buffer=buffer)
+            # Run MaxEnt IRL, sequential optimization, avoid using multiprocessing
+            irl_instance.maxent_irl(buffer=buffer)
 
     if irl_instance.save_training_log:
         logger.info('Saved training log.')

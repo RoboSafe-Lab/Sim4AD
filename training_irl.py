@@ -34,8 +34,8 @@ def main():
         if args.driving_style_idx < 0:
             logger.info(f'Loading {episode_id} for training.')
             for key, value in driving_styles.items():
-                if key > 0:
-                    buffer = load_pkl(driving_styles[args.driving_style_idx] + '_' + episode_id)
+                if key >= 0:
+                    buffer = load_pkl(value + '_' + episode_id)
                     if buffer is None:
                         continue
                     irl_instance.maxent_irl(buffer=buffer)

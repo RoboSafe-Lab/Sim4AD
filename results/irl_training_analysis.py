@@ -5,7 +5,7 @@ import numpy as np
 
 def load_training_log():
     # Open the pickle file and load the data
-    with open('training_log.pkl', 'rb') as f:
+    with open('Cautioustraining_log.pkl', 'rb') as f:
         training_log = pickle.load(f)
 
     return training_log
@@ -42,8 +42,10 @@ def plot_theta(iteration, key, theta):
 
 def main():
     training_log = load_training_log()
-    iteration = range(1, len(training_log['iteration']) + 1)
+    length = len(training_log['iteration'])
+    iteration = range(1, length + 1)
     for key, value in training_log.items():
+        value = value[:length]
         if key != 'iteration' and key != 'theta':
             plot_training_variable(iteration, key, value)
         elif key == 'theta':

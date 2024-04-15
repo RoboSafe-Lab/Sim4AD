@@ -35,21 +35,21 @@ class ExtractObservationAction:
     Extract observation and action from the clustered data
     """
 
-    def __init__(self, split, map_name, episodes, clustering):
+    def __init__(self, split, map_name, episodes, driving_style):
         """
         Args:
             split: represents if the data belongs to training, testing or validation
             map_name: the name of the map
             episodes: the episodes from the original dataset
-            clustering: cluster information
+            driving_style: the driving style used for computing the rewards
         """
         self._split = split
         self._map_name = map_name
-        self._clustering = clustering
+        self._driving_style = driving_style
         self._episodes = episodes
 
-        self._clustered_demonstrations = {"General": MDPValues(), "Cautious": MDPValues(),
-                                          "Normal": MDPValues(), "Aggressive": MDPValues()}
+        self._theta = self.load_reward_weights()
+        self._clustered_demonstrations = {"General": MDPValues(), "clustered": MDPValues()}
 
     @staticmethod
     def combine(x, y):
@@ -83,13 +83,16 @@ class ExtractObservationAction:
         # comfort
         ego_long_acc = np.exp(-abs(agent.ax_vec[inx]))
         ego_lat_acc = np.exp(-abs(agent.ay_vec[inx]))
-        ego_long_jerk = np.exp(-abs(agent.jerk_x_vec[inx]))
+        if agent.jerk_x_vec is None:
+            ego_long_jerk = np.exp(-abs((agent.ax_vec[inx] - agent.ax_vec[inx - 1]) / agent.delta_t)) if inx > 0 else 0
+        else:
+            ego_long_jerk = np.exp(-abs(agent.jerk_x_vec[inx]))
 
         # time headway front (thw_front) and time headway behind (thw_rear)
         thw_front = agent.tth_dict_vec[inx]['front_ego']
         thw_rear = agent.tth_dict_vec[inx]['behind_ego']
-        thw_front = np.exp(-1 / thw_front)
-        thw_rear = np.exp(-1 / thw_rear)
+        thw_front = np.exp(-1 / thw_front) if thw_front is not None else 1
+        thw_rear = np.exp(-1 / thw_rear) if thw_rear is not None else 1
 
         # no collision in the dataset
         collision = -1
@@ -166,10 +169,11 @@ class ExtractObservationAction:
                 ego_agent_observations[f'{surrounding_agent_relation}_rel_a'].append(surrounding_rel_a)
                 ego_agent_observations[f'{surrounding_agent_relation}_heading'].append(surrounding_heading)
 
-            # extract features to compute rewards
-            features = self.extract_features(inx, agent)
-            features.append(social_impact)
-            ego_agent_features.append(features)
+            if self._driving_style != '':
+                # extract features to compute rewards
+                features = self.extract_features(inx, agent)
+                features.append(social_impact)
+                ego_agent_features.append(features)
 
         if not skip_vehicle:
             ego_agent_observations = pd.DataFrame(ego_agent_observations, index=agent.time)
@@ -186,8 +190,7 @@ class ExtractObservationAction:
 
             observations = ego_agent_observations.values
             actions = ego_agent_actions.values
-            # TODO: load the theta from inverse RL
-            rewards = [np.dot(feature, self.theta) for feature in ego_agent_features]
+            rewards = [np.dot(feature, self._theta) for feature in ego_agent_features]
             terminals = [False for _ in range(len(agent.time)-1)] + [True]
 
             return observations, actions, rewards, terminals
@@ -196,22 +199,28 @@ class ExtractObservationAction:
 
     def extract_demonstrations(self):
         """Extract observations"""
-        driving_style = 'General'
+        key = 'General'
+        if self._driving_style != '':
+            key = 'clustered'
+
         for episode in self._episodes:
             for aid, agent in episode.agents.items():
                 agent_mdp_values = self.extract_mdp(episode, aid, agent)
                 if agent_mdp_values is None:
                     continue
-                if self._clustering is not None:
-                    episode_id = episode.config.recording_id
-                    driving_style = self._clustering[episode_id + '/' + aid]
 
-                self._clustered_demonstrations[driving_style].observations.append(agent_mdp_values[0])
-                self._clustered_demonstrations[driving_style].actions.append(agent_mdp_values[1])
-                self._clustered_demonstrations[driving_style].rewards.append(agent_mdp_values[2])
-                self._clustered_demonstrations[driving_style].terminals.append(agent_mdp_values[3])
+                self._clustered_demonstrations[key].observations.append(agent_mdp_values[0])
+                self._clustered_demonstrations[key].actions.append(agent_mdp_values[1])
+                self._clustered_demonstrations[key].rewards.append(agent_mdp_values[2])
+                self._clustered_demonstrations[key].terminals.append(agent_mdp_values[3])
 
         self.save_trajectory()
+
+    def load_reward_weights(self):
+        """Loading reward weights theta derived from IRL"""
+        with open('results/' + self._driving_style + 'training_log.pkl', 'rb') as file:
+            data = pickle.load(file)
+        return data['theta'][-1]
 
     @staticmethod
     def extract_yaw_rate(agent) -> List:
@@ -230,5 +239,5 @@ class ExtractObservationAction:
             os.makedirs(folder_path)
 
         # Saving the demonstration data to a file
-        with open(folder_path + "/" + self._map_name + "_demonstration.pkl", "wb") as file:
+        with open(folder_path + "/" + self._driving_style + self._map_name + "_demonstration.pkl", "wb") as file:
             pickle.dump(self._clustered_demonstrations, file)

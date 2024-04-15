@@ -5,7 +5,8 @@ import numpy as np
 
 def load_training_log():
     # Open the pickle file and load the data
-    with open('Cautioustraining_log.pkl', 'rb') as f:
+    # remember change this accordingly
+    with open('Aggressivetraining_log.pkl', 'rb') as f:
         training_log = pickle.load(f)
 
     return training_log
@@ -51,6 +52,8 @@ def main():
         elif key == 'theta':
             plot_theta(iteration, key, value)
 
+            # print theta at the last row
+            print(f'The final theta are: {value[-1]}')
     # Show the plot
     plt.show()
 

@@ -20,12 +20,12 @@ def main():
 
     # creat two dicts, one for training and one for testing
     data_splits = ['valid']
-    driving_styles = {0: 'Cautious', 1: 'Normal', 2: 'Aggressive', -1: ''}
+    driving_styles = {0: 'Cautious', 1: 'Normal', 2: 'Aggressive', -1: 'General'}
     driving_style = driving_styles[args.driving_style_idx]
-    if driving_style != '':
+    if driving_style != 'General':
         logger.info(f'{driving_style} reward weights are loaded')
     else:
-        logger.info('No reward weights are loaded.')
+        logger.info('General reward weights are loaded.')
 
     for split in data_splits:
         data = load_dataset(get_config_path(args.map), [split])

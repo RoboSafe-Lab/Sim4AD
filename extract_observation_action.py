@@ -169,7 +169,7 @@ class ExtractObservationAction:
                 ego_agent_observations[f'{surrounding_agent_relation}_rel_a'].append(surrounding_rel_a)
                 ego_agent_observations[f'{surrounding_agent_relation}_heading'].append(surrounding_heading)
 
-            if self._driving_style != '':
+            if self._driving_style != 'General':
                 # extract features to compute rewards
                 features = self.extract_features(inx, agent)
                 features.append(social_impact)
@@ -200,7 +200,7 @@ class ExtractObservationAction:
     def extract_demonstrations(self):
         """Extract observations"""
         key = 'General'
-        if self._driving_style != '':
+        if self._driving_style != 'General':
             key = 'clustered'
 
         for episode in self._episodes:
@@ -218,7 +218,7 @@ class ExtractObservationAction:
 
     def load_reward_weights(self):
         """Loading reward weights theta derived from IRL"""
-        with open('results/' + self._driving_style + 'Generaltraining_log.pkl', 'rb') as file:
+        with open('results/' + self._driving_style + 'training_log.pkl', 'rb') as file:
             data = pickle.load(file)
         return data['theta'][-1]
 

@@ -3,6 +3,7 @@ Gymnasium based environment that is based on the lightweight simulator.
 Based on the official tutorial: https://gymnasium.farama.org/tutorials/gymnasium_basics/environment_creation/
 """
 import os
+import pickle
 
 import gymnasium as gym
 from gymnasium.spaces import Box
@@ -12,7 +13,8 @@ from openautomatumdronedata.dataset import droneDataset
 from sim4ad.util import load_dataset
 from sim4ad.data import DatasetScenario, ScenarioConfig
 from sim4ad.opendrive import Map
-from sim4ad.path_utils import get_path_to_automatum_scenario, get_config_path, get_path_to_automatum_map
+from sim4ad.path_utils import get_path_to_automatum_scenario, get_config_path, get_path_to_automatum_map, \
+    get_path_irl_weights
 from simulator.lightweight_simulator import Sim4ADSimulation
 
 from simulator.gym_env.gym_env.envs.reward import get_reward
@@ -23,7 +25,7 @@ class SimulatorEnv(gym.Env):
     Gym environment for the lightweight simulator.
     """
 
-    metadata = {"render_modes": ["human"], "render_fps": 4}  # TODO: set the fps
+    metadata = {"render_modes": ["human"], "render_fps": 4}
     SPAWN_METHOD = "dataset_one"  # We assume there is a
 
     def __init__(self, render_mode: str = None, config: dict = None):
@@ -46,28 +48,22 @@ class SimulatorEnv(gym.Env):
 
         # At each step, the agent must choose the acceleration and steering angle.
         self.action_space = Box(
-            low=np.array([-1, -np.pi]),  # TODO: change the rate according to the simulator/dataset; change tanh accordingly in the bc baseline
-            high=np.array([1, np.pi])
+            low=np.array([-5, -np.pi]),
+            high=np.array([5, np.pi])
         )
 
         # The observation will be a set of 34 features.
         self.observation_space = Box(
-            low=np.array([-np.nan] * 34), # TODO: change the nan?
+            low=np.array([-np.nan] * 34),
             high=np.array([np.nan] * 34)
         )
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
 
-        # """ TODO
-        # If human-rendering is used, `self.window` will be a reference
-        # to the window that we draw to. `self.clock` will be a clock that is used
-        # to ensure that the environment is rendered at the correct framerate in
-        # human-mode. They will remain `None` until human-mode is used for the
-        # first time.
-        # """
-        # self.window = None
-        # self.clock = None
+        # Load the weights from IRL from training_log.pkl
+        with open(get_path_irl_weights(), "rb") as f:
+            self.weights = pickle.load(f)
 
     def reset(self, seed=None, options=None):
         # We need the following line to seed self.np_random
@@ -89,11 +85,8 @@ class SimulatorEnv(gym.Env):
         truncated = info["truncated"] or info["collision"] or info["off_road"]
 
         # An episode is terminated iff the agent has reached the target
-        # TODO: technically reward is a function of (s, a, s')...
-        reward = get_reward(terminated=terminated, truncated=truncated, info=info)
-
-        # if self.render_mode == "human": # TODO
-        #     self._render_frame()
+        # technically reward is a function of (s, a, s')...
+        reward = get_reward(terminated=terminated, truncated=truncated, info=info, irl_weights=self.weights)
 
         return next_obs, reward, terminated, truncated, info
 

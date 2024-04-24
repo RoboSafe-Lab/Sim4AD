@@ -1,24 +1,23 @@
-# Sim4AD
-RL/MARL-based Behavior Modeling for Simulation-Driven Autonomous Vehicle Validation
-
+# Massimiliano Tamborski's dissertation code
 
 ### Requirements
 We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first install the Python utility to interface the data
 `pip3 install openautomatumdronedata`.
 
-### Clustering
-We cluster the driving styles and train different policies for each cluster.
-we have two different methods for clustering.
+### Preprocessing
+The preprocessing was done bt Dr. Cheng Wang. The code is available at `preprocessing.py`.
 
-Method 1: using features defined from this paper. 
-`run clustering.py` to have the results. 
+### The folder which I have created and I solely worked on are:
+- /baselines: contains the code for the baselines
+- /evaluation: contains the  code for the metrics (and their unit tests), scoring, evaluation and plotting.
+- /simulator: which contains the lightweigth simulator and the RL simulator
 
-Method 2: we segment each trajectory into low risk, safe, potential danger and high risk, 
-which are then used as features for clustering. The risk level is determined by inverse TTC and THW.
-`run riskclustering.py` to show the radar charts, which indicates different clusters.
 
-### IRL
-After training, the `training_log.pkl` records important info during training.
-`run irl_training_analysis.py` to visualize the change of variables during training.
-
-`run evaluation.py` under *sim4ad/irlenv* to test the trained reward function.
+### Useful commands to run the code are the following:
+- `python3 evaluation/evaluation_methods.py` to evaluate the baselines 
+- `baselines/bc_baseline.py` to train the BC baseline
+- `baselines/rl.py` to train the SAC baseline
+- `simulator/lightweight_simulator.py` to run the lightweight simulator. Useful parameters to 
+set (at the bottom of the file) are `spawn_method` = which is "dataset_one" for micro analysis 
+and "dataset_all" for macro analysis, `policy_type` = which is "bc-all-obs-5_pi" for BC, "sac_5_rl" for SAC (after training it as above),
+or "idm" for IDM

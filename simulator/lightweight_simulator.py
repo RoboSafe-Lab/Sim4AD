@@ -2,8 +2,9 @@
 This file is used to run a given policy on a given scenario and generate the trajectories of the vehicles in the
 scenario.
 
-The basic structure is vaguely based on https://github.com/uoe-agents/IGP2/blob/main/igp2/simplesim/simulation.py
+The basic structure was initially vaguely based on https://github.com/uoe-agents/IGP2/blob/main/igp2/simplesim/simulation.py
 """
+import json
 import logging
 import random
 from collections import defaultdict
@@ -14,9 +15,12 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
 from openautomatumdronedata.dataset import droneDataset
-from shapely import Point
+from shapely import Point, LineString
+from stable_baselines3 import SAC
+from tqdm import tqdm
 
 from baselines.bc_baseline import BCBaseline as BC
+from baselines.idm import IDM
 from extract_observation_action import ExtractObservationAction
 from sim4ad.data import DatasetDataLoader, ScenarioConfig, DatasetScenario
 from sim4ad.opendrive import plot_map, Map
@@ -38,7 +42,8 @@ class Sim4ADSimulation:
                  policy_type: str = "bc",
                  simulation_name: str = "sim4ad_simulation",
                  spawn_method: str = "dataset",
-                 evaluation: bool = True):
+                 evaluation: bool = True,
+                 clustering: str = "all"):
 
         """ Initialise new simulation.
 
@@ -50,6 +55,9 @@ class Sim4ADSimulation:
 
         self.episode_idx = 0  # Index of the episode we are currently evaluating
         self.__all_episode_names = episode_name
+        self.will_be_done_next = False
+        self.done_full_cycle = False  # If iterate once through all agents in all episodes
+        self.clustering = clustering
         self.__load_datasets()
         self.__fps = np.round(1 / self.__dt)
 
@@ -66,7 +74,7 @@ class Sim4ADSimulation:
 
         self.__spawn_method = spawn_method
 
-        assert policy_type in ["follow_dataset", "rl"] or "bc" in policy_type.lower(), \
+        assert policy_type in ["follow_dataset", "rl", "idm"] or "bc" in policy_type.lower() or "sac" in policy_type.lower(), \
             f"Policy type {policy_type} not found."
         if policy_type == "follow_dataset":
             assert spawn_method != "random", "Policy type 'follow_dataset' is not compatible with 'random' spawn"
@@ -78,18 +86,36 @@ class Sim4ADSimulation:
         self.__state = {}
         self.__agents = {}
         self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
+        if self.clustering != "all":
+            self.__agents_to_add = self.cluster_agents(self.__episode_agents)
+                
         self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
         self.__last_agent_id = 0  # ID when creating a new random agent
         # Dictionary (agent_id, DeathCause) of agents that have been removed from the simulation.
         self.__dead_agents = {}
         self.__agent_evaluated = None  # If we spawn_method is "dataset_one", then this is the agent we are evaluating.
 
-    def _add_agent(self, new_agent: PolicyAgent):
+    def cluster_agents(self, agents: Dict[str, droneDataset]):
+        episode_name = self.__all_episode_names[self.episode_idx-1]
+        scenario_name = episode_name.split("-")[2]
+        with open(f"scenarios/configs/{scenario_name}_drivingStyle.json", "rb") as f:
+            import json
+            clusterings = json.load(f)
+            return {k: v for k, v in agents.items() if self.clustering == clusterings[f"{episode_name}/{k}"]}
+
+    def _add_agent(self, agent, policy: str):
         """ Add a new agent to the simulation.
 
         Args:
             new_agent: Agent to add.
         """
+
+        if policy == "idm":
+            new_agent = self._create_policy_agent(agent, policy="follow_dataset")
+            new_agent.idm.activate(v0=new_agent.state.speed)
+        else:
+            new_agent = self._create_policy_agent(agent, policy=policy)
+
         if new_agent.agent_id in self.__agents \
                 and self.__agents[new_agent.agent_id] is not None:
             raise ValueError(f"Agent with ID {new_agent.agent_id} already exists.")
@@ -98,7 +124,6 @@ class Sim4ADSimulation:
             self.__state[new_agent.agent_id] = new_agent.initial_state
         elif self.__spawn_method == "dataset_one":
             # Spawn the vehicle at the state it was in the dataset at the time of the simulation.
-            # TODO: maybe make a method to create a policy agent from dataset as we use it in multiple places.
             new_agent_original = self.__episode_agents[new_agent.agent_id]
             current_state = self.__get_original_current_state(new_agent_original)
 
@@ -128,8 +153,10 @@ class Sim4ADSimulation:
     @staticmethod
     def _get_policy(policy):
 
-        if "bc" in policy.lower():  # TODO: could move ths in get_policy()
+        if "bc" in policy.lower():
             return BC(name=policy, evaluation=True)
+        elif "sac" in policy.lower():
+            return SAC.load(policy)
         elif policy == "follow_dataset":
             return "follow_dataset"
         elif policy == "rl":
@@ -178,7 +205,8 @@ class Sim4ADSimulation:
 
         # Save the agent's trajectory for evaluation
         if self.__spawn_method in ["dataset_all", "random"] or agent_id == self.__agent_evaluated:
-            self.__eval.save_trajectory(agent=agent_removed, death_cause=death_cause)
+            self.__eval.save_trajectory(agent=agent_removed, death_cause=death_cause,
+                                        episode_id=self._get_current_episode_id())
 
         logger.debug(f"Removed Agent {agent_id}")
 
@@ -199,6 +227,8 @@ class Sim4ADSimulation:
         self.__simulation_history = []
         self.__eval = EvaluationFeaturesExtractor(sim_name=self.__simulation_name)
         self.__last_agent_id = 0
+        self.will_be_done_next = False
+        self.done_full_cycle = False
 
         # Dictionary (agent_id, DeathCause) of agents that have been removed from the simulation.
         self.__dead_agents = {}
@@ -224,7 +254,7 @@ class Sim4ADSimulation:
 
         return initial_obs, info
 
-    def step(self, action: Tuple[float, float] = None):
+    def step(self, action: Tuple[float, float] = None, return_done: bool = False):
         """
         Advance simulation by one time step.
         If action is provided, we will use that action for the agent being evaluated (only if policy is "rl").
@@ -235,6 +265,9 @@ class Sim4ADSimulation:
         self.__update_vehicles()
         ego_obs = self.__take_actions(ego_action=action)
         self.__time += self.__dt
+
+        if return_done:
+            return self.done_full_cycle
         return ego_obs
 
     @property
@@ -255,9 +288,14 @@ class Sim4ADSimulation:
         # SELECT AGENTS TO ADD
         add_agents = {}
 
+        # if finished the current episode, move to the next one
+        if self.__spawn_method in ["dataset_all", "dataset_one"] and self.__policy_type != "rl":
+            if len(self.__agents_to_add) == 0:
+                self.__change_episode()
+
         if self.__spawn_method == "dataset_all":
             for agent_id, agent in self.__agents_to_add.items():
-                if agent.time[0] <= self.__time <= agent.time[-1]:
+                if (self.__time - agent.time[0]) > -1e-6 and (agent.time[-1] - self.time) > -1e-6:
                     if agent_id not in self.__agents:
                         add_agents[agent_id] = (agent, self.__policy_type)
         elif self.__spawn_method == "random":
@@ -276,6 +314,7 @@ class Sim4ADSimulation:
 
             if self.__agent_evaluated is None:
                 if self.__policy_type == "rl":
+
                     assert soft_reset, "Agent evaluated is None, but soft_reset (we want a new RL episode) is False"
 
                 # Get the first agent in the dataset
@@ -284,7 +323,7 @@ class Sim4ADSimulation:
 
             # Spawn all vehicles alive at the current time.
             for agent_id, agent in self.__episode_agents.items():
-                if agent.time[0] <= self.__time <= agent.time[-1]:
+                if (self.__time - agent.time[0]) > -1e-6 and (agent.time[-1] - self.time) > -1e-6:
                     if agent_id not in self.__agents:
                         if agent_id == self.__agent_evaluated:
                             add_agents[agent_id] = (agent, self.__policy_type)
@@ -295,7 +334,7 @@ class Sim4ADSimulation:
 
         # ADD AGENTS
         for agent_id, (agent, policy) in add_agents.items():
-            self._add_agent(self._create_policy_agent(agent, policy=policy))
+            self._add_agent(agent=agent, policy=policy)
 
         # Generate the first observation for the new agents
         obs_to_return = None, None
@@ -425,15 +464,87 @@ class Sim4ADSimulation:
             assert len(agent.observation_trajectory) == len(agent.action_trajectory)+1 == len(agent.state_trajectory)
 
             if agent.policy == "follow_dataset":
-                dataset_time_step = round((self.__time - agent.original_initial_time) / self.__dt)
-                # Get the acceleration and steering angle from the dataset
+
                 dataset_agent = self.__episode_agents[agent_id]
-                deltas = ExtractObservationAction.extract_yaw_rate(agent=dataset_agent)
-                acceleration = np.sqrt(float(dataset_agent.ax_vec[dataset_time_step]) ** 2 +
-                                       float(dataset_agent.ay_vec[dataset_time_step]) ** 2)
-                action = Action(acceleration=acceleration,
-                                steer_angle=deltas[dataset_time_step])
-            elif isinstance(agent.policy, BC):
+                # Check if the current gap with the vehicle in front is less than the minimum gap
+                vehicle_in_front = agent.last_vehicle_in_front_ego()
+                dataset_time_step = round((self.__time - agent.original_initial_time) / self.__dt)
+                if vehicle_in_front is not None and not agent.idm.activated():
+                    # agent died at the previous time step
+                    vehicle_front_not_alive_anymore = vehicle_in_front["agent_id"] not in self.__agents
+                    if vehicle_front_not_alive_anymore:
+                        pass
+                    else:
+                        # The gap is the distance between the bounding boxes of the two vehicles
+                        bbox_i = LineString(agent.state.bbox.boundary)
+                        vehicle_in_front_simulator = self.__agents[vehicle_in_front["agent_id"]]
+                        bbox_j = LineString(vehicle_in_front_simulator.state.bbox.boundary)
+                        gap = bbox_i.distance(bbox_j)
+
+                        if gap < agent.idm.s0:
+                            # Check if the gap appears in the dataset or it changed tue to external reasons (e.g., policy
+                            # pi causing the vehicle in front to brake)
+                            if dataset_time_step + 1 < len(dataset_agent.x_vec):
+                                expected_v_front = self.__episode_agents[vehicle_in_front["agent_id"]]
+                                # find timestep for j corresponding to the current time step
+                                time_j = round((self.__time - expected_v_front.time[0]) / self.__dt)
+
+                                try:
+                                    expected_j_bbox = Box(center=Point(expected_v_front.x_vec[time_j],
+                                                                        expected_v_front.y_vec[time_j]),
+                                                            length=expected_v_front.length, width=expected_v_front.width,
+                                                            heading=expected_v_front.psi_vec[time_j])
+                                    expected_gap = bbox_i.distance(LineString(expected_j_bbox.boundary))
+
+                                    if (gap - expected_gap) < 1e-4:
+                                        debug = False
+                                        if debug:
+                                            fig, ax = plt.subplots()
+                                            plot_map(self.__scenario_map, markings=True, hide_road_bounds_in_junction=True, ax=ax)
+                                            for ajd, aj in self.__agents.items():
+                                                color = "red" if ajd == self.__agent_evaluated else "blue"
+                                                plt.plot(aj.state.position.x, aj.state.position.y, "o")
+                                                # blot bonding
+                                                # Plot the bounding box of the agent
+                                                bbox = aj.state.bbox.boundary
+                                                # repeat the first point to create a 'closed loop'
+                                                bbox = [*bbox, bbox[0]]
+                                                ax.plot([point[0] for point in bbox], [point[1] for point in bbox], color=color)
+                                            # plot the expected bounding box of the vehicle in front in white
+                                            bbox = expected_j_bbox.boundary
+                                            # repeat the first point to create a 'closed loop'
+                                            bbox = [*bbox, bbox[0]]
+                                            ax.plot([point[0] for point in bbox], [point[1] for point in bbox],
+                                                    color="green")
+                                            plt.show()
+
+                                        # The gap is critical and different than what it should be
+                                        agent.idm.activate(v0=agent.state.speed)
+                                        self.__agents[self.__agent_evaluated].add_interference(
+                                            agent_id=vehicle_in_front["agent_id"])
+
+                                except IndexError:
+                                    if vehicle_in_front_simulator.policy not in ["follow_dataset"]:
+                                        # the vehicle in front is not following the dataset and thus we cannot compare
+                                        # its position to the original one.
+                                        # The gap is critical and different from what it should be
+                                        agent.idm.activate(v0=agent.state.speed)
+                                        self.__agents[self.__agent_evaluated].add_interference(
+                                            agent_id=vehicle_in_front["agent_id"])
+                                        pass
+
+                if agent.idm.activated():
+                    action = agent.idm.compute_idm_action(state_i=agent.state, agent_in_front=vehicle_in_front,
+                                                          agent_meta=agent.meta, previous_state_i=agent.state_trajectory[-2] if len(agent.state_trajectory) > 1 else agent.state)
+
+                else:
+                    # Get the acceleration and steering angle from the dataset
+                    deltas = ExtractObservationAction.extract_yaw_rate(agent=dataset_agent)
+                    acceleration = np.sqrt(float(dataset_agent.ax_vec[dataset_time_step]) ** 2 +
+                                           float(dataset_agent.ay_vec[dataset_time_step]) ** 2)
+                    action = Action(acceleration=acceleration,
+                                    steer_angle=deltas[dataset_time_step])
+            elif isinstance(agent.policy, BC) or isinstance(agent.policy, SAC):
                 action = agent.next_action(history=agent.observation_trajectory)
             elif agent.policy == "rl":
                 assert agent_id == self.__agent_evaluated, "Only the agent being evaluated can have policy 'rl'"
@@ -445,7 +556,7 @@ class Sim4ADSimulation:
             new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
 
             goal_reached, truncated = False, False
-            if agent.policy == "follow_dataset":
+            if agent.policy == "follow_dataset" and not agent.idm.activated():
 
                 if dataset_time_step + 1 < len(dataset_agent.x_vec):
                     position = Point(dataset_agent.x_vec[dataset_time_step + 1],
@@ -463,7 +574,7 @@ class Sim4ADSimulation:
                     goal_reached = True
             else:
                 goal_reached = agent.reached_goal(new_state)
-                truncated = agent.terminated(max_steps=1000)  # TODO: max_steps should be a parameter
+                truncated = agent.terminated(max_steps=1000)
 
             off_road = new_state.lane is None
 
@@ -479,6 +590,7 @@ class Sim4ADSimulation:
             agent.add_state(new_state)
 
         new_frame["time"] = self.__time + self.__dt
+        new_frame["evaluated_agent"] = self.__agent_evaluated
         self.__simulation_history.append(new_frame)
         self.__state = new_frame
 
@@ -517,7 +629,7 @@ class Sim4ADSimulation:
         :return: The next State.
         """
 
-        # TODO: bicycle model
+        # bicycle model
         # acceleration = np.clip(action.acceleration, - agent.meta.max_acceleration, agent.meta.max_acceleration)
         #
         # speed = current_state.speed + acceleration * self.__dt
@@ -538,18 +650,25 @@ class Sim4ADSimulation:
         acceleration = np.clip(action.acceleration, - agent.meta.max_acceleration, agent.meta.max_acceleration)
         speed = current_state.speed + acceleration * self.__dt
         speed = max(0, speed)
-        d_theta = action.steer_angle
+        if agent.idm.activated():
+            # we move along the midline of the road, rather than following the current one
+            new_lane = current_state.lane
+            center = np.array([current_state.position.x, current_state.position.y]) + np.array([speed * np.cos(current_state.heading), speed * np.sin(current_state.heading)]) * self.__dt
+            center_ds = new_lane.distance_at(Point(center[0], center[1]))
+            center = new_lane.point_at(center_ds)
+            heading = new_lane.get_heading_at(center_ds)
 
-        # update heading but respect the (-pi, pi) convention
-        heading = (current_state.heading + d_theta * self.__dt + np.pi) % (2 * np.pi) - np.pi
-        d_position = np.array([speed * np.cos(heading), speed * np.sin(heading)])
-        center = np.array([current_state.position.x, current_state.position.y]) + d_position * self.__dt
+        else:
+            d_theta = action.steer_angle
 
-        new_lane = self.__scenario_map.best_lane_at(center, heading)
+            # update heading but respect the (-pi, pi) convention
+            heading = (current_state.heading + d_theta * self.__dt + np.pi) % (2 * np.pi) - np.pi
+            d_position = np.array([speed * np.cos(heading), speed * np.sin(heading)])
+            center = np.array([current_state.position.x, current_state.position.y]) + d_position * self.__dt
+            new_lane = self.__scenario_map.best_lane_at(center, heading)
 
-        # TODO: is the time correct? or should we use the time of the action?
         return State(time=self.time + self.dt, position=center, speed=speed, acceleration=acceleration,
-                     heading=heading, lane=new_lane, agent_width=agent.meta.width, agent_length=agent.meta.length)
+                      heading=heading, lane=new_lane, agent_width=agent.meta.width, agent_length=agent.meta.length)
 
     def _get_observation(self, agent: PolicyAgent, state: State) -> Tuple[Observation, dict]:
         """
@@ -591,6 +710,7 @@ class Sim4ADSimulation:
 
         done = collision or off_road or truncated or reached_goal
 
+        ax, ay, long_jerk, thw_front, thw_rear = 0, 0, 0, 0, 0
         if not done:
             front_ego = nearby_agents_features[PNA.CENTER_IN_FRONT]
             behind_ego = nearby_agents_features[PNA.CENTER_BEHIND]
@@ -639,16 +759,23 @@ class Sim4ADSimulation:
             obs = Observation(state=observation)
 
             # Compute the evaluation features for the agent
-            assert self.evaluation or self.policy_type != "rl", "We need these features to use the IRL reward"
+            assert self.evaluation or self.__policy_type != "rl", "We need these features to use the IRL reward"
             if self.evaluation:
-                agent.add_nearby_vehicles(vehicles_nearby)
+                nearby_vehicles = agent.add_nearby_vehicles(vehicles_nearby)
                 agent.add_distance_right_lane_marking(obs.get_feature("distance_right_lane_marking"))
                 agent.add_distance_left_lane_marking(obs.get_feature("distance_left_lane_marking"))
+                d_midline = state.lane.midline.distance(state.position)
+                agent.add_distance_midline(d_midline)
 
                 # Compute the features needed to use the IRL reward (and evaluation)
                 ax, ay = agent.compute_current_lat_lon_acceleration()
                 long_jerk = agent.compute_current_long_jerk()
-
+                _, tths = self.evaluator.compute_ttc_tth(agent, state=state, nearby_vehicles=nearby_vehicles,
+                                                         episode_id=None, add=False)
+                thw_front = tths[PNA.CENTER_IN_FRONT]
+                thw_rear = tths[PNA.CENTER_BEHIND]
+                thw_front = thw_front if thw_front is not None else 0
+                thw_rear = thw_rear if thw_rear is not None else 0
 
             # Put the observation in a tuple, as the policy expects it
             obs = obs.get_tuple()
@@ -656,7 +783,11 @@ class Sim4ADSimulation:
         else:
             obs = None
 
-        info = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated}
+        info = None
+        if self.__policy_type == "rl":
+            info = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated,
+                    "ego_speed": state.speed, "ego_long_acc": ax, "ego_lat_acc": ay, "ego_long_jerk": long_jerk,
+                    "thw_front": thw_front, "thw_rear": thw_rear, "social_impact": 0}  # add social impact
 
         return obs, info
 
@@ -672,13 +803,14 @@ class Sim4ADSimulation:
             ax.clear()
             plot_map(self.__scenario_map, markings=True, hide_road_bounds_in_junction=True, ax=ax)
             time = frame['time']
+            evaluated_agent = frame['evaluated_agent']
             for idx, (agent_id, state) in enumerate(frame.items()):
-                if agent_id == "time":
+                if agent_id in ["time", "evaluated_agent"]:
                     continue
 
                 if self.__spawn_method == "dataset_one":
                     # Make the agent we are evaluating blue and all other agents grey
-                    color = "blue" if agent_id == self.__agent_evaluated else "white"
+                    color = "blue" if agent_id == evaluated_agent else "white"
                 else:
                     # pick a color based on the hash of the agent_id
                     random.seed(agent_id)
@@ -703,18 +835,23 @@ class Sim4ADSimulation:
             ax.set_title(f"Simulation Time: {time}")
 
         ani = FuncAnimation(fig, update, frames=self.__simulation_history, repeat=True,
-                            interval=self.__fps)  # TODO: interval=self.__fps
+                            interval=self.__fps)
         plt.show()
 
     def __load_datasets(self):
+
+        if self.will_be_done_next:
+            self.done_full_cycle = True
 
         if isinstance(self.__all_episode_names, list):
             episode_name = self.__all_episode_names[self.episode_idx]
             self.episode_idx += 1
             if self.episode_idx == len(self.__all_episode_names):
                 self.episode_idx = 0
+                self.will_be_done_next = True
         else:
             episode_name = self.__all_episode_names
+            self.will_be_done_next = True
 
         path_to_dataset_folder = get_path_to_automatum_scenario(episode_name)
         dataset = droneDataset(path_to_dataset_folder)
@@ -733,6 +870,9 @@ class Sim4ADSimulation:
         self.__state = {}
         self.__agents = {}
         self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
+        
+        if self.clustering != "all":
+            self.__episode_agents = self.cluster_agents(self.__episode_agents)
         self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
         self.__last_agent_id = 0  # ID when creating a new random agent
         # Dictionary (agent_id, DeathCause) of agents that have been removed from the simulation.
@@ -751,21 +891,40 @@ class Sim4ADSimulation:
         return self.__eval
 
     @property
+    def agents(self):
+        return self.__agents
+
+    @property
     def simulation_history(self):
-        return self.__simulation_history  # todo: remove this
+        return self.__simulation_history
+
+    def _get_current_episode_id(self):
+        # We need -1 because we increment the episode_idx before using it.
+        return self.__all_episode_names[self.episode_idx-1] if isinstance(self.__all_episode_names, list) else self.__all_episode_names
+
+    @property
+    def agents_to_add(self):
+        return self.__agents_to_add
 
 
 if __name__ == "__main__":
 
-    ep_name = "hw-a9-appershofen-001-d8087340-8287-46b6-9612-869b09e68448"
+    ep_name = ["hw-a9-appershofen-001-d8087340-8287-46b6-9612-869b09e68448",
+               "hw-a9-appershofen-002-2234a9ae-2de1-4ad4-9f43-65c2be9696d6"]
 
-    sim = Sim4ADSimulation(episode_name=ep_name, spawn_method="dataset_one", policy_type="bc-all-obs-1.5_pi")
+    spawn_method = "dataset_one"
+    policy_type = "sac_5_rl"  # "bc-all-obs-5_pi_cluster_Aggressive"  # "bc-all-obs-1.5_pi" "idm"
+    clustering = "all"
+    sim = Sim4ADSimulation(episode_name=ep_name, spawn_method=spawn_method, policy_type=policy_type, clustering=clustering)
     sim.full_reset()
 
-    simulation_length = 100  # seconds
+    # done = False # TODO: uncomment this to run until we use all vehicles
+    # while not done:
+    #     assert spawn_method != "random", "we will never finish!"
+    #     done = sim.step(return_done=True)
 
-    # TODO: use tqdm
-    for _ in range(int(np.floor(simulation_length / sim.dt))):
+    simulation_length = 50  # seconds
+    for _ in tqdm(range(int(np.floor(simulation_length / sim.dt)))):
         sim.step()
 
     # Remove all agents left in the simulation.

@@ -7,21 +7,30 @@ Define the reward function for the environment. The reward function is a callabl
         done: A boolean indicating whether the episode has ended.
         info: A dictionary containing any additional information.
 """
+import pickle
+
+import numpy as np
+
+from sim4ad.path_utils import get_path_irl_weights
 
 
-def get_reward(terminated, truncated, info, use_rl_reward=False):
+def get_reward(terminated, truncated, info, irl_weights=None):
     """
     Reward function for the environment.
     Currently, it is a sparse reward function that is zero but when agent reaches the goal, collides or goes off-road.
     """
 
+    use_rl_reward = False
     if use_rl_reward:
-        # Load the weights
-        # We need to compute these features
-        # ego_speed, abs(ego_long_acc), abs(ego_lat_acc), abs(ego_long_jerk),
-        #                              thw_front, thw_rear, collision, social_impact
-        raise NotImplementedError
-        features = compute_features(state, action, next_state, done, info)
+
+        features = np.array([info["ego_speed"], abs(info["ego_long_acc"]), abs(info["ego_lat_acc"]),
+                             abs(info["ego_long_jerk"]), info["thw_front"], info["thw_rear"], info["collision"],
+                             info["social_impact"]])
+
+        assert irl_weights is not None, "IRL weights are not provided."
+        # Compute the reward
+        return np.dot(irl_weights["theta"][0], features)
+
     else:
         if terminated:
             return 1
@@ -33,5 +42,5 @@ def get_reward(terminated, truncated, info, use_rl_reward=False):
             # The episode was truncated due to the maximum number of steps being reached.
             return -1
         else:
-            return 0  # TODO: add self._time_discount ** trajectory.duration
+            return 0
 

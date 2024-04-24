@@ -43,7 +43,7 @@ def plot_map(odr_map: Map, ax: plt.Axes = None, scenario_config=None, **kwargs) 
     if odr_map.west is not None:
         ax.set_xlim([odr_map.west, odr_map.east])
         ax.set_ylim([odr_map.south, odr_map.north])
-    ax.set_facecolor("grey")
+    ax.set_facecolor("white")
 
     if kwargs.get("plot_background", False):
         if scenario_config is None:
@@ -130,7 +130,7 @@ def plot_map(odr_map: Map, ax: plt.Axes = None, scenario_config=None, **kwargs) 
                             side = "left" if lane.id <= 0 else "right"
                             line = lane.reference_line.parallel_offset(i * df, side=side)
                             ax.plot(line.xy[0], line.xy[1],
-                                    color=marker.color_to_rgb,
+                                    color="grey",
                                     linestyle=style,
                                     linewidth=marker.plot_width)
 

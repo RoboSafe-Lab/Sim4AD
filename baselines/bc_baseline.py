@@ -19,40 +19,58 @@ from baselines.bc_model import LSTMModel
 from sim4ad.data import DatasetDataLoader, ScenarioConfig
 from sim4ad.opendrive import Map, plot_map
 from sim4ad.path_utils import baseline_path, get_config_path
+import argparse
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
 class BCBaseline:
-    def __init__(self, name: str, evaluation=False):
+    def __init__(self, name: str, evaluation=False, cluster="all", scenario="appershofen"):
 
-        self.name = name
-        self.BATCH_SIZE = 128  # Define your batch size # TODO: parameterize
-        self.SHUFFLE = True  # shuffle your data
-        self.EPOCHS = 1000  # Define the number of epochs # TODO: parameterize
-        self.LR = 1e-3  # Define your learning rate # TODO: parameterize
+        if evaluation:
+            self.name = name
+        else:
+            self.name = f"{name}_cluster_{cluster}"
+        self.BATCH_SIZE = 128
+        self.SHUFFLE = True
+        self.EPOCHS = 500
+        self.LR = 1e-3
         LSTM_HIDDEN_SIZE = 128
         FC_HIDDEN_SIZE = 512
         DROPOUT = 0.2 if not evaluation else 0.0
-        INPUT_SPACE = 34  # TODO: parameterize
-        ACTION_SPACE = 2  # TODO: parameterize
+        INPUT_SPACE = 34
+        ACTION_SPACE = 2
 
         self.model = LSTMModel(INPUT_SPACE, ACTION_SPACE, LSTM_HIDDEN_SIZE, FC_HIDDEN_SIZE, DROPOUT)
 
         if evaluation:
-            self.model.load_state_dict(torch.load(baseline_path(self.name)))
+
+            try:
+                self.model.load_state_dict(torch.load(baseline_path(self.name), map_location=torch.device('cpu')))
+                self.model.eval()
+            except RuntimeError:
+                # from https://stackoverflow.com/questions/44230907/keyerror-unexpected-key-module-encoder-embedding-weight-in-state-dict
+                state_dict = torch.load(baseline_path(self.name), map_location=torch.device('cpu'))
+                # create new OrderedDict that does not contain `module.`
+                from collections import OrderedDict
+                new_state_dict = OrderedDict()
+                for k, v in state_dict.items():
+                    name = k[7:]  # remove `module.`
+                    new_state_dict[name] = v
+                # load params
+                self.model.load_state_dict(new_state_dict)
             self.model.eval()
         else:
             # We are training
             expert_data = {"observations": [], "actions": []}
 
-            configs = ScenarioConfig.load(get_config_path("appershofen"))
+            configs = ScenarioConfig.load(get_config_path(scenario))
             idx = configs.dataset_split["train"]
             episode_names = [x.recording_id for i, x in enumerate(configs.episodes) if i in idx]
 
             for episode in episode_names:
-                with open(f'scenarios/data/trainingdata/{episode}/demonstration.pkl', 'rb') as f:
+                with open(f'scenarios/data/trainingdata/{episode}/demonstrations_{cluster}.pkl', 'rb') as f:
                     new_expert_data = pickle.load(f)
                     expert_data['observations'] += new_expert_data['observations']
                     expert_data['actions'] += new_expert_data['actions']
@@ -70,7 +88,6 @@ class BCBaseline:
             expert_states_train, expert_states_test, expert_actions_train, expert_actions_test = train_test_split(
                 expert_states_all, expert_actions_all, test_size=0.2)
 
-            # TODO: should we normalize the data?
 
             assert expert_states_train.shape[-1] == INPUT_SPACE
             assert expert_actions_train.shape[-1] == ACTION_SPACE
@@ -106,7 +123,7 @@ class BCBaseline:
         """ Only compute the loss for the time steps that were not padded """
 
         mask = ~(trajectory == self.PADDING_VALUE).all(dim=-1)
-        loss = self.loss_function((predicted_actions[mask]*10).to(self.device), (actions[mask]*10).to(self.device)) # TODO: scaling?
+        loss = self.loss_function((predicted_actions[mask]*10).to(self.device), (actions[mask]*10).to(self.device))
         return loss
 
     def train(self, num_epochs=100, learning_rate=1e-3):
@@ -165,12 +182,21 @@ class BCBaseline:
         self.writer.close()
 
     def save(self):
-        torch.save(self.model.state_dict(), baseline_path(self.name))
+        if isinstance(self.model, torch.nn.DataParallel):
+            model_state_dict = self.model.module.state_dict()
+        else:
+            model_state_dict = self.model.state_dict()
+
+        torch.save(model_state_dict, baseline_path(self.name))
 
     def __call__(self, trajectory):
         return self.model(trajectory)
 
 
 if __name__ == '__main__':
-    policy_network = BCBaseline("bc-all-obs-1.5_pi")
+    args = argparse.ArgumentParser()
+    args.add_argument("--cluster", type=str, default="all")
+    args = args.parse_args()
+
+    policy_network = BCBaseline("bc-all-obs-5_pi", cluster=args.cluster)
     policy_network.train(num_epochs=policy_network.EPOCHS, learning_rate=policy_network.LR)

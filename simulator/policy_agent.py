@@ -5,7 +5,10 @@ from collections import defaultdict
 from typing import Any, Dict, List
 
 import numpy as np
+from stable_baselines3 import SAC
 
+from baselines.idm import IDM
+from simulator.simulator_util import PositionNearbyAgent
 from simulator.state_action import Observation, Action, State
 from sim4ad.agentstate import AgentMetadata
 
@@ -27,10 +30,10 @@ class PolicyAgent:
 
         self._agent_id = agent.UUID
         self._metadata = AgentMetadata(length=agent.length, width=agent.width, agent_type=agent.type,
-                                       front_overhang=0.91, rear_overhang=1.094,  # TODO: front and rear overhang are arbitrary
-                                       wheelbase=agent.length*0.6,  # TODO: arbitrary wheelbase
-                                       max_acceleration=5.0,  # TODO: arbitrary max acceleration
-                                       max_angular_vel=2.0  # TODO: arbitrary max angular velocity
+                                       front_overhang=0.91, rear_overhang=1.094,
+                                       wheelbase=agent.length*0.6,
+                                       max_acceleration=1.5,
+                                       max_angular_vel=2.0
                                        )
 
         self.policy = policy
@@ -40,6 +43,10 @@ class PolicyAgent:
         self.__evaluation_features_trajectory = defaultdict(list)  # List of all the features used for evaluation at each time step.
         self._initial_state = initial_state
         self._original_initial_time = original_initial_time
+        self.__long_acc = []
+        self.__lat_acc = []
+        self.__long_jerk = []
+        self.idm = IDM()
 
         # For the bicycle model
         correction = (self._metadata.rear_overhang - self._metadata.front_overhang) / 2  # Correction for cg
@@ -53,8 +60,12 @@ class PolicyAgent:
         :param history: The history of the observations/states.
         :return: The desired acceleration and steering angle.
         """
-        acceleration, delta = self.policy(history)[0].tolist()
 
+        if isinstance(self.policy, SAC):
+            obs = history[-1]
+            (acceleration, delta), _ = self.policy.predict(obs, deterministic=True)
+        else:
+            acceleration, delta = self.policy(history)[0].tolist()
         action = Action(acceleration=acceleration, steer_angle=delta)
 
         return action
@@ -73,9 +84,6 @@ class PolicyAgent:
             return False
 
         reached_end_lane = state.lane.distance_at(state.position) > 0.97 * state.lane.length
-        if reached_end_lane:
-            # TODO: adapt for other scenarios
-            logger.warning("This only works for AUTOMATUM where is there is only one lane")
         return reached_end_lane
 
     def __call__(self, history: [[Observation]]) -> tuple[Observation, Action]:
@@ -89,6 +97,42 @@ class PolicyAgent:
 
     def terminated(self, max_steps: int) -> bool:
         return len(self._state_trajectory) >= max_steps
+
+    def compute_current_lat_lon_acceleration(self):
+        """
+        Compute the lateral and longitudinal acceleration at the current timestep.
+        :return: lat ang long acceleration
+        """
+
+        state = self.state_trajectory[-1]
+        acc = state.acceleration
+        long_acc = acc * np.cos(state.heading)
+        lat_acc = acc * np.sin(state.heading)
+
+        assert (np.sqrt(long_acc ** 2 + lat_acc ** 2) - np.abs(state.acceleration) < 1e-6), \
+               f"Computed acceleration: {np.sqrt(long_acc ** 2 + lat_acc ** 2)}, " \
+               f"state acceleration: {state.acceleration}"
+
+        self.__long_acc.append(long_acc)
+        self.__lat_acc.append(lat_acc)
+
+        return lat_acc, long_acc
+
+    def compute_current_long_jerk(self):
+        """
+        Compute the longitudinal jerk at the current timestep.
+        :return: long jerk
+        """
+
+        assert len(self.__long_acc) == len(self._state_trajectory)
+
+        long_jerk = 0
+        if len(self.__long_acc) > 2:
+            long_jerk = (self.__long_acc[-1] - self.__long_acc[-2]) / (self._state_trajectory[-1].time - self._state_trajectory[-2].time)
+
+        self.__long_jerk.append(long_jerk)
+        return long_jerk
+
     @property
     def agent_id(self) -> str:
         """
@@ -147,6 +191,12 @@ class PolicyAgent:
         """ The nearby vehicles at each time step. """
         return self.__evaluation_features_trajectory["nearby_vehicles"]
 
+    def last_vehicle_in_front_ego(self):
+        """
+        Get the vehicle in front of the ego agent at the last time step.
+        """
+        return self.__evaluation_features_trajectory["nearby_vehicles"][-1][PositionNearbyAgent.CENTER_IN_FRONT]
+
     def add_nearby_vehicles(self, nearby_vehicles: Dict[str, Any]):
         """
         Add the nearby vehicles to the trajectory of the agent.
@@ -160,11 +210,13 @@ class PolicyAgent:
 
             if vehicle is not None:
                 vehicle = {"agent_id": vehicle.agent_id, "position": vehicle.state.position,
-                           "speed": vehicle.state.speed, "metadata": vehicle.metadata}
+                           "speed": vehicle.state.speed, "metadata": vehicle.metadata,
+                           "heading": vehicle.state.heading}
 
             nearby_vehicles_new[position] = vehicle
 
         self.__evaluation_features_trajectory["nearby_vehicles"].append(nearby_vehicles_new)
+        return nearby_vehicles_new
 
     @property
     def distance_right_lane_marking(self):
@@ -180,9 +232,16 @@ class PolicyAgent:
     def add_distance_left_lane_marking(self, distance_left_lane_marking: float):
         self.__evaluation_features_trajectory["distance_left_lane_marking"].append(distance_left_lane_marking)
 
+    def add_distance_midline(self, distance_midline: float):
+        self.__evaluation_features_trajectory["distance_midline"].append(distance_midline)
+
     @property
     def meta(self):
         return self._metadata
+
+    @property
+    def distance_midline(self):
+        return self.__evaluation_features_trajectory["distance_midline"]
 
     @property
     def initial_state(self) -> State:
@@ -198,6 +257,13 @@ class PolicyAgent:
     def state(self) -> State:
         """The last state in the trajectory"""
         return self.state_trajectory[-1]
+
+    def add_interference(self, agent_id):
+        self.__evaluation_features_trajectory["interferences"].append(agent_id)
+
+    @property
+    def interferences(self):
+        return self.__evaluation_features_trajectory["interferences"]
 
 
 class DummyRandomAgent:

@@ -7,7 +7,7 @@ from shapely import Point
 
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 from sim4ad.opendrive import Lane
-from simulator.policy_agent import PolicyAgent
+# from simulator.policy_agent import PolicyAgent
 from simulator.state_action import State
 
 
@@ -104,9 +104,9 @@ def __find_perpendicular(lane: Lane, state: State, length=50) -> Tuple[Point, Po
     return Point(x_left, y_left), Point(x_right, y_right)
 
 
-def get_nearby_vehicles(agent: PolicyAgent, state: State, all_agents: dict):
+def get_nearby_vehicles(agent: "PolicyAgent", state: State, all_agents: dict):
     """
-    TODO: we assume that there is only one lane, and not consider that vehicle may be in different lane groups,
+    we assume that there is only one lane, and not consider that vehicle may be in different lane groups,
     e.g., if lane changes group in front and the agent in front is in that lane instead.
     """
 
@@ -117,7 +117,7 @@ def get_nearby_vehicles(agent: PolicyAgent, state: State, all_agents: dict):
         raise ValueError(f"No lane found at position {state.position} and heading {state.heading}.")
 
     # 2. We want the lanes to the left and right of the current one (as long as they have the same flow of motion)
-    # TODO: in urban environments, is this an acceptable limitation, or should we also include vehicles from
+    # in urban environments, is this an acceptable limitation, or should we also include vehicles from
     #   the other direction, as they may surpass, merge / cut in front of the vehicle?
 
     nearby_lanes = {k: None for k in ["left", "center", "right"]}
@@ -127,7 +127,7 @@ def get_nearby_vehicles(agent: PolicyAgent, state: State, all_agents: dict):
 
     # 3. We want to further divide the lanes into two parts, the one in front and the one behind the vehicle.
     # We will use the perpendicular line to the lane to divide the lanes into two parts.
-    # perpendicular = np.array(left_point, right_point) TODO: check this is still updated
+    # perpendicular = np.array(left_point, right_point)
     perpendicular = __find_perpendicular(lane, state)
 
     nearby_vehicles_features = defaultdict(None)
@@ -193,7 +193,7 @@ def get_nearby_vehicles(agent: PolicyAgent, state: State, all_agents: dict):
     return nearby_vehicles_features, vehicles_nearby
 
 
-def collision_check(agent_state: State, nearby_vehicles: dict) -> Tuple[bool, PolicyAgent]:
+def collision_check(agent_state: State, nearby_vehicles: dict) -> Tuple[bool, "PolicyAgent"]:
     """
     Check if the agent is colliding with a nearby vehicle.
 
@@ -209,7 +209,7 @@ def collision_check(agent_state: State, nearby_vehicles: dict) -> Tuple[bool, Po
     return False
 
 
-def get_vehicle_features(nearby_vehicle: PolicyAgent, state: State):
+def get_vehicle_features(nearby_vehicle: "PolicyAgent", state: State):
     """
     :param nearby_vehicle: The vehicle to get the features from, w.r.t the ego agent.
     :param state: The current state of the ego agent.

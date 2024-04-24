@@ -29,7 +29,7 @@ class LSTMModel(nn.Module):
         out, _ = self.rnn(history)
         out = self.fc(out)
 
-        MAX_ACCELERATION = 1.5  # TODO: set these globally
+        MAX_ACCELERATION = 5 # [m/s]
         MAX_STEERING_ANGLE = np.pi
 
         # We want the output to be between -max_acceleration and max_acceleration and

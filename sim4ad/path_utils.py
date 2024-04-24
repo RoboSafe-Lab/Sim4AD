@@ -1,5 +1,6 @@
 import json
 import pathlib
+from typing import List
 
 
 def get_base_dir():
@@ -56,3 +57,49 @@ def get_path_to_automatum_scenario(scenario_name):
 
 def get_path_to_automatum_map(scenario_name):
     return f"{get_path_to_automatum_scenario(scenario_name)}/staticWorld.xodr"
+
+
+def get_path_irl_weights():
+    return f"{get_base_dir()}/simulator/gym_env/gym_env/envs/training_log.pkl"
+
+
+def get_file_name_trajectories(policy_type, spwan_method, irl_weights, episode_name: List[str], simulation_length):
+    """
+    Get the file name for the trajectories.
+
+    :param policy_type: The policy type.
+    :param irl_weights: The IRL weights.
+    :param episode_name: The episode name.
+    :return: The file name.
+    """
+
+    episode_name = "_".join(episode_name)
+    if irl_weights is not None:
+        irl_weights = "_".join([str(i) for i in irl_weights])
+
+    folder_path = f"{get_base_dir()}/evaluation/trajectories/"
+    pathlib.Path(folder_path).mkdir(parents=True, exist_ok=True)
+
+    return f"{folder_path}/{episode_name}_{policy_type}_{spwan_method}_{irl_weights}_{simulation_length}steps.pkl"
+
+def get_file_name_evaluation(policy_type, spawn_method, irl_weights, episode_name):
+    """
+    Get the file name for the evaluation.
+
+    :param policy_type: The policy type.
+    :param irl_weights: The IRL weights.
+    :param episode_name: The episode nameS.
+    :return: The file name.
+    """
+    episode_name = "_".join(episode_name)
+    if irl_weights is not None:
+        irl_weights = "_".join([str(i) for i in irl_weights])
+
+    folder_path = f"{get_base_dir()}/evaluation/results/"
+    pathlib.Path(folder_path).mkdir(parents=True, exist_ok=True)
+
+    filename = f"{episode_name}_{policy_type}_{spawn_method}_{irl_weights}steps"
+    return f"{folder_path}{filename}.pkl", filename
+
+def get_agent_id_combined(episode_name, agent_id):
+    return f"{episode_name}/{agent_id}"

@@ -169,11 +169,10 @@ class ExtractObservationAction:
                 ego_agent_observations[f'{surrounding_agent_relation}_rel_a'].append(surrounding_rel_a)
                 ego_agent_observations[f'{surrounding_agent_relation}_heading'].append(surrounding_heading)
 
-            if self._driving_style != 'General':
-                # extract features to compute rewards
-                features = self.extract_features(inx, agent)
-                features.append(social_impact)
-                ego_agent_features.append(features)
+            # extract features to compute rewards
+            features = self.extract_features(inx, agent)
+            features.append(social_impact)
+            ego_agent_features.append(features)
 
         if not skip_vehicle:
             ego_agent_observations = pd.DataFrame(ego_agent_observations, index=agent.time)

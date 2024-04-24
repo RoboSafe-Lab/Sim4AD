@@ -4,6 +4,9 @@ import numpy as np
 import pickle
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+import os
+import imageio
+from loguru import logger
 
 from sim4ad.data.data_loaders import DatasetDataLoader
 from sim4ad.util import parse_args
@@ -28,17 +31,17 @@ def load_dataset(config_path: str = None, evaluation_data: List[str] = None):
     return data_loader
 
 
-def load_theta():
+def load_theta(driving_style: str):
     """Load the optimized theta from IRL"""
-    with open('results/Generaltraining_log.pkl', 'rb') as f:
+    with open('results/' + driving_style + 'training_log.pkl', 'rb') as f:
         training_log = pickle.load(f)
 
     return training_log['theta'][-1]
 
 
 class IRLEva(IRLEnv):
-    def __init__(self, episode, scenario_map, ego):
-        self._theta = load_theta()
+    def __init__(self, episode, scenario_map, ego, driving_style: str):
+        self._theta = load_theta(driving_style)
         super().__init__(episode, scenario_map, ego)
 
     def get_trajectory_one_timestep(self, time):
@@ -77,6 +80,7 @@ class CreateAnimation:
         plot_map(scenario_map, ax=self.ax, markings=True, midline=False, drivable=True,
                  plot_background=False)
         self.vehicles = {}
+        self._num = 0
 
     def update_and_show(self, agents, time, delta_t):
         # Update each vehicle's trajectory based on the current states
@@ -107,10 +111,22 @@ class CreateAnimation:
         self.ax.set_title(f'T = {time}')
         plt.draw()
         plt.pause(0.01)
+        self.save_frames()
+        self._num += 1
+
+    def save_frames(self):
+        """Save the frames for creating git"""
+        temp_dir = 'temp_frames'
+        os.makedirs(temp_dir, exist_ok=True)
+        frame_filename = f'{temp_dir}/frame_{self._num}.png'
+        self.fig.savefig(frame_filename)
 
 
 def main():
     args = parse_args()
+    driving_styles = {0: 'Cautious', 1: 'Normal', 2: 'Aggressive', -1: 'General'}
+    driving_style = driving_styles[args.driving_style_idx]
+    logger.info(f'Loading {driving_style} for visualization.')
 
     # we do the evaluation here
     test_data = load_dataset(get_config_path(args.map), ['test'])
@@ -133,7 +149,8 @@ def main():
                     else:
                         re_plan = True
 
-                irl_eva = IRLEva(episode=episode, scenario_map=scenario_map, ego=episode.agents[aid])
+                irl_eva = IRLEva(episode=episode, scenario_map=scenario_map,
+                                 ego=episode.agents[aid], driving_style=driving_style)
                 # re_plan but use previous state instead of state from the dataset
                 if re_plan:
                     irl_eva.reset_ego_state = active_agents[aid].state

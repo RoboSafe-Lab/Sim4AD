@@ -7,7 +7,7 @@ We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first instal
 ### Preprocessing
 The preprocessing was done bt Dr. Cheng Wang. The code is available at `preprocessing.py`.
 
-### The folder which I have created and I solely worked on are:
+### Evaluation folders:
 - /baselines: contains the code for the baselines
 - /evaluation: contains the  code for the metrics (and their unit tests), scoring, evaluation and plotting.
 - /simulator: which contains the lightweigth simulator and the RL simulator

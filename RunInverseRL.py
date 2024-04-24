@@ -24,7 +24,7 @@ def main():
 
     if irl_instance.save_training_log:
         logger.info('Saved training log.')
-        with open("training_log.pkl", "wb") as file:
+        with open("Generaltraining_log.pkl", "wb") as file:
             pickle.dump(irl_instance.training_log, file)
 
 

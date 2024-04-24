@@ -53,7 +53,7 @@ def main():
 
     if irl_instance.save_training_log:
         logger.info('Saved training log.')
-        with open(driving_styles[args.driving_style_idx] + "training_log.pkl", "wb") as file:
+        with open(driving_styles[args.driving_style_idx] + "Generaltraining_log.pkl", "wb") as file:
             pickle.dump(irl_instance.training_log, file)
 
 

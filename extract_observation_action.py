@@ -218,7 +218,7 @@ class ExtractObservationAction:
 
     def load_reward_weights(self):
         """Loading reward weights theta derived from IRL"""
-        with open('results/' + self._driving_style + 'training_log.pkl', 'rb') as file:
+        with open('results/' + self._driving_style + 'Generaltraining_log.pkl', 'rb') as file:
             data = pickle.load(file)
         return data['theta'][-1]
 

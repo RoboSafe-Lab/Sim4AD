@@ -30,7 +30,7 @@ def load_dataset(config_path: str = None, evaluation_data: List[str] = None):
 
 def load_theta():
     """Load the optimized theta from IRL"""
-    with open('results/training_log.pkl', 'rb') as f:
+    with open('results/Generaltraining_log.pkl', 'rb') as f:
         training_log = pickle.load(f)
 
     return training_log['theta'][-1]

@@ -311,9 +311,9 @@ class IRLEnv:
         ego_speed = np.exp(-1/abs(ego_long_speeds[-1])) if ego_long_speeds[-1] != 0 else 0
 
         # comfort
-        ego_long_acc = np.exp(-abs(ego_long_accs[-1]))
-        ego_lat_acc = np.exp(-abs(ego_lateral_accs[-1]))
-        ego_long_jerk = np.exp(-abs(ego_long_jerks[-1]))
+        ego_long_acc = np.exp(-1/abs(ego_long_accs[-1]))
+        ego_lat_acc = np.exp(-1/abs(ego_lateral_accs[-1]))
+        ego_long_jerk = np.exp(-1/abs(ego_long_jerks[-1]))
 
         # time headway front (thw_front) and time headway behind (thw_rear)
         thw_front, thw_rear = self._get_thw()
@@ -328,7 +328,7 @@ class IRLEnv:
                 social_impact += np.abs(v.velocity[0] - v.velocity_history[-1][0]) / self.delta_t \
                     if v.velocity[0] - v.velocity_history[-1][0] < 0 else 0
 
-        social_impact = np.exp(-abs(social_impact))
+        social_impact = np.exp(-1/abs(social_impact))
 
         # ego vehicle human-likeness
         ego_likeness = self.vehicle.calculate_human_likeness()

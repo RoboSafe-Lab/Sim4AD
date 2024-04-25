@@ -16,9 +16,10 @@ from torch.utils.tensorboard import SummaryWriter
 
 from baselines.dataset import AutomatumDataset
 from baselines.bc_model import LSTMModel
+from sim4ad.common_constants import DEFAULT_SCENARIO, DEFAULT_CLUSTER, LSTM_PADDING_VALUE
 from sim4ad.data import DatasetDataLoader, ScenarioConfig
 from sim4ad.opendrive import Map, plot_map
-from sim4ad.path_utils import baseline_path, get_config_path
+from sim4ad.path_utils import baseline_path, get_config_path, get_processed_demonstrations
 import argparse
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,10 @@ logger.setLevel(logging.DEBUG)
 
 
 class BCBaseline:
-    def __init__(self, name: str, evaluation=False, cluster="all", scenario="appershofen"):
+    def __init__(self, name: str, evaluation=False, cluster=DEFAULT_CLUSTER, scenario=DEFAULT_SCENARIO):
+
+        logger.debug(f"Creating BC baseline with name {name}, evaluation = {evaluation}, cluster = {cluster}, "
+                     f"scenario = {scenario}")
 
         if evaluation:
             self.name = name
@@ -39,10 +43,11 @@ class BCBaseline:
         LSTM_HIDDEN_SIZE = 128
         FC_HIDDEN_SIZE = 512
         DROPOUT = 0.2 if not evaluation else 0.0
-        INPUT_SPACE = 34
-        ACTION_SPACE = 2
+        self.INPUT_SPACE = 34
+        self.ACTION_SPACE = 2
 
-        self.model = LSTMModel(INPUT_SPACE, ACTION_SPACE, LSTM_HIDDEN_SIZE, FC_HIDDEN_SIZE, DROPOUT)
+        self.model = LSTMModel(self.INPUT_SPACE, self.ACTION_SPACE, LSTM_HIDDEN_SIZE, FC_HIDDEN_SIZE, DROPOUT)
+        self.PADDING_VALUE = LSTM_PADDING_VALUE  # used to pad the LSTM input to the same length
 
         if evaluation:
 
@@ -62,35 +67,7 @@ class BCBaseline:
                 self.model.load_state_dict(new_state_dict)
             self.model.eval()
         else:
-            # We are training
-            expert_data = {"observations": [], "actions": []}
 
-            configs = ScenarioConfig.load(get_config_path(scenario))
-            idx = configs.dataset_split["train"]
-            episode_names = [x.recording_id for i, x in enumerate(configs.episodes) if i in idx]
-
-            for episode in episode_names:
-                with open(f'scenarios/data/trainingdata/{episode}/demonstrations_{cluster}.pkl', 'rb') as f:
-                    new_expert_data = pickle.load(f)
-                    expert_data['observations'] += new_expert_data['observations']
-                    expert_data['actions'] += new_expert_data['actions']
-
-            self.PADDING_VALUE = -1  # used to pad the LSTM input to the same length
-
-            expert_states_all = pad_sequence(
-                    [torch.as_tensor(seq, dtype=torch.float32) for seq in expert_data['observations']],
-                    batch_first=True,
-                    padding_value=self.PADDING_VALUE)
-            expert_actions_all = pad_sequence([torch.as_tensor(seq, dtype=torch.float32) for seq in expert_data['actions']],
-                                              batch_first=True,
-                                              padding_value=self.PADDING_VALUE)
-
-            expert_states_train, expert_states_test, expert_actions_train, expert_actions_test = train_test_split(
-                expert_states_all, expert_actions_all, test_size=0.2)
-
-
-            assert expert_states_train.shape[-1] == INPUT_SPACE
-            assert expert_actions_train.shape[-1] == ACTION_SPACE
 
             # Check cuda, cpu or mps
             if torch.cuda.is_available():
@@ -110,9 +87,12 @@ class BCBaseline:
             self.loss_function = nn.MSELoss(reduction="mean")
             self.loss_function.to(self.device)
 
+            expert_states_train, expert_actions_train, expert_states_valid, expert_actions_valid = self.load_datasets(
+                evaluation=evaluation, cluster=cluster, scenario=scenario)
+
             self.train_loader = DataLoader(AutomatumDataset(expert_states_train, expert_actions_train),
                                            batch_size=self.BATCH_SIZE, shuffle=self.SHUFFLE)
-            self.eval_loader = DataLoader(AutomatumDataset(expert_states_test, expert_actions_test),
+            self.eval_loader = DataLoader(AutomatumDataset(expert_states_valid, expert_actions_valid),
                                           batch_size=self.BATCH_SIZE, shuffle=self.SHUFFLE)
 
             self.eval_losses = []
@@ -125,6 +105,33 @@ class BCBaseline:
         mask = ~(trajectory == self.PADDING_VALUE).all(dim=-1)
         loss = self.loss_function((predicted_actions[mask]*10).to(self.device), (actions[mask]*10).to(self.device))
         return loss
+
+    def load_datasets(self, evaluation: bool, cluster: str, scenario: str):
+        def load_one_dataset(split_type):
+            with open(get_processed_demonstrations(split_type=split_type, scenario=scenario, cluster=cluster), 'rb') as f:
+                expert_data = pickle.load(f)
+                if cluster == "General":
+                    expert_data = expert_data["General"]
+                else:
+                    expert_data = expert_data["clustered"]
+            expert_states = pad_sequence(
+                [torch.as_tensor(seq, dtype=torch.float32) for seq in expert_data.observations],
+                batch_first=True,
+                padding_value=self.PADDING_VALUE)
+            expert_actions = pad_sequence([torch.as_tensor(seq, dtype=torch.float32) for seq in expert_data.actions],
+                                              batch_first=True,
+                                              padding_value=self.PADDING_VALUE)
+            return expert_states, expert_actions
+
+        assert not evaluation, ("`evaluation` should be true only if the network is used to get prediction with already"
+                                "trained weights.")
+        expert_states_train, expert_actions_train = load_one_dataset(split_type="train")
+        expert_states_valid, expert_actions_valid = load_one_dataset(split_type="valid")
+
+        assert expert_states_train.shape[-1] == self.INPUT_SPACE
+        assert expert_actions_train.shape[-1] == self.ACTION_SPACE
+
+        return expert_states_train, expert_actions_train, expert_states_valid, expert_actions_valid
 
     def train(self, num_epochs=100, learning_rate=1e-3):
         best_loss = float('inf')
@@ -195,7 +202,7 @@ class BCBaseline:
 
 if __name__ == '__main__':
     args = argparse.ArgumentParser()
-    args.add_argument("--cluster", type=str, default="all")
+    args.add_argument("--cluster", type=str, default=DEFAULT_CLUSTER)
     args = args.parse_args()
 
     policy_network = BCBaseline("bc-all-obs-5_pi", cluster=args.cluster)

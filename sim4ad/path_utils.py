@@ -63,6 +63,10 @@ def get_path_irl_weights():
     return f"{get_base_dir()}/simulator/gym_env/gym_env/envs/training_log.pkl"
 
 
+def get_processed_demonstrations(split_type, scenario, cluster):
+    return f"{get_base_dir()}/scenarios/data/{split_type}/{cluster}{scenario}_demonstration.pkl"
+
+
 def get_file_name_trajectories(policy_type, spwan_method, irl_weights, episode_name: List[str], simulation_length):
     """
     Get the file name for the trajectories.

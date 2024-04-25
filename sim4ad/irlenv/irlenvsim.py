@@ -321,21 +321,21 @@ class IRLEnv:
         # avoid collision
         collision = 1 if self.vehicle.crashed or not self.vehicle.on_road else 0
 
-        # interaction (social) impact
-        social_impact = 0
+        # induced decelerations
+        induced_deceleration = 0
         for v in self.active_vehicles:
             if isinstance(v, DatasetVehicle) and v.overtaken and (v.velocity[0] != 0 or v.velocity[1] != 0):
-                social_impact += np.abs(v.velocity[0] - v.velocity_history[-1][0]) / self.delta_t \
+                induced_deceleration += np.abs(v.velocity[0] - v.velocity_history[-1][0]) / self.delta_t \
                     if v.velocity[0] - v.velocity_history[-1][0] < 0 else 0
 
-        social_impact = np.exp(-1/abs(social_impact))
+        induced_deceleration = np.exp(-1/abs(induced_deceleration))
 
         # ego vehicle human-likeness
         ego_likeness = self.vehicle.calculate_human_likeness()
 
         # feature array
         features = np.array([ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk,
-                             thw_front, thw_rear, collision, social_impact, ego_likeness])
+                             thw_front, thw_rear, collision, induced_deceleration, ego_likeness])
 
         return features
 

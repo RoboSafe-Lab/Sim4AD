@@ -787,7 +787,7 @@ class Sim4ADSimulation:
         if self.__policy_type == "rl":
             info = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated,
                     "ego_speed": state.speed, "ego_long_acc": ax, "ego_lat_acc": ay, "ego_long_jerk": long_jerk,
-                    "thw_front": thw_front, "thw_rear": thw_rear, "social_impact": 0}  # add social impact
+                    "thw_front": thw_front, "thw_rear": thw_rear, "induced_deceleration": 0}  # add induced_deceleration
 
         return obs, info
 

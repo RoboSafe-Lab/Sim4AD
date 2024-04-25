@@ -25,7 +25,7 @@ def get_reward(terminated, truncated, info, irl_weights=None):
 
         features = np.array([info["ego_speed"], abs(info["ego_long_acc"]), abs(info["ego_lat_acc"]),
                              abs(info["ego_long_jerk"]), info["thw_front"], info["thw_rear"], info["collision"],
-                             info["social_impact"]])
+                             info["induced_deceleration"]])
 
         assert irl_weights is not None, "IRL weights are not provided."
         # Compute the reward

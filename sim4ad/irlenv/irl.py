@@ -119,7 +119,7 @@ class IRL:
         max_feature = np.max(features, axis=0)
         # set maximum collision value to 1 to avoid divided by zero
         max_feature[6] = 1.0
-        # set social impact to 1 to avoid divided by zero
+        # set induced deceleration to 1 to avoid divided by zero
         if max_feature[7] == 0:
             max_feature[7] = 1.0
 

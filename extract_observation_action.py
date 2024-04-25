@@ -125,7 +125,7 @@ class ExtractObservationAction:
 
         skip_vehicle = False
         for inx, t in enumerate(agent.time):
-            social_impact = 0
+            induced_deceleration = 0
             # get surrounding agent's information
             try:
                 surrounding_agents = agent.object_relation_dict_list[inx]
@@ -150,13 +150,13 @@ class ExtractObservationAction:
                                          - acceleration[inx])
                     surrounding_heading = surrounding_agent.psi_vec[surrounding_agent_inx]
 
-                    # for computing social impact
+                    # for computing induced deceleration
                     if surrounding_agent_relation == 'behind_ego':
                         desired_gap = self.desired_gap(agent.vx_vec[inx], agent.length,
                                                        surrounding_agent.vx_vec[surrounding_agent_inx],
                                                        surrounding_agent.length)
                         if long_distance < desired_gap and surrounding_agent.ax_vec[surrounding_agent_inx] < 0:
-                            social_impact = surrounding_agent.ax_vec[surrounding_agent_inx]
+                            induced_deceleration = surrounding_agent.ax_vec[surrounding_agent_inx]
 
                 else:
                     # Set to invalid value if there is no surrounding agent
@@ -171,7 +171,7 @@ class ExtractObservationAction:
 
             # extract features to compute rewards
             features = self.extract_features(inx, agent)
-            features.append(social_impact)
+            features.append(induced_deceleration)
             ego_agent_features.append(features)
 
         if not skip_vehicle:

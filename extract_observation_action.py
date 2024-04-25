@@ -95,7 +95,7 @@ class ExtractObservationAction:
         thw_rear = np.exp(-1 / thw_rear) if thw_rear is not None else 1
 
         # no collision in the dataset
-        collision = -1
+        collision = 0
 
         # feature array
         features = [ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk, thw_front, thw_rear, collision]

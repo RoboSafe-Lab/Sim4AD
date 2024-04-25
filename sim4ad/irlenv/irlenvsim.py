@@ -319,7 +319,7 @@ class IRLEnv:
         thw_front, thw_rear = self._get_thw()
 
         # avoid collision
-        collision = -1 if self.vehicle.crashed or not self.vehicle.on_road else 0
+        collision = 1 if self.vehicle.crashed or not self.vehicle.on_road else 0
 
         # interaction (social) impact
         social_impact = 0

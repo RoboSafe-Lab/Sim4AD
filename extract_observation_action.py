@@ -81,12 +81,13 @@ class ExtractObservationAction:
         ego_speed = np.exp(-1/abs(agent.vx_vec[inx])) if agent.vx_vec[inx] != 0 else 0
 
         # comfort
-        ego_long_acc = np.exp(-abs(agent.ax_vec[inx]))
-        ego_lat_acc = np.exp(-abs(agent.ay_vec[inx]))
+        ego_long_acc = np.exp(-1/abs(agent.ax_vec[inx])) if agent.ax_vec[inx] != 0 else 0
+        ego_lat_acc = np.exp(-1/abs(agent.ay_vec[inx])) if agent.ay_vec[inx] != 0 else 0
         if agent.jerk_x_vec is None:
-            ego_long_jerk = np.exp(-abs((agent.ax_vec[inx] - agent.ax_vec[inx - 1]) / agent.delta_t)) if inx > 0 else 0
+            ego_long_jerk = (agent.ax_vec[inx] - agent.ax_vec[inx - 1]) / agent.delta_t if inx > 0 else 0
         else:
-            ego_long_jerk = np.exp(-abs(agent.jerk_x_vec[inx]))
+            ego_long_jerk = agent.jerk_x_vec[inx]
+        ego_long_jerk = np.exp(-1 / abs(ego_long_jerk)) if ego_long_jerk != 0 else 0
 
         # time headway front (thw_front) and time headway behind (thw_rear)
         thw_front = agent.tth_dict_vec[inx]['front_ego']

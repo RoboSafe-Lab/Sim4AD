@@ -185,8 +185,8 @@ class IRLEnv:
                     else:
                         plt.plot(vehicle.dataset_traj[:, 0], vehicle.dataset_traj[:, 1], color="y", linewidth=1)
                         plt.scatter(ego_traj[:, 0], ego_traj[:, 1], color='orange', s=10)
-                        if vehicle.overtaken:
-                            plt.scatter(ego_traj[vehicle.overtaken_inx:, 0], ego_traj[vehicle.overtaken_inx:, 1],
+                        if vehicle.overridden:
+                            plt.scatter(ego_traj[vehicle.overridden_inx:, 0], ego_traj[vehicle.overridden_inx:, 1],
                                         color='r', s=10)
                     plt.xlabel('x')
                     plt.ylabel('y')
@@ -311,9 +311,9 @@ class IRLEnv:
         ego_speed = np.exp(-1/abs(ego_long_speeds[-1])) if ego_long_speeds[-1] != 0 else 0
 
         # comfort
-        ego_long_acc = np.exp(-1/abs(ego_long_accs[-1]))
-        ego_lat_acc = np.exp(-1/abs(ego_lateral_accs[-1]))
-        ego_long_jerk = np.exp(-1/abs(ego_long_jerks[-1]))
+        ego_long_acc = np.exp(-1/abs(ego_long_accs[-1])) if ego_long_accs[-1] != 0 else 0
+        ego_lat_acc = np.exp(-1/abs(ego_lateral_accs[-1])) if ego_lateral_accs[-1] != 0 else 0
+        ego_long_jerk = np.exp(-1/abs(ego_long_jerks[-1])) if ego_long_jerks[-1] != 0 else 0
 
         # time headway front (thw_front) and time headway behind (thw_rear)
         thw_front, thw_rear = self._get_thw()
@@ -323,12 +323,14 @@ class IRLEnv:
 
         # induced decelerations
         induced_deceleration = 0
-        for v in self.active_vehicles:
-            if isinstance(v, DatasetVehicle) and v.overtaken and (v.velocity[0] != 0 or v.velocity[1] != 0):
-                induced_deceleration += np.abs(v.velocity[0] - v.velocity_history[-1][0]) / self.delta_t \
-                    if v.velocity[0] - v.velocity_history[-1][0] < 0 else 0
+        _, rear_vehicle = DatasetVehicle.get_front_rear_vehicle(self.active_vehicles, self.vehicle)
+        # find the nearest rear vehicle
+        v = rear_vehicle[0]
+        if v is not None and v.overridden and (v.velocity[0] != 0 or v.velocity[1] != 0):
+            induced_deceleration = np.abs(v.velocity[0] - v.velocity_history[-1][0]) / self.delta_t \
+                if v.velocity[0] - v.velocity_history[-1][0] < 0 else 0
 
-        induced_deceleration = np.exp(-1/abs(induced_deceleration))
+        induced_deceleration = np.exp(-1/abs(induced_deceleration)) if induced_deceleration != 0 else 0
 
         # ego vehicle human-likeness
         ego_likeness = self.vehicle.calculate_human_likeness()

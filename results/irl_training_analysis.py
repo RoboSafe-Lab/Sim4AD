@@ -85,7 +85,7 @@ def plot_weight_comparison(categories):
     ax.set_ylabel('Weights')
     ax.set_title('Weights for different driving styles')
     ax.set_xticks(x)
-    ax.set_xticklabels(features, rotation=15)
+    ax.set_xticklabels(features, rotation=10)
     ax.legend()
     ax.grid(True, which='both', axis='y', linestyle='--', linewidth=0.5, color='gray')
     # Show the plot

@@ -9,7 +9,7 @@ from sim4ad.irlenv import IRLEnv
 
 class IRL:
     feature_num = 8
-    n_iters = 200
+    n_iters = 2000
     beta1 = 0.9
     beta2 = 0.999
     eps = 1e-8

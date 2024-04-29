@@ -25,8 +25,9 @@ def main():
     irl_instance = IRL(multiprocessing=False, num_processes=12,
                        save_buffer=False, save_training_log=True)
 
-    driving_styles = {0: 'Cautious', 1: 'Normal', 2: 'Aggressive', -1: ''}
+    driving_styles = {0: 'Cautious', 1: 'Normal', 2: 'Aggressive', -1: 'General'}
 
+    new_buffer = []
     for episode in config.episodes:
         episode_id = episode.recording_id
 
@@ -38,7 +39,12 @@ def main():
                     buffer = load_pkl(value + '_' + episode_id)
                     if buffer is None:
                         continue
-                    irl_instance.maxent_irl(buffer=buffer)
+                    # If new_buffer is empty, simply assign buffer to it
+                    if not new_buffer:
+                        new_buffer = buffer.copy()
+                    else:
+                        # Otherwise, concatenate the current buffer to each corresponding sublist in new_buffer
+                        new_buffer = [nb + b for nb, b in zip(new_buffer, buffer)]
 
         # load buffered features for a specific driving style
         else:
@@ -47,13 +53,19 @@ def main():
             if buffer is None:
                 continue
             logger.info(f'Loading {driving_styles[args.driving_style_idx]} {episode_id} for training.')
+            # If new_buffer is empty, simply assign buffer to it
+            if not new_buffer:
+                new_buffer = buffer.copy()
+            else:
+                # Otherwise, concatenate the current buffer to each corresponding sublist in new_buffer
+                new_buffer = [nb + b for nb, b in zip(new_buffer, buffer)]
 
-            # Run MaxEnt IRL, sequential optimization, avoid using multiprocessing
-            irl_instance.maxent_irl(buffer=buffer)
+    # Run MaxEnt IRL, sequential optimization, avoid using multiprocessing
+    irl_instance.maxent_irl(buffer=new_buffer)
 
     if irl_instance.save_training_log:
         logger.info('Saved training log.')
-        with open(driving_styles[args.driving_style_idx] + "Generaltraining_log.pkl", "wb") as file:
+        with open(driving_styles[args.driving_style_idx] + "training_log.pkl", "wb") as file:
             pickle.dump(irl_instance.training_log, file)
 
 

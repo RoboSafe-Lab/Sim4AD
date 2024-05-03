@@ -49,7 +49,7 @@ class ExtractObservationAction:
         self._episodes = episodes
 
         self._theta = self.load_reward_weights()
-        self._clustered_demonstrations = {"General": MDPValues(), "clustered": MDPValues()}
+        self._clustered_demonstrations = {"General": [], "clustered": []}
 
     @staticmethod
     def combine(x, y):
@@ -105,6 +105,7 @@ class ExtractObservationAction:
 
     def extract_mdp(self, episode, aid, agent):
         """Extract mdp values for one agent"""
+        mdp = MDPValues()
         # calculate yaw rate
         yaw_rate = self.extract_yaw_rate(agent)
 
@@ -188,12 +189,12 @@ class ExtractObservationAction:
             write_common_property('FEATURES_IN_OBSERVATIONS', ego_agent_observations.columns.tolist())
             write_common_property('FEATURES_IN_ACTIONS', ego_agent_actions.columns.tolist())
 
-            observations = ego_agent_observations.values
-            actions = ego_agent_actions.values
-            rewards = [np.dot(feature, self._theta) for feature in ego_agent_features]
-            terminals = [False for _ in range(len(agent.time)-1)] + [True]
+            mdp.observations = ego_agent_observations.values
+            mdp.actions = ego_agent_actions.values
+            mdp.rewards = [np.dot(feature, self._theta) for feature in ego_agent_features]
+            mdp.terminals = [False for _ in range(len(agent.time)-1)] + [True]
 
-            return observations, actions, rewards, terminals
+            return mdp
         else:
             return None
 
@@ -209,10 +210,7 @@ class ExtractObservationAction:
                 if agent_mdp_values is None:
                     continue
 
-                self._clustered_demonstrations[key].observations.append(agent_mdp_values[0])
-                self._clustered_demonstrations[key].actions.append(agent_mdp_values[1])
-                self._clustered_demonstrations[key].rewards.append(agent_mdp_values[2])
-                self._clustered_demonstrations[key].terminals.append(agent_mdp_values[3])
+                self._clustered_demonstrations[key].append(agent_mdp_values)
 
         self.save_trajectory()
 

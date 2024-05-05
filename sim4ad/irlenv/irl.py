@@ -9,7 +9,7 @@ from sim4ad.irlenv import IRLEnv
 
 class IRL:
     feature_num = 8
-    n_iters = 2000
+    n_iters = 200
     beta1 = 0.9
     beta2 = 0.999
     eps = 1e-8
@@ -154,7 +154,7 @@ class IRL:
         for i in range(IRL.n_iters):
             logger.info(f'interation: {i + 1}/{IRL.n_iters}')
             # fix collision feature's weight, because no collision in the dataset
-            self.theta[6] = -10
+            self.theta[6] = -1
 
             feature_exp = np.zeros([IRL.feature_num])
             human_feature_exp = np.zeros([IRL.feature_num])

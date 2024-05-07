@@ -16,9 +16,6 @@ def main():
     # compute features
     irl_instance.get_simulated_features()
 
-    # normalize features
-    irl_instance.normalize_features()
-
     # save buffered features
     irl_instance.save_buffer_data()
 

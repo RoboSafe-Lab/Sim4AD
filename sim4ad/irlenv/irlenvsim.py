@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from loguru import logger
 from typing import Tuple, Optional
-
+import joblib
 from sim4ad.irlenv.vehicle.humandriving import HumanLikeVehicle, DatasetVehicle
 from sim4ad.opendrive import plot_map
 from sim4ad.irlenv import utils
@@ -24,6 +24,7 @@ class IRLEnv:
         self.reset_time = None
         self.start_frame = None
         self.reset_ego_state = None
+        self._feature_mean_std = self.load_feature_normalization()
 
     def reset(self, reset_time, human=False):
         """
@@ -308,12 +309,12 @@ class IRLEnv:
         ego_lateral_accs = (ego_lateral_speeds[1:] - ego_lateral_speeds[:-1]) / self.delta_t if self.time >= 3 else [0]
 
         # travel efficiency
-        ego_speed = np.exp(-1/abs(ego_long_speeds[-1])) if ego_long_speeds[-1] != 0 else 0
+        ego_speed = abs(ego_long_speeds[-1])
 
         # comfort
-        ego_long_acc = np.exp(-1/abs(ego_long_accs[-1])) if ego_long_accs[-1] != 0 else 0
-        ego_lat_acc = np.exp(-1/abs(ego_lateral_accs[-1])) if ego_lateral_accs[-1] != 0 else 0
-        ego_long_jerk = np.exp(-1/abs(ego_long_jerks[-1])) if ego_long_jerks[-1] != 0 else 0
+        ego_long_acc = abs(ego_long_accs[-1])
+        ego_lat_acc = abs(ego_lateral_accs[-1])
+        ego_long_jerk = abs(ego_long_jerks[-1])
 
         # time headway front (thw_front) and time headway behind (thw_rear)
         thw_front, thw_rear = self._get_thw()
@@ -330,7 +331,7 @@ class IRLEnv:
             induced_deceleration = np.abs(v.velocity[0] - v.velocity_history[-1][0]) / self.delta_t \
                 if v.velocity[0] - v.velocity_history[-1][0] < 0 else 0
 
-        induced_deceleration = np.exp(-1/abs(induced_deceleration)) if induced_deceleration != 0 else 0
+        induced_deceleration = abs(induced_deceleration)
 
         # ego vehicle human-likeness
         ego_likeness = self.vehicle.calculate_human_likeness()
@@ -339,7 +340,14 @@ class IRLEnv:
         features = np.array([ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk,
                              thw_front, thw_rear, collision, induced_deceleration, ego_likeness])
 
-        return features
+        # normalize features
+        features = np.array(features)
+        mean = self._feature_mean_std['mean']
+        std = self._feature_mean_std['std']
+        std_safe = np.where(std == 0, 1, std)  # Replace 0s with 1s in std array to avoid division by zero
+        normalized_features = (features - mean) / std_safe
+
+        return normalized_features
 
     def get_buffer_scene(self, t, save_planned_tra=False):
         """Get the features of sampled trajectories"""
@@ -371,3 +379,8 @@ class IRLEnv:
                 self.reset(reset_time=t)
 
         return buffer_scene
+
+    @staticmethod
+    def load_feature_normalization():
+        """Loading the mean and standard deviation for feature normalization"""
+        return joblib.load('results/feature_normalization.pkl')

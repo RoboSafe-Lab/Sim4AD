@@ -28,9 +28,6 @@ def feature_extraction_irl(episode, agents=None, driving_style=''):
     # compute features
     irl_instance.get_simulated_features(agents)
 
-    # Normalize features
-    irl_instance.normalize_features()
-
     # save buffered features
     irl_instance.save_buffer_data(driving_style)
 

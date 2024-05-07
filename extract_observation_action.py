@@ -5,10 +5,10 @@ from typing import Optional, List
 import numpy as np
 import pandas as pd
 import pickle
-
+import joblib
+from feature_normalization import extract_features
 from sim4ad.path_utils import write_common_property
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
-from sim4ad.irlenv.vehicle.behavior import IDMVehicle
 
 
 @dataclass
@@ -49,59 +49,12 @@ class ExtractObservationAction:
         self._episodes = episodes
 
         self._theta = self.load_reward_weights()
+        self._feature_mean_std = self.load_feature_normalization()
         self._clustered_demonstrations = {"General": [], "clustered": []}
 
     @staticmethod
     def combine(x, y):
         return np.sqrt(np.array(x) ** 2 + np.array(y) ** 2)
-
-    @staticmethod
-    def desired_gap(ego_v: float, ego_length: float, rear_agent_v: float, rear_agent_length: float):
-        """
-        Compute the desired distance between a vehicle and its leading vehicle.
-
-        :param ego_v: the velocity of the ego
-        :param ego_length: length
-        :param rear_agent_v: the velocity of the rear agent
-        :param rear_agent_length: length
-        :return: the desired distance between the two vehicles
-        """
-        d0 = IDMVehicle.DISTANCE_WANTED + ego_length / 2 + rear_agent_length / 2
-        tau = IDMVehicle.TIME_WANTED
-        ab = -IDMVehicle.COMFORT_ACC_MAX * IDMVehicle.COMFORT_ACC_MIN
-        dv = rear_agent_v - ego_v
-        d_star = d0 + rear_agent_v * tau + rear_agent_v * dv / (2 * np.sqrt(ab))
-
-        return d_star
-
-    @staticmethod
-    def extract_features(inx, agent) -> List:
-        """Using the same features from inverse RL"""
-        # travel efficiency
-        ego_speed = np.exp(-1/abs(agent.vx_vec[inx])) if agent.vx_vec[inx] != 0 else 0
-
-        # comfort
-        ego_long_acc = np.exp(-1/abs(agent.ax_vec[inx])) if agent.ax_vec[inx] != 0 else 0
-        ego_lat_acc = np.exp(-1/abs(agent.ay_vec[inx])) if agent.ay_vec[inx] != 0 else 0
-        if agent.jerk_x_vec is None:
-            ego_long_jerk = (agent.ax_vec[inx] - agent.ax_vec[inx - 1]) / agent.delta_t if inx > 0 else 0
-        else:
-            ego_long_jerk = agent.jerk_x_vec[inx]
-        ego_long_jerk = np.exp(-1 / abs(ego_long_jerk)) if ego_long_jerk != 0 else 0
-
-        # time headway front (thw_front) and time headway behind (thw_rear)
-        thw_front = agent.tth_dict_vec[inx]['front_ego']
-        thw_rear = agent.tth_dict_vec[inx]['behind_ego']
-        thw_front = np.exp(-1 / thw_front) if thw_front is not None else 1
-        thw_rear = np.exp(-1 / thw_rear) if thw_rear is not None else 1
-
-        # no collision in the dataset
-        collision = 0
-
-        # feature array
-        features = [ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk, thw_front, thw_rear, collision]
-
-        return features
 
     def extract_mdp(self, episode, aid, agent):
         """Extract mdp values for one agent"""
@@ -127,7 +80,6 @@ class ExtractObservationAction:
 
         skip_vehicle = False
         for inx, t in enumerate(agent.time):
-            induced_deceleration = 0
             # get surrounding agent's information
             try:
                 surrounding_agents = agent.object_relation_dict_list[inx]
@@ -139,7 +91,7 @@ class ExtractObservationAction:
             for surrounding_agent_relation, surrounding_agent_id in surrounding_agents.items():
                 if surrounding_agent_id is not None:
                     surrounding_agent = episode.agents[surrounding_agent_id]
-                    # todo lat_dist_dict_vec, long_dist_dict_vec are none, so should be recalculated
+                    # lat_dist_dict_vec, long_dist_dict_vec are none, so should be recalculated using get_lat_and_long
                     long_distance, lat_distance = agent.get_lat_and_long(t, surrounding_agent)
                     surrounding_agent_inx = surrounding_agent.next_index_of_specific_time(t)
                     surrounding_rel_dx = long_distance
@@ -151,14 +103,6 @@ class ExtractObservationAction:
                                                       surrounding_agent.ay_vec[surrounding_agent_inx])
                                          - acceleration[inx])
                     surrounding_heading = surrounding_agent.psi_vec[surrounding_agent_inx]
-
-                    # for computing induced deceleration
-                    if surrounding_agent_relation == 'behind_ego':
-                        desired_gap = self.desired_gap(agent.vx_vec[inx], agent.length,
-                                                       surrounding_agent.vx_vec[surrounding_agent_inx],
-                                                       surrounding_agent.length)
-                        if long_distance < desired_gap and surrounding_agent.ax_vec[surrounding_agent_inx] < 0:
-                            induced_deceleration = surrounding_agent.ax_vec[surrounding_agent_inx]
 
                 else:
                     # Set to invalid value if there is no surrounding agent
@@ -172,9 +116,16 @@ class ExtractObservationAction:
                 ego_agent_observations[f'{surrounding_agent_relation}_heading'].append(surrounding_heading)
 
             # extract features to compute rewards
-            features = self.extract_features(inx, agent)
-            features.append(induced_deceleration)
-            ego_agent_features.append(features)
+            features = extract_features(inx, t, agent, episode)
+
+            # normalize features
+            features = np.array(features)
+            mean = self._feature_mean_std['mean']
+            std = self._feature_mean_std['std']
+            std_safe = np.where(std == 0, 1, std)  # Replace 0s with 1s in std array to avoid division by zero
+            normalized_features = (features - mean) / std_safe
+
+            ego_agent_features.append(normalized_features)
 
         if not skip_vehicle:
             ego_agent_observations = pd.DataFrame(ego_agent_observations, index=agent.time)
@@ -189,6 +140,7 @@ class ExtractObservationAction:
             write_common_property('FEATURES_IN_OBSERVATIONS', ego_agent_observations.columns.tolist())
             write_common_property('FEATURES_IN_ACTIONS', ego_agent_actions.columns.tolist())
 
+            # save mdp values
             mdp.observations = ego_agent_observations.values
             mdp.actions = ego_agent_actions.values
             mdp.rewards = [np.dot(feature, self._theta) for feature in ego_agent_features]
@@ -219,6 +171,11 @@ class ExtractObservationAction:
         with open('results/' + self._driving_style + 'training_log.pkl', 'rb') as file:
             data = pickle.load(file)
         return data['theta'][-1]
+
+    @staticmethod
+    def load_feature_normalization():
+        """Loading the mean and standard deviation for feature normalization"""
+        return joblib.load('results/feature_normalization.pkl')
 
     @staticmethod
     def extract_yaw_rate(agent) -> List:

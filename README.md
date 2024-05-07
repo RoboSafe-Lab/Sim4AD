@@ -1,11 +1,13 @@
-# Massimiliano Tamborski's dissertation code
+# Sim4AD
 
 ### Requirements
 We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first install the Python utility to interface the data
 `pip3 install openautomatumdronedata`.
 
 ### Preprocessing
-The preprocessing was done bt Dr. Cheng Wang. The code is available at `preprocessing.py`.
+- Run `feature_normalization.py` for mean and standard deviation calculation of features in order to normalize features
+- Run `preprocessing.py` for data generation for BC and offline RL. `feature_normalization.pkl` and `XXXtraining_log.pkl` 
+are needed for preprocessing.
 
 ### Evaluation folders:
 - /baselines: contains the code for the baselines

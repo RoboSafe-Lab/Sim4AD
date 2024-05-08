@@ -341,11 +341,10 @@ class IRLEnv:
                              thw_front, thw_rear, collision, induced_deceleration, ego_likeness])
 
         # normalize features
-        features = np.array(features)
         mean = self._feature_mean_std['mean']
         std = self._feature_mean_std['std']
         std_safe = np.where(std == 0, 1, std)  # Replace 0s with 1s in std array to avoid division by zero
-        normalized_features = (features - mean) / std_safe
+        normalized_features = (features[:8] - mean) / std_safe
 
         return normalized_features
 

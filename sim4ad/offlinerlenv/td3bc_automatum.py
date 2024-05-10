@@ -46,7 +46,7 @@ class TrainConfig:
     normalize_reward: bool = False  # Normalize reward
     # Wandb logging
     project: str = "CORL"
-    group: str = "TD3_BC-D4RL"
+    group: str = "TD3_BC-Automatum"
     name: str = "TD3_BC"
 
     def __post_init__(self):
@@ -185,6 +185,7 @@ def eval_actor(
     env.reset(seed=seed)
     actor.eval()
     episode_rewards = []
+    # one agent is evaluated for n_episodes times
     for _ in range(n_episodes):
         state, done = env.reset(), False
         # State is tuple from simulator_env
@@ -337,6 +338,7 @@ class TD3_BC:
             # Compute actor loss
             pi = self.actor(state)
             q = self.critic_1(state, pi)
+            # using detach to prevent lmbda from affecting q
             lmbda = self.alpha / q.abs().mean().detach()
 
             actor_loss = -lmbda * q.mean() + F.mse_loss(pi, action)
@@ -347,6 +349,7 @@ class TD3_BC:
             self.actor_optimizer.step()
 
             # Update the frozen target models
+            # gradually blending the main network's weights into the target network's weights
             soft_update(self.critic_1_target, self.critic_1, self.tau)
             soft_update(self.critic_2_target, self.critic_2, self.tau)
             soft_update(self.actor_target, self.actor, self.tau)
@@ -453,7 +456,7 @@ def evaluate(config, env, actor, trainer, t, evaluations):
             )
 
         wandb.log(
-            {"d4rl_normalized_score": normalized_eval_score},
+            {"normalized_score": normalized_eval_score},
             step=trainer.total_it,
         )
 
@@ -527,6 +530,7 @@ def train(config: TrainConfig):
         else:
             state_mean, state_std = 0, 1
 
+        # normalization for all data
         agent_data["observations"] = normalize_states(
             agent_data["observations"], state_mean, state_std
         )
@@ -549,6 +553,9 @@ def train(config: TrainConfig):
             batch = [b.to(config.device) for b in batch]
             log_dict = trainer.train(batch)
             wandb.log(log_dict, step=trainer.total_it)
+
+            # evaluate the policy
+            evaluate(config, env, actor, trainer, t, evaluations)
 
 
 if __name__ == "__main__":

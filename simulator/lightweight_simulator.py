@@ -22,6 +22,7 @@ from tqdm import tqdm
 from baselines.bc_baseline import BCBaseline as BC
 from baselines.idm import IDM
 from extract_observation_action import ExtractObservationAction
+from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 from sim4ad.data import DatasetDataLoader, ScenarioConfig, DatasetScenario
 from sim4ad.opendrive import plot_map, Map
 from sim4ad.path_utils import get_path_to_automatum_scenario, get_path_to_automatum_map, get_config_path
@@ -710,7 +711,8 @@ class Sim4ADSimulation:
 
         done = collision or off_road or truncated or reached_goal
 
-        ax, ay, long_jerk, thw_front, thw_rear = 0, 0, 0, 0, 0
+        ax, ay, long_jerk, thw_front, thw_rear = None, None, 0, None, None
+        behind_ego = {"": MISSING_NEARBY_AGENT_VALUE}  # There is no vehicle behind the ego, as per the check later in the code
         if not done:
             front_ego = nearby_agents_features[PNA.CENTER_IN_FRONT]
             behind_ego = nearby_agents_features[PNA.CENTER_BEHIND]
@@ -774,8 +776,6 @@ class Sim4ADSimulation:
                                                          episode_id=None, add=False)
                 thw_front = tths[PNA.CENTER_IN_FRONT]
                 thw_rear = tths[PNA.CENTER_BEHIND]
-                thw_front = thw_front if thw_front is not None else 0
-                thw_rear = thw_rear if thw_rear is not None else 0
 
             # Put the observation in a tuple, as the policy expects it
             obs = obs.get_tuple()
@@ -785,11 +785,47 @@ class Sim4ADSimulation:
 
         info = None
         if self.__policy_type == "rl":
+
+            induced_deceleration = 0
+            # Check if there is a vehicle behind the ego.
+            behind_ego_missing = sum([x == MISSING_NEARBY_AGENT_VALUE for x in behind_ego.values()]) == len(behind_ego)
+            if not done and not behind_ego_missing:
+                ego_rear_d = np.sqrt((behind_ego["rel_dx"]) ** 2 + (behind_ego["rel_dy"]) ** 2)
+                induced_deceleration = self.compute_induced_deceleration(ego_v=state.speed, ego_length=agent.meta.length,
+                                                                         rear_agent_v=behind_ego["speed"],
+                                                                         rear_agent_length=behind_ego["length"],
+                                                                         ego_rear_d=ego_rear_d,
+                                                                         rear_a=behind_ego["a"])
+
             info = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated,
                     "ego_speed": state.speed, "ego_long_acc": ax, "ego_lat_acc": ay, "ego_long_jerk": long_jerk,
-                    "thw_front": thw_front, "thw_rear": thw_rear, "social_impact": 0}  # add social impact
+                    "thw_front": thw_front, "thw_rear": thw_rear, "induced_deceleration": induced_deceleration}
 
         return obs, info
+
+    @staticmethod
+    def compute_induced_deceleration(ego_v: float, ego_length: float, rear_agent_v: float, rear_agent_length: float,
+                                     ego_rear_d: float, rear_a) -> float:
+        """
+
+        :param ego_v:               velocity of the ego vehicle
+        :param ego_length:          length of the ego vehicle
+        :param rear_agent_v:        velocity of the rear vehicle
+        :param rear_agent_length:   length of the rear vehicle
+        :param ego_rear_d:          distance between the ego vehicle and the rear vehicle
+        :param rear_a:              acceleration of the rear vehicle
+        :return:
+        """
+
+        # Compute the safe distance according to IDM
+        safe_d = ExtractObservationAction.desired_gap(ego_v, ego_length, rear_agent_v, rear_agent_length)
+
+        # If the distance is less than the minimum distance, then return the deceleration of the vehicle behind
+        if ego_rear_d < safe_d:
+            if rear_a < 0:
+                return abs(rear_a)
+
+        return 0.
 
     def replay_simulation(self):
         """

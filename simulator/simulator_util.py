@@ -222,4 +222,5 @@ def get_vehicle_features(nearby_vehicle: "PolicyAgent", state: State):
         features["speed"] = nearby_vehicle.state.speed
         features["a"] = nearby_vehicle.state.acceleration
         features["heading"] = nearby_vehicle.state.heading
+        features["length"] = nearby_vehicle.meta.length
     return features

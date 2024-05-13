@@ -10,6 +10,7 @@ from gymnasium.spaces import Box
 import numpy as np
 from openautomatumdronedata.dataset import droneDataset
 
+from sim4ad.common_constants import DEFAULT_CLUSTER
 from sim4ad.util import load_dataset
 from sim4ad.data import DatasetScenario, ScenarioConfig
 from sim4ad.opendrive import Map
@@ -25,8 +26,8 @@ class SimulatorEnv(gym.Env):
     Gym environment for the lightweight simulator.
     """
 
-    metadata = {"render_modes": ["human"], "render_fps": 4}
-    SPAWN_METHOD = "dataset_one"  # We assume there is a
+    metadata = {"render_modes": ["human"], "render_fps": 4, "cluster": DEFAULT_CLUSTER} # todo: change cluster name
+    SPAWN_METHOD = "dataset_one"  # We assume there is a todo: change spawn method
 
     def __init__(self, render_mode: str = None, config: dict = None):
         """
@@ -36,7 +37,7 @@ class SimulatorEnv(gym.Env):
 
         if config is None:
             # Load all episodes in the training dataset
-            configs = ScenarioConfig.load(get_config_path("appershofen"))
+            configs = ScenarioConfig.load(get_config_path("appershofen"))  # todo: change scenario name
             idx = configs.dataset_split["train"]
             self.episode_names = [x.recording_id for i, x in enumerate(configs.episodes) if i in idx]
         else:
@@ -54,16 +55,16 @@ class SimulatorEnv(gym.Env):
 
         # The observation will be a set of 34 features.
         self.observation_space = Box(
-            low=np.array([-np.nan] * 34),
-            high=np.array([np.nan] * 34)
+            low=np.array([-200, -np.pi] + [-500] * 32),  # velocity can max be 200, heading can min be -pi
+            high=np.array([200, np.pi] + [-500] * 32)
         )
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
 
         # Load the weights from IRL from training_log.pkl
-        with open(get_path_irl_weights(), "rb") as f:
-            self.weights = pickle.load(f)
+        with open(get_path_irl_weights(self.metadata["cluster"]), "rb") as f:
+            self.weights = pickle.load(f)['theta'][-1]
 
     def reset(self, seed=None, options=None):
         # We need the following line to seed self.np_random
@@ -85,7 +86,6 @@ class SimulatorEnv(gym.Env):
         truncated = info["truncated"] or info["collision"] or info["off_road"]
 
         # An episode is terminated iff the agent has reached the target
-        # technically reward is a function of (s, a, s')...
         reward = get_reward(terminated=terminated, truncated=truncated, info=info, irl_weights=self.weights)
 
         return next_obs, reward, terminated, truncated, info

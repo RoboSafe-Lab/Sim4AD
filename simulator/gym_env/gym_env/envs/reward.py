@@ -20,16 +20,28 @@ def get_reward(terminated, truncated, info, irl_weights=None):
     Currently, it is a sparse reward function that is zero but when agent reaches the goal, collides or goes off-road.
     """
 
-    use_rl_reward = False
+    use_rl_reward = True # TODO: set as variable
     if use_rl_reward:
 
-        features = np.array([info["ego_speed"], abs(info["ego_long_acc"]), abs(info["ego_lat_acc"]),
-                             abs(info["ego_long_jerk"]), info["thw_front"], info["thw_rear"], info["collision"],
-                             info["social_impact"]])
+        # TODO Check that the alternative values are crrect: e.g., that if None the value should be 0 or 1
+        speed = 0 if info["ego_speed"] == 0 else np.exp(-1 / abs(info["ego_speed"]))
+        long_acc = np.exp(-1 / abs(info["ego_long_acc"])) if info["ego_long_acc"] is not None else 0
+        lat_acc = np.exp(-1 / abs(info["ego_lat_acc"])) if info["ego_lat_acc"] is not None else 0
+        long_jerk = np.exp(-1 / abs(info["ego_long_jerk"])) if info["ego_long_jerk"] != 0 else 0
+        thw_front = np.exp(-1 / abs(info["thw_front"])) if info["thw_front"] is not None else 1
+        thw_rear = np.exp(-1 / abs(info["thw_rear"])) if info["thw_rear"] is not None else 1
+        collision = info["collision"]
+        induced_deceleration = np.exp(-1 / abs(info["induced_deceleration"])) if info["induced_deceleration"] != 0 else 0 # TODO: check else statement
+
+        features = np.array([speed, long_acc, lat_acc, long_jerk,
+                             thw_front, thw_rear, collision, induced_deceleration])
+
+        assert all([0 <= f <= 1 for f in features]), "Features should be between 0 and 1."
 
         assert irl_weights is not None, "IRL weights are not provided."
+        assert len(irl_weights) == len(features), "IRL weights and features have different lengths."
         # Compute the reward
-        return np.dot(irl_weights["theta"][0], features)
+        return np.dot(irl_weights, features)
 
     else:
         if terminated:

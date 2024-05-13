@@ -66,9 +66,9 @@ class ExtractObservationAction:
         :param rear_agent_length: length
         :return: the desired distance between the two vehicles
         """
-        d0 = IDMVehicle.DISTANCE_WANTED + ego_length / 2 + rear_agent_length / 2
+        d0 = IDMVehicle.DISTANCE_WANTED + ego_length / 2
         tau = IDMVehicle.TIME_WANTED
-        ab = -IDMVehicle.COMFORT_ACC_MAX * IDMVehicle.COMFORT_ACC_MIN
+        ab =0.73*1.67
         dv = rear_agent_v - ego_v
         d_star = d0 + rear_agent_v * tau + rear_agent_v * dv / (2 * np.sqrt(ab))
 

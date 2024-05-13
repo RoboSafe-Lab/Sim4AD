@@ -43,13 +43,13 @@ class DatasetVehicle(IDMVehicle):
         self.traj = [[position, velocity, self.acceleration, heading]]
         self.vehicle_id = vehicle_id
         self.sim_steps = 0
-        self.overtaken = False
+        self.overridden = False
         self.appear = True if self.position[0] != 0 else False
         self.velocity_history = []
         self.heading_history = []
         self.crash_history = []
-        self.overtaken_history = []
-        self.overtaken_inx = 0
+        self.overridden_history = []
+        self.overridden_inx = 0
 
         # Vehicle length [m]
         self.LENGTH = v_length
@@ -85,7 +85,7 @@ class DatasetVehicle(IDMVehicle):
         :param action:
         :param active_vehicles: the existing vehicles in a scene
         """
-        if not self.overtaken or self.crashed:
+        if not self.overridden or self.crashed:
             return
 
         action = {}
@@ -113,11 +113,11 @@ class DatasetVehicle(IDMVehicle):
         self.heading_history.append(self.heading)
         self.velocity_history.append(self.velocity.copy())
         self.crash_history.append(self.crashed)
-        self.overtaken_history.append(self.overtaken)
+        self.overridden_history.append(self.overridden)
 
-        # Check if the vehicle is needed to be overtaken
+        # Check if the vehicle is needed to be overridden
         front_vehicle, _ = self.get_front_rear_vehicle(active_vehicles, self)
-        if front_vehicle[0] is not None and isinstance(front_vehicle[0], DatasetVehicle) and front_vehicle[0].overtaken:
+        if front_vehicle[0] is not None and isinstance(front_vehicle[0], DatasetVehicle) and front_vehicle[0].overridden:
             gap = front_vehicle[1]
             desired_gap = self.desired_gap(self, front_vehicle[0])
         elif front_vehicle[0] is not None and (
@@ -128,7 +128,7 @@ class DatasetVehicle(IDMVehicle):
             gap = 100
             desired_gap = 50
 
-        if gap >= desired_gap and not self.overtaken:
+        if gap >= desired_gap and not self.overridden:
             # follow the original dataset trajectory
             self.position = self.dataset_traj[self.sim_steps][:2].copy()
             self.velocity = self.dataset_traj[self.sim_steps][2:4].copy()
@@ -138,9 +138,9 @@ class DatasetVehicle(IDMVehicle):
             self.lane = self.scenario_map.best_lane_at(point=self.position, heading=self.heading)
             self.s, self.d = utils.local2frenet(point=self.position, reference_line=self.lane.midline)
         else:
-            self.overtaken = True
-            if self.overtaken and not self.overtaken_history[-1]:
-                self.overtaken_inx = self.sim_steps
+            self.overridden = True
+            if not self.overridden_history[-1]:
+                self.overridden_inx = self.sim_steps
 
             # target lane for lane changing, if equals to self.lane, will keep current lane
             # self.target_lane = self.lane
@@ -162,9 +162,9 @@ class DatasetVehicle(IDMVehicle):
         if np.linalg.norm(other.position - self.position) > self.LENGTH:
             return
 
-        # if both vehicles are dataset vehicles and have not been overriden
-        if isinstance(self, DatasetVehicle) and not self.overtaken and \
-                isinstance(other, DatasetVehicle) and not other.overtaken:
+        # if both vehicles are dataset vehicles and have not been overridden
+        if isinstance(self, DatasetVehicle) and not self.overridden and \
+                isinstance(other, DatasetVehicle) and not other.overridden:
             return
 
             # Accurate rectangular check

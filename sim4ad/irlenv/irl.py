@@ -108,31 +108,6 @@ class IRL:
                     self.human_traj_features.extend(human_traj_features_one_agent)
                     self.buffer.extend(buffer_one_agent)
 
-    def normalize_features(self):
-        """normalize the features"""
-        assert len(self.buffer) > 0, "Buffer is empty."
-
-        features = []
-        for buffer_scene in self.buffer:
-            for traj in buffer_scene:
-                features.append(traj[2])
-        max_feature = np.max(features, axis=0)
-        # set maximum collision value to 1 to avoid divided by zero
-        max_feature[6] = 1.0
-        # set social impact to 1 to avoid divided by zero
-        if max_feature[7] == 0:
-            max_feature[7] = 1.0
-
-        for buffer_scene in self.buffer:
-            for traj in buffer_scene:
-                for i in range(IRL.feature_num):
-                    traj[2][i] /= max_feature[i]
-
-        # save max_v for normalize features during evaluation
-        with open('max_feature.txt', 'w') as f:
-            for item in max_feature:
-                f.write("%s\n" % item)
-
     def save_buffer_data(self, driving_style=''):
         # save buffer data to avoid repeated computation
         if self.save_buffer:
@@ -154,7 +129,7 @@ class IRL:
         for i in range(IRL.n_iters):
             logger.info(f'interation: {i + 1}/{IRL.n_iters}')
             # fix collision feature's weight, because no collision in the dataset
-            self.theta[6] = -10
+            self.theta[6] = -1
 
             feature_exp = np.zeros([IRL.feature_num])
             human_feature_exp = np.zeros([IRL.feature_num])

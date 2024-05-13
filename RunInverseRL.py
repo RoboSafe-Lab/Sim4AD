@@ -9,10 +9,10 @@ from sim4ad.path_utils import get_config_path
 def main():
     """The code can only train on one episode"""
     args = parse_args()
-    train_data = load_dataset(get_config_path(args.map), ['train'])
+    train_data = load_dataset(get_config_path(args.map), ['valid'])
 
     irl_instance = IRL(episode=train_data.scenario.episodes[0], multiprocessing=False, num_processes=12,
-                       save_buffer=False, save_training_log=False)
+                       save_buffer=True, save_training_log=False)
     # compute features
     irl_instance.get_simulated_features()
 

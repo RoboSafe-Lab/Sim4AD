@@ -338,14 +338,15 @@ class IRLEnv:
 
         # feature array
         features = np.array([ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk,
-                             thw_front, thw_rear, collision, induced_deceleration, ego_likeness])
+                             thw_front, thw_rear, collision, induced_deceleration])
 
         # normalize features
         mean = self._feature_mean_std['mean']
         std = self._feature_mean_std['std']
         std_safe = np.where(std == 0, 1, std)  # Replace 0s with 1s in std array to avoid division by zero
-        normalized_features = (features[:8] - mean) / std_safe
-
+        normalized_features = (features - mean) / std_safe
+        # add ego likeness for monitoring
+        normalized_features = np.append(normalized_features, ego_likeness)
         return normalized_features
 
     def get_buffer_scene(self, t, save_planned_tra=False):

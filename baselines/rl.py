@@ -10,8 +10,6 @@ import gymnasium as gym
 
 
 if __name__ == "__main__":
-
-
     if torch.cuda.is_available():
         device = "cuda"
     elif torch.backends.mps.is_available():

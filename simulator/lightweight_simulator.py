@@ -24,6 +24,7 @@ from baselines.idm import IDM
 from extract_observation_action import ExtractObservationAction
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 from sim4ad.data import DatasetDataLoader, ScenarioConfig, DatasetScenario
+from sim4ad.irlenv.vehicle.behavior import IDMVehicle
 from sim4ad.opendrive import plot_map, Map
 from sim4ad.path_utils import get_path_to_automatum_scenario, get_path_to_automatum_map, get_config_path
 from sim4ad.util import Box
@@ -32,6 +33,8 @@ from simulator.state_action import State, Action, Observation
 from simulator.simulator_util import DeathCause, get_nearby_vehicles, compute_distance_markings, collision_check
 from simulator.simulator_util import PositionNearbyAgent as PNA
 from evaluation.evaluation_functions import EvaluationFeaturesExtractor
+
+from sim4ad.common_constants import DEFAULT_DECELERATION_VALUE
 
 logger = logging.getLogger(__name__)
 
@@ -788,37 +791,46 @@ class Sim4ADSimulation:
 
             induced_deceleration = 0
             # Check if there is a vehicle behind the ego.
-            behind_ego_missing = sum([x == MISSING_NEARBY_AGENT_VALUE for x in behind_ego.values()]) == len(behind_ego)
-            if not done and not behind_ego_missing:
-                ego_rear_d = np.sqrt((behind_ego["rel_dx"]) ** 2 + (behind_ego["rel_dy"]) ** 2)
-                induced_deceleration = self.compute_induced_deceleration(ego_v=state.speed, ego_length=agent.meta.length,
-                                                                         rear_agent_v=behind_ego["speed"],
-                                                                         rear_agent_length=behind_ego["length"],
-                                                                         ego_rear_d=ego_rear_d,
-                                                                         rear_a=behind_ego["a"])
 
             info = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated,
                     "ego_speed": state.speed, "ego_long_acc": ax, "ego_lat_acc": ay, "ego_long_jerk": long_jerk,
-                    "thw_front": thw_front, "thw_rear": thw_rear, "induced_deceleration": induced_deceleration}
+                    "thw_front": thw_front, "thw_rear": thw_rear, "induced_deceleration": DEFAULT_DECELERATION_VALUE}
+
+            behind_ego_missing = sum([x == MISSING_NEARBY_AGENT_VALUE for x in behind_ego.values()]) == len(behind_ego)
+            if not done and not behind_ego_missing:
+                ego_rear_d = np.sqrt((behind_ego["rel_dx"]) ** 2 + (behind_ego["rel_dy"]) ** 2)
+                rear_position = np.array([state.position.x + behind_ego["rel_dx"], state.position.y + behind_ego["rel_dy"]])
+                induced_deceleration = self.compute_induced_deceleration(ego_v=state.speed, ego_length=agent.meta.length,
+                                                                         rear_agent=behind_ego,
+                                                                         ego_rear_d=ego_rear_d,
+                                                                         rear_a=behind_ego["a"],
+                                                                         rear_position=rear_position)
+                info["induced_deceleration"] = induced_deceleration
 
         return obs, info
 
-    @staticmethod
-    def compute_induced_deceleration(ego_v: float, ego_length: float, rear_agent_v: float, rear_agent_length: float,
-                                     ego_rear_d: float, rear_a) -> float:
+    def compute_induced_deceleration(self, ego_v, ego_length, rear_agent, ego_rear_d, rear_a,
+                                     rear_position) -> float:
         """
 
         :param ego_v:               velocity of the ego vehicle
         :param ego_length:          length of the ego vehicle
-        :param rear_agent_v:        velocity of the rear vehicle
-        :param rear_agent_length:   length of the rear vehicle
         :param ego_rear_d:          distance between the ego vehicle and the rear vehicle
         :param rear_a:              acceleration of the rear vehicle
+        :param rear_position:       position of the rear vehicle
         :return:
         """
 
+        class DummyVehicle:
+            def __init__(self, v, length):
+                self.velocity = [v]
+                self.LENGTH = length
+
         # Compute the safe distance according to IDM
-        safe_d = ExtractObservationAction.desired_gap(ego_v, ego_length, rear_agent_v, rear_agent_length)
+        idm = IDMVehicle(scenario_map=self.__scenario_map, position=rear_position, heading=rear_agent["heading"],
+                         velocity=rear_agent["speed"])
+        safe_d = idm.desired_gap(ego_vehicle=DummyVehicle(rear_agent["speed"], rear_agent["length"]),
+                                        front_vehicle=DummyVehicle(ego_v, ego_length))
 
         # If the distance is less than the minimum distance, then return the deceleration of the vehicle behind
         if ego_rear_d < safe_d:

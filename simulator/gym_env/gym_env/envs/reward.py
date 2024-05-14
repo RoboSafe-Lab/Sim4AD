@@ -12,6 +12,7 @@ import pickle
 import numpy as np
 
 from sim4ad.path_utils import get_path_irl_weights
+from sim4ad.common_constants import DEFAULT_DECELERATION_VALUE
 
 
 def get_reward(terminated, truncated, info, irl_weights=None):
@@ -31,7 +32,7 @@ def get_reward(terminated, truncated, info, irl_weights=None):
         thw_front = np.exp(-1 / abs(info["thw_front"])) if info["thw_front"] is not None else 1
         thw_rear = np.exp(-1 / abs(info["thw_rear"])) if info["thw_rear"] is not None else 1
         collision = info["collision"]
-        induced_deceleration = np.exp(-1 / abs(info["induced_deceleration"])) if info["induced_deceleration"] != 0 else 0 # TODO: check else statement
+        induced_deceleration = np.exp(-1 / abs(info["induced_deceleration"])) if info["induced_deceleration"] != DEFAULT_DECELERATION_VALUE else DEFAULT_DECELERATION_VALUE # TODO: check else statement
 
         features = np.array([speed, long_acc, lat_acc, long_jerk,
                              thw_front, thw_rear, collision, induced_deceleration])

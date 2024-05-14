@@ -15,10 +15,10 @@ if __name__ == "__main__":
     else:
         device = "cpu"
 
-    model = SAC("MlpPolicy", env, verbose=1, device=device)
-    model.learn(total_timesteps=200_000, log_interval=4, progress_bar=True)
-    model.save("sac_5_rl")
-    del model  # remove to demonstrate saving and loading
+    #model = SAC("MlpPolicy", env, verbose=1, device=device)
+    #model.learn(total_timesteps=200_000, log_interval=4, progress_bar=True)
+    #model.save("sac_5_rl")
+    #del model  # remove to demonstrate saving and loading
     model = SAC.load("sac_5_rl")
 
     obs, info = env.reset()

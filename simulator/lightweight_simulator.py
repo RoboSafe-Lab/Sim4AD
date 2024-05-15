@@ -131,11 +131,15 @@ class Sim4ADSimulation:
             new_agent_original = self.__episode_agents[new_agent.agent_id]
             current_state = self.__get_original_current_state(new_agent_original)
 
+            # Check if safe to spawn or if maybe there is another vehicle in that position, such as a vehicle that is
+            # controlled by IDM and therefore deviated from what the corresponding vehicle did in the dataset or the
+            # ego vehicle that is controlled by the vehicle deviated from the dataset.
             safe_to_spawn = self.__safe_to_spawn(position=current_state.position, width=new_agent.meta.width,
-                                                 length=new_agent.meta.length, heading=current_state.heading)
+                                                 length=new_agent.meta.length, heading=current_state.heading,
+                                                 current_lane=current_state.lane)
 
             if safe_to_spawn:
-                # Add it to the current state
+                # Add it to the current state if
                 self.__state[new_agent.agent_id] = current_state
             else:
                 self.__dead_agents[new_agent.agent_id] = DeathCause.COLLISION
@@ -345,6 +349,9 @@ class Sim4ADSimulation:
         for agent_id, _ in add_agents.items():
 
             if agent_id in self.__dead_agents:
+                # An agent could be dead if, for example, we tried to spawn it but there was another vehicle
+                # in the same position. This should not happen as when we spawn the agent evaluated, the
+                # other vehicles should all reset to the initial state in the dataset where there were no collisions.
                 assert agent_id != self.__agent_evaluated, "Agent evaluated is dead, but it should not be."
                 continue
 
@@ -390,7 +397,7 @@ class Sim4ADSimulation:
             spawn_position = spawn_lane.point_at(spawn_distance)
 
             safe_to_spawn = self.__safe_to_spawn(position=spawn_position, width=spawn_width, length=spawn_length,
-                                                 heading=spawn_heading)
+                                                 heading=spawn_heading, current_lane=spawn_lane)
 
             if safe_to_spawn is False:
                 continue
@@ -407,7 +414,7 @@ class Sim4ADSimulation:
 
         raise ValueError("Could not spawn a vehicle after 1000 attempts.")
 
-    def __safe_to_spawn(self, position: np.array, width: float, length: float, heading:float) -> bool:
+    def __safe_to_spawn(self, position: np.array, width: float, length: float, heading:float, current_lane) -> bool:
         # Check if the position is free
         bbox = Box(center=position, length=length, width=width, heading=heading)
 
@@ -416,7 +423,10 @@ class Sim4ADSimulation:
             if agent.state.bbox.overlaps(bbox):
                 safe_to_spawn = False
                 break
-        return safe_to_spawn
+
+        # Check if there is a vehicle in the same position as the vehicle we are spawning and check that the vehicle
+        # is on a drivable road (i.e., its lane is not None).
+        return safe_to_spawn and current_lane is not None
 
     def _get_spawn_positions(self):
         """
@@ -710,7 +720,24 @@ class Sim4ADSimulation:
                 raise ValueError(f"Death cause {death_cause} not found.")
 
         if state.lane is None:
-            assert off_road, f"Agent {agent.agent_id} went off the road but off_road is False."
+
+            if off_road is False:
+                # plot the map
+                plot_map(self.__scenario_map, markings=True, hide_road_bounds_in_junction=True)
+                # plot the agents
+                for agent_id, agent in self.__agents.items():
+                    color = "red" if agent_id == self.__agent_evaluated else "blue"
+                    plt.plot(agent.state.position.x, agent.state.position.y, "o")
+                    # blot bonding
+                    # Plot the bounding box of the agent
+                    bbox = agent.state.bbox.boundary
+                    # repeat the first point to create a 'closed loop'
+                    bbox = [*bbox, bbox[0]]
+                    plt.plot([point[0] for point in bbox], [point[1] for point in bbox], color=color)
+                plt.show()
+                print() # TODO: remove
+
+            assert off_road, f"Agent {agent.agent_id} went off the road but off_road is False. Death cause: {self.__dead_agents[agent.agent_id]}"
 
         done = collision or off_road or truncated or reached_goal
 

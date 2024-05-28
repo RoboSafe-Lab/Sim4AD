@@ -35,6 +35,7 @@ class SimulatorEnv(gym.Env):
             config: Configuration for the environment.
         """
 
+        self.weights = None
         if config is None:
             # Load all episodes in the training dataset
             configs = ScenarioConfig.load(get_config_path("appershofen"))  # todo: change scenario name
@@ -47,7 +48,7 @@ class SimulatorEnv(gym.Env):
                                            simulation_name=f"gym_sim_{self.episode_names}",
                                            spawn_method=self.SPAWN_METHOD)
 
-        # At each step, the agent must choose the acceleration and steering angle.
+        # At each step, the agent must choose the acceleration and yaw rate.
         self.action_space = Box(
             low=np.array([-5, -np.pi]),
             high=np.array([5, np.pi])
@@ -62,7 +63,8 @@ class SimulatorEnv(gym.Env):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
 
-        # Load the weights from IRL from training_log.pkl
+    def load_weights(self):
+        # Load the weights from IRL
         with open(get_path_irl_weights(self.metadata["cluster"]), "rb") as f:
             self.weights = pickle.load(f)['theta'][-1]
 

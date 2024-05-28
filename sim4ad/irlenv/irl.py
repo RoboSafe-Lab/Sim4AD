@@ -147,8 +147,11 @@ class IRL:
 
                 # calculate probability of each trajectory
                 rewards = [traj[0] for traj in scene_trajs]
-                probs = [np.exp(reward) for reward in rewards]
-                probs = probs / np.sum(probs)
+                # Subtract the maximum reward to prevent overflow
+                max_reward = np.max(rewards)
+                stable_rewards = rewards - max_reward
+                probs = np.exp(stable_rewards)
+                probs /= np.sum(probs)
 
                 # calculate feature expectation with respect to the weights
                 traj_features = np.array([traj[1] for traj in scene_trajs])

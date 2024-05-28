@@ -95,6 +95,7 @@ def plot_weight_comparison(categories):
 def main():
     categories = ['Normal', 'Aggressive', 'Cautious', 'General']
     plot_weight_comparison(categories)
+    plot_training_process(categories[0])
 
 
 if __name__ == "__main__":

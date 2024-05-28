@@ -17,8 +17,6 @@ from torch.utils.tensorboard import SummaryWriter
 from baselines.dataset import AutomatumDataset
 from baselines.bc_model import LSTMModel
 from sim4ad.common_constants import DEFAULT_SCENARIO, DEFAULT_CLUSTER, LSTM_PADDING_VALUE
-from sim4ad.data import DatasetDataLoader, ScenarioConfig
-from sim4ad.opendrive import Map, plot_map
 from sim4ad.path_utils import baseline_path, get_config_path, get_processed_demonstrations
 import argparse
 
@@ -38,7 +36,7 @@ class BCBaseline:
             self.name = f"{name}_cluster_{cluster}"
         self.BATCH_SIZE = 128
         self.SHUFFLE = True
-        self.EPOCHS = 500
+        self.EPOCHS = 10000
         self.LR = 1e-3
         LSTM_HIDDEN_SIZE = 128
         FC_HIDDEN_SIZE = 512
@@ -67,8 +65,6 @@ class BCBaseline:
                 self.model.load_state_dict(new_state_dict)
             self.model.eval()
         else:
-
-
             # Check cuda, cpu or mps
             if torch.cuda.is_available():
                 self.device = torch.device('cuda')

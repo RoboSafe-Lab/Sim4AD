@@ -59,8 +59,8 @@ def get_path_to_automatum_map(scenario_name):
     return f"{get_path_to_automatum_scenario(scenario_name)}/staticWorld.xodr"
 
 
-def get_path_irl_weights():
-    return f"{get_base_dir()}/simulator/gym_env/gym_env/envs/training_log.pkl"
+def get_path_irl_weights(cluster):
+    return f"{get_base_dir()}/results/{cluster}training_log.pkl"
 
 
 def get_processed_demonstrations(split_type, scenario, cluster):

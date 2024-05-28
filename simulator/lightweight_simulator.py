@@ -22,7 +22,9 @@ from tqdm import tqdm
 from baselines.bc_baseline import BCBaseline as BC
 from baselines.idm import IDM
 from extract_observation_action import ExtractObservationAction
+from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 from sim4ad.data import DatasetDataLoader, ScenarioConfig, DatasetScenario
+from sim4ad.irlenv.vehicle.behavior import IDMVehicle
 from sim4ad.opendrive import plot_map, Map
 from sim4ad.path_utils import get_path_to_automatum_scenario, get_path_to_automatum_map, get_config_path
 from sim4ad.util import Box
@@ -31,6 +33,8 @@ from simulator.state_action import State, Action, Observation
 from simulator.simulator_util import DeathCause, get_nearby_vehicles, compute_distance_markings, collision_check
 from simulator.simulator_util import PositionNearbyAgent as PNA
 from evaluation.evaluation_functions import EvaluationFeaturesExtractor
+
+from sim4ad.common_constants import DEFAULT_DECELERATION_VALUE
 
 logger = logging.getLogger(__name__)
 
@@ -127,11 +131,15 @@ class Sim4ADSimulation:
             new_agent_original = self.__episode_agents[new_agent.agent_id]
             current_state = self.__get_original_current_state(new_agent_original)
 
+            # Check if safe to spawn or if maybe there is another vehicle in that position, such as a vehicle that is
+            # controlled by IDM and therefore deviated from what the corresponding vehicle did in the dataset or the
+            # ego vehicle that is controlled by the vehicle deviated from the dataset.
             safe_to_spawn = self.__safe_to_spawn(position=current_state.position, width=new_agent.meta.width,
-                                                 length=new_agent.meta.length, heading=current_state.heading)
+                                                 length=new_agent.meta.length, heading=current_state.heading,
+                                                 current_lane=current_state.lane)
 
             if safe_to_spawn:
-                # Add it to the current state
+                # Add it to the current state if
                 self.__state[new_agent.agent_id] = current_state
             else:
                 self.__dead_agents[new_agent.agent_id] = DeathCause.COLLISION
@@ -341,6 +349,9 @@ class Sim4ADSimulation:
         for agent_id, _ in add_agents.items():
 
             if agent_id in self.__dead_agents:
+                # An agent could be dead if, for example, we tried to spawn it but there was another vehicle
+                # in the same position. This should not happen as when we spawn the agent evaluated, the
+                # other vehicles should all reset to the initial state in the dataset where there were no collisions.
                 assert agent_id != self.__agent_evaluated, "Agent evaluated is dead, but it should not be."
                 continue
 
@@ -386,7 +397,7 @@ class Sim4ADSimulation:
             spawn_position = spawn_lane.point_at(spawn_distance)
 
             safe_to_spawn = self.__safe_to_spawn(position=spawn_position, width=spawn_width, length=spawn_length,
-                                                 heading=spawn_heading)
+                                                 heading=spawn_heading, current_lane=spawn_lane)
 
             if safe_to_spawn is False:
                 continue
@@ -403,7 +414,7 @@ class Sim4ADSimulation:
 
         raise ValueError("Could not spawn a vehicle after 1000 attempts.")
 
-    def __safe_to_spawn(self, position: np.array, width: float, length: float, heading:float) -> bool:
+    def __safe_to_spawn(self, position: np.array, width: float, length: float, heading:float, current_lane) -> bool:
         # Check if the position is free
         bbox = Box(center=position, length=length, width=width, heading=heading)
 
@@ -412,7 +423,10 @@ class Sim4ADSimulation:
             if agent.state.bbox.overlaps(bbox):
                 safe_to_spawn = False
                 break
-        return safe_to_spawn
+
+        # Check if there is a vehicle in the same position as the vehicle we are spawning and check that the vehicle
+        # is on a drivable road (i.e., its lane is not None).
+        return safe_to_spawn and current_lane is not None
 
     def _get_spawn_positions(self):
         """
@@ -706,11 +720,29 @@ class Sim4ADSimulation:
                 raise ValueError(f"Death cause {death_cause} not found.")
 
         if state.lane is None:
-            assert off_road, f"Agent {agent.agent_id} went off the road but off_road is False."
+
+            if off_road is False:
+                # plot the map
+                plot_map(self.__scenario_map, markings=True, hide_road_bounds_in_junction=True)
+                # plot the agents
+                for agent_id, agent in self.__agents.items():
+                    color = "red" if agent_id == self.__agent_evaluated else "blue"
+                    plt.plot(agent.state.position.x, agent.state.position.y, "o")
+                    # blot bonding
+                    # Plot the bounding box of the agent
+                    bbox = agent.state.bbox.boundary
+                    # repeat the first point to create a 'closed loop'
+                    bbox = [*bbox, bbox[0]]
+                    plt.plot([point[0] for point in bbox], [point[1] for point in bbox], color=color)
+                plt.show()
+                print() # TODO: remove
+
+            assert off_road, f"Agent {agent.agent_id} went off the road but off_road is False. Death cause: {self.__dead_agents[agent.agent_id]}"
 
         done = collision or off_road or truncated or reached_goal
 
-        ax, ay, long_jerk, thw_front, thw_rear = 0, 0, 0, 0, 0
+        ax, ay, long_jerk, thw_front, thw_rear = None, None, 0, None, None
+        behind_ego = {"": MISSING_NEARBY_AGENT_VALUE}  # There is no vehicle behind the ego, as per the check later in the code
         if not done:
             front_ego = nearby_agents_features[PNA.CENTER_IN_FRONT]
             behind_ego = nearby_agents_features[PNA.CENTER_BEHIND]
@@ -774,8 +806,6 @@ class Sim4ADSimulation:
                                                          episode_id=None, add=False)
                 thw_front = tths[PNA.CENTER_IN_FRONT]
                 thw_rear = tths[PNA.CENTER_BEHIND]
-                thw_front = thw_front if thw_front is not None else 0
-                thw_rear = thw_rear if thw_rear is not None else 0
 
             # Put the observation in a tuple, as the policy expects it
             obs = obs.get_tuple()
@@ -785,11 +815,56 @@ class Sim4ADSimulation:
 
         info = None
         if self.__policy_type == "rl":
+
+            induced_deceleration = 0
+            # Check if there is a vehicle behind the ego.
+
             info = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated,
                     "ego_speed": state.speed, "ego_long_acc": ax, "ego_lat_acc": ay, "ego_long_jerk": long_jerk,
-                    "thw_front": thw_front, "thw_rear": thw_rear, "induced_deceleration": 0}  # add induced_deceleration
+                    "thw_front": thw_front, "thw_rear": thw_rear, "induced_deceleration": DEFAULT_DECELERATION_VALUE}
+
+            behind_ego_missing = sum([x == MISSING_NEARBY_AGENT_VALUE for x in behind_ego.values()]) == len(behind_ego)
+            if not done and not behind_ego_missing:
+                ego_rear_d = np.sqrt((behind_ego["rel_dx"]) ** 2 + (behind_ego["rel_dy"]) ** 2)
+                rear_position = np.array([state.position.x + behind_ego["rel_dx"], state.position.y + behind_ego["rel_dy"]])
+                induced_deceleration = self.compute_induced_deceleration(ego_v=state.speed, ego_length=agent.meta.length,
+                                                                         rear_agent=behind_ego,
+                                                                         ego_rear_d=ego_rear_d,
+                                                                         rear_a=behind_ego["a"],
+                                                                         rear_position=rear_position)
+                info["induced_deceleration"] = induced_deceleration
 
         return obs, info
+
+    def compute_induced_deceleration(self, ego_v, ego_length, rear_agent, ego_rear_d, rear_a,
+                                     rear_position) -> float:
+        """
+
+        :param ego_v:               velocity of the ego vehicle
+        :param ego_length:          length of the ego vehicle
+        :param ego_rear_d:          distance between the ego vehicle and the rear vehicle
+        :param rear_a:              acceleration of the rear vehicle
+        :param rear_position:       position of the rear vehicle
+        :return:
+        """
+
+        class DummyVehicle:
+            def __init__(self, v, length):
+                self.velocity = [v]
+                self.LENGTH = length
+
+        # Compute the safe distance according to IDM
+        idm = IDMVehicle(scenario_map=self.__scenario_map, position=rear_position, heading=rear_agent["heading"],
+                         velocity=rear_agent["speed"])
+        safe_d = idm.desired_gap(ego_vehicle=DummyVehicle(rear_agent["speed"], rear_agent["length"]),
+                                        front_vehicle=DummyVehicle(ego_v, ego_length))
+
+        # If the distance is less than the minimum distance, then return the deceleration of the vehicle behind
+        if ego_rear_d < safe_d:
+            if rear_a < 0:
+                return abs(rear_a)
+
+        return 0.
 
     def replay_simulation(self):
         """

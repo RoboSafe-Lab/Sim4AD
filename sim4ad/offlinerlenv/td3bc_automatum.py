@@ -187,13 +187,15 @@ def eval_actor(
     episode_rewards = []
     # one agent is evaluated for n_episodes times
     for _ in range(n_episodes):
-        state, done = env.reset(), False
+        state = env.reset()
+        terminated = False
+        truncated = False
         # State is tuple from simulator_env
         state = state[0]
         episode_reward = 0.0
-        while not done:
+        while not terminated and not truncated:
             action = actor.act(state, device)
-            state, reward, done, _, _ = env.step(action)
+            state, reward, terminated, truncated, _ = env.step(action)
             episode_reward += reward
         episode_rewards.append(episode_reward)
 

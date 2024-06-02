@@ -78,6 +78,8 @@ def wrap_env(
 ) -> gym.Env:
     # PEP 8: E731 do not assign a lambda expression, use a def
     def normalize_state(state):
+        if state is None:
+            return state
         return (
                 state - state_mean
         ) / state_std  # epsilon should be already added in std.

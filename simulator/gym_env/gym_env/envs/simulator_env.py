@@ -62,6 +62,7 @@ class SimulatorEnv(gym.Env):
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
+        self.load_weights()
 
     def load_weights(self):
         # Load the weights from IRL

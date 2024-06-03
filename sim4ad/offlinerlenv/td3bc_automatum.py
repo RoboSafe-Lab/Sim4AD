@@ -434,7 +434,7 @@ def qlearning_dataset(dataset=None):
     }
 
 
-def evaluate(config, env, actor, trainer, t, evaluations):
+def evaluate(config, env, actor, trainer, t, evaluations, ref_max_score, ref_min_score):
     """evaluate the policy at certain evaluation frequency"""
     # Evaluate episode
     if (t + 1) % config.eval_freq == 0:
@@ -447,7 +447,7 @@ def evaluate(config, env, actor, trainer, t, evaluations):
             seed=config.seed,
         )
         eval_score = eval_scores.mean()
-        normalized_eval_score = env.get_normalized_score(eval_score) * 100.0
+        normalized_eval_score = get_normalized_score(eval_score, ref_max_score, ref_min_score) * 100.0
         evaluations.append(normalized_eval_score)
 
         logger.info(f"Evaluation over {config.n_episodes} episodes: ")
@@ -465,6 +465,12 @@ def evaluate(config, env, actor, trainer, t, evaluations):
         )
 
 
+def get_normalized_score(score, ref_max_score, ref_min_score):
+    if (ref_max_score is None) or (ref_min_score is None):
+        raise ValueError("Reference score not provided for env")
+    return (score - ref_min_score) / (ref_max_score - ref_min_score)
+
+
 @pyrallis.wrap()
 def train(config: TrainConfig):
     env = gym.make(config.env)
@@ -475,6 +481,16 @@ def train(config: TrainConfig):
     # load demonstration data
     with open('scenarios/data/train/Cautiousappershofen_demonstration.pkl', 'rb') as file:
         dataset = pickle.load(file)
+
+    # get maximum and minimum score for normalization
+    ref_max_score = -float('inf')
+    ref_min_score = float('inf')
+    for agent_mdp in dataset['clustered']:
+        score = sum(agent_mdp.rewards)
+        if score > ref_max_score:
+            ref_max_score = score
+        if score < ref_min_score:
+            ref_min_score = score
 
     if config.checkpoints_path is not None:
         print(f"Checkpoints path: {config.checkpoints_path}")
@@ -559,7 +575,7 @@ def train(config: TrainConfig):
             wandb.log(log_dict, step=trainer.total_it)
 
             # evaluate the policy
-            evaluate(config, env, actor, trainer, t, evaluations)
+            evaluate(config, env, actor, trainer, t, evaluations, ref_max_score, ref_min_score)
 
 
 if __name__ == "__main__":

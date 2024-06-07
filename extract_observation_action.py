@@ -119,11 +119,7 @@ class ExtractObservationAction:
             features = extract_features(inx, t, agent, episode)
 
             # normalize features
-            features = np.array(features)
-            mean = self._feature_mean_std['mean']
-            std = self._feature_mean_std['std']
-            std_safe = np.where(std == 0, 1, std)  # Replace 0s with 1s in std array to avoid division by zero
-            normalized_features = (features - mean) / std_safe
+            normalized_features = self.exponential_normalization(features)
 
             ego_agent_features.append(normalized_features)
 
@@ -149,6 +145,29 @@ class ExtractObservationAction:
             return mdp
         else:
             return None
+
+    def zscore_normalization(self, features):
+        """Using Z-Score to normalize the features"""
+        features = np.array(features)
+        mean = self._feature_mean_std['mean']
+        std = self._feature_mean_std['std']
+        std_safe = np.where(std == 0, 1, std)  # Replace 0s with 1s in std array to avoid division by zero
+        normalized_features = (features - mean) / std_safe
+
+        return normalized_features
+
+    @staticmethod
+    def exponential_normalization(features):
+        """Using exponential for normalization"""
+        normalized_features = [None for _ in range(len(features))]
+        for inx, feature in enumerate(features):
+            # skip THW, collision
+            if inx == 4 or 5 or 6:
+                normalized_features[inx] = feature
+            else:
+                normalized_features[inx] = np.exp(-1/feature)
+
+        return normalized_features
 
     def extract_demonstrations(self):
         """Extract observations"""

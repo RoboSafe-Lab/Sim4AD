@@ -29,7 +29,7 @@ class SimulatorEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 4, "cluster": DEFAULT_CLUSTER} # todo: change cluster name
     SPAWN_METHOD = "dataset_one"  # We assume there is a todo: change spawn method
 
-    def __init__(self, render_mode: str = None, config: dict = None):
+    def __init__(self, render_mode: str = None, config: dict = None, seed: int = None):
         """
         Args:s
             config: Configuration for the environment.
@@ -63,6 +63,13 @@ class SimulatorEnv(gym.Env):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         self.load_weights()
+        self.seed_used = seed
+
+    def seed(self, seed=None):
+        self.np_random, seed = gym.utils.seeding.np_random(seed)
+        self.simulation.seed(seed)
+        self.seed_used = seed
+        return [seed]
 
     def load_weights(self):
         # Load the weights from IRL
@@ -71,7 +78,11 @@ class SimulatorEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         # We need the following line to seed self.np_random
+
+        if seed is None:
+            seed = self.seed_used
         super().reset(seed=seed)
+        self.seed(seed)
 
         obs, info = self.simulation.soft_reset()
         return obs, info

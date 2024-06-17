@@ -8,6 +8,8 @@ We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first instal
 - Run `feature_normalization.py` for mean and standard deviation calculation of features in order to normalize features
 - Run `preprocessing.py` for data generation for BC and offline RL. `feature_normalization.pkl` and `XXXtraining_log.pkl` 
 are needed for preprocessing.
+- 
+## todo: need to preprocess all of the sriving style groups. You need to pass the --driving_style_idx argument from 0 to 2
 
 ### Evaluation folders:
 - /baselines: contains the code for the baselines
@@ -23,3 +25,8 @@ are needed for preprocessing.
 set (at the bottom of the file) are `spawn_method` = which is "dataset_one" for micro analysis 
 and "dataset_all" for macro analysis, `policy_type` = which is "bc-all-obs-5_pi" for BC, "sac_5_rl" for SAC (after training it as above),
 or "idm" for IDM
+
+- first install igp2 (sim4ad branch) with `pip3 install -e .` in the root folder of IGP2 after cloning
+- then pip install -e . in the root folder of sim4ad # todo update the requirements
+t
+- 

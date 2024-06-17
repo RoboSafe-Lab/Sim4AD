@@ -107,6 +107,10 @@ class Sim4ADSimulation:
             clusterings = json.load(f)
             return {k: v for k, v in agents.items() if self.clustering == clusterings[f"{episode_name}/{k}"]}
 
+    def seed(self, seed: int):
+        random.seed(seed)
+        np.random.seed(seed)
+
     def _add_agent(self, agent, policy: str):
         """ Add a new agent to the simulation.
 

@@ -74,7 +74,7 @@ def extract_features(inx, t, agent, episode) -> Optional[List]:
         long_distance, lat_distance = agent.get_lat_and_long(t, surrounding_agent)
 
         if long_distance < des_gap and surrounding_agent.ax_vec[surrounding_agent_inx] < 0:
-            induced_deceleration = surrounding_agent.ax_vec[surrounding_agent_inx]
+            induced_deceleration = abs(surrounding_agent.ax_vec[surrounding_agent_inx])
 
     # feature array
     features = [ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk, thw_front, thw_rear, collision,

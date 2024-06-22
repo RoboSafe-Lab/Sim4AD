@@ -6,6 +6,7 @@ import joblib
 from sim4ad.irlenv.vehicle.humandriving import HumanLikeVehicle, DatasetVehicle
 from sim4ad.opendrive import plot_map
 from sim4ad.irlenv import utils
+from extract_observation_action import ExtractObservationAction
 
 
 class IRLEnv:
@@ -24,7 +25,8 @@ class IRLEnv:
         self.reset_time = None
         self.start_frame = None
         self.reset_ego_state = None
-        self._feature_mean_std = self.load_feature_normalization()
+        # using exponential normalization, no longer necessary to load mean and std
+        # self._feature_mean_std = self.load_feature_normalization()
 
     def reset(self, reset_time, human=False):
         """
@@ -340,11 +342,8 @@ class IRLEnv:
         features = np.array([ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk,
                              thw_front, thw_rear, collision, induced_deceleration])
 
-        # normalize features
-        mean = self._feature_mean_std['mean']
-        std = self._feature_mean_std['std']
-        std_safe = np.where(std == 0, 1, std)  # Replace 0s with 1s in std array to avoid division by zero
-        normalized_features = (features - mean) / std_safe
+        # normalize features using exponential
+        normalized_features = ExtractObservationAction.exponential_normalization(features)
         # add ego likeness for monitoring
         normalized_features = np.append(normalized_features, ego_likeness)
         return normalized_features

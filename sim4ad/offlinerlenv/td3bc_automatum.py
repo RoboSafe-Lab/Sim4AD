@@ -16,6 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import wandb
 import pickle
+from sim4ad.util import parse_args
 
 TensorBatch = List[torch.Tensor]
 
@@ -478,8 +479,12 @@ def train(config: TrainConfig):
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
 
+    args = parse_args()
+    driving_styles = {0: 'Cautious', 1: 'Normal', 2: 'Aggressive', -1: 'General'}
+    driving_style = driving_styles[args.driving_style_idx]
+    map_name = args.map
     # load demonstration data
-    with open('scenarios/data/train/Cautiousappershofen_demonstration.pkl', 'rb') as file:
+    with open('scenarios/data/train/' + driving_style + map_name + '_demonstration.pkl', 'rb') as file:
         dataset = pickle.load(file)
 
     # get maximum and minimum score for normalization

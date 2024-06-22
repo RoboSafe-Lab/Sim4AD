@@ -9,6 +9,7 @@ import joblib
 from feature_normalization import extract_features
 from sim4ad.path_utils import write_common_property
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
+from sim4ad.irlenv.irlenvsim import IRLEnv
 
 
 @dataclass
@@ -49,7 +50,8 @@ class ExtractObservationAction:
         self._episodes = episodes
 
         self._theta = self.load_reward_weights()
-        self._feature_mean_std = self.load_feature_normalization()
+        # no longer using z-score
+        # self._feature_mean_std = self.load_feature_normalization()
         self._clustered_demonstrations = {"General": [], "clustered": []}
 
     @staticmethod
@@ -119,7 +121,7 @@ class ExtractObservationAction:
             features = extract_features(inx, t, agent, episode)
 
             # normalize features
-            normalized_features = self.exponential_normalization(features)
+            normalized_features = IRLEnv.exponential_normalization(features)
 
             ego_agent_features.append(normalized_features)
 
@@ -146,26 +148,12 @@ class ExtractObservationAction:
         else:
             return None
 
-    def zscore_normalization(self, features):
+    @staticmethod
+    def zscore_normalization(features, mean: float, std: float):
         """Using Z-Score to normalize the features"""
         features = np.array(features)
-        mean = self._feature_mean_std['mean']
-        std = self._feature_mean_std['std']
         std_safe = np.where(std == 0, 1, std)  # Replace 0s with 1s in std array to avoid division by zero
         normalized_features = (features - mean) / std_safe
-
-        return normalized_features
-
-    @staticmethod
-    def exponential_normalization(features):
-        """Using exponential for normalization"""
-        normalized_features = [None for _ in range(len(features))]
-        for inx, feature in enumerate(features):
-            # skip THW, collision
-            if inx == 4 or 5 or 6:
-                normalized_features[inx] = feature
-            else:
-                normalized_features[inx] = np.exp(-1/feature)
 
         return normalized_features
 

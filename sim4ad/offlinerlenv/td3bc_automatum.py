@@ -557,7 +557,7 @@ def train(config: TrainConfig):
         all_observations = np.concatenate([agent_data['observations']], axis=0)
 
     if config.normalize:
-        state_mean, state_std = compute_mean_std(all_observations["observations"], eps=1e-3)
+        state_mean, state_std = compute_mean_std(all_observations, eps=1e-3)
     else:
         state_mean, state_std = 0, 1
 

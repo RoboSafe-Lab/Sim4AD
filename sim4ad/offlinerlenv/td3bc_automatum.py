@@ -16,7 +16,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import wandb
 import pickle
-from sim4ad.util import parse_args
 
 TensorBatch = List[torch.Tensor]
 
@@ -52,7 +51,7 @@ class TrainConfig:
 
     # need to be changed according to the policy to be trained
     map_name: str = "appershofen"
-    driving_style: str = "Cautious"
+    driving_style: str = "Aggressive"
 
     def __post_init__(self):
         self.name = f"{self.name}-{self.env}-{str(uuid.uuid4())[:8]}"
@@ -506,6 +505,11 @@ def train(config: TrainConfig):
             pyrallis.dump(config, f)
 
     max_action = env.action_space.high
+
+    # Set seeds
+    seed = config.seed
+    set_seed(seed, env)
+
     actor = Actor(state_dim, action_dim, max_action).to(config.device)
     actor_optimizer = torch.optim.Adam(actor.parameters(), lr=3e-4)
 
@@ -544,19 +548,23 @@ def train(config: TrainConfig):
 
     wandb_init(asdict(config))
 
-    evaluations = []
+    # Combine all agent data to compute global normalization statistics
+    agents_data = []
+    all_observations = []
     for agent_mdp in dataset['clustered']:
-        # Set seeds
-        seed = config.seed
-        set_seed(seed, env)
-
         agent_data = qlearning_dataset(dataset=agent_mdp)
+        agents_data.append(agent_data)
+        all_observations = np.concatenate([agent_data['observations']], axis=0)
 
-        if config.normalize:
-            state_mean, state_std = compute_mean_std(agent_data["observations"], eps=1e-3)
-        else:
-            state_mean, state_std = 0, 1
+    if config.normalize:
+        state_mean, state_std = compute_mean_std(all_observations["observations"], eps=1e-3)
+    else:
+        state_mean, state_std = 0, 1
 
+    env = wrap_env(env, state_mean=state_mean, state_std=state_std)
+
+    evaluations = []
+    for agent_data in agents_data:
         # normalization for all data
         agent_data["observations"] = normalize_states(
             agent_data["observations"], state_mean, state_std
@@ -564,7 +572,7 @@ def train(config: TrainConfig):
         agent_data["next_observations"] = normalize_states(
             agent_data["next_observations"], state_mean, state_std
         )
-        env = wrap_env(env, state_mean=state_mean, state_std=state_std)
+
         replay_buffer = ReplayBuffer(
             state_dim,
             action_dim,
@@ -573,16 +581,18 @@ def train(config: TrainConfig):
         )
         replay_buffer.load_automatum_dataset(agent_data)
 
-        logger.info(f"Training for one agent, Seed: {seed}")
-
+        logger.info(f"Training for a NEW agent!")
+        log_dict = {}
         for t in range(int(config.max_timesteps)):
             batch = replay_buffer.sample(config.batch_size)
             batch = [b.to(config.device) for b in batch]
             log_dict = trainer.train(batch)
-            wandb.log(log_dict, step=trainer.total_it)
 
-            # evaluate the policy
-            evaluate(config, env, actor, trainer, t, evaluations, ref_max_score, ref_min_score)
+        # Log results after training each agent
+        wandb.log(log_dict, step=trainer.total_it)
+
+        # evaluate the policy
+        evaluate(config, env, actor, trainer, config.max_timesteps, evaluations, ref_max_score, ref_min_score)
 
 
 if __name__ == "__main__":

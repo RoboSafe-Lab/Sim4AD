@@ -582,14 +582,14 @@ def train(config: TrainConfig):
         replay_buffer.load_automatum_dataset(agent_data)
 
         logger.info(f"Training for a NEW agent!")
-        log_dict = {}
         for t in range(int(config.max_timesteps)):
             batch = replay_buffer.sample(config.batch_size)
             batch = [b.to(config.device) for b in batch]
             log_dict = trainer.train(batch)
 
-        # Log results after training each agent
-        wandb.log(log_dict, step=trainer.total_it)
+            # Optionally log results periodically
+            if t % 50 == 0:
+                wandb.log(log_dict, step=trainer.total_it)
 
         # evaluate the policy
         evaluate(config, env, actor, trainer, config.max_timesteps, evaluations, ref_max_score, ref_min_score)

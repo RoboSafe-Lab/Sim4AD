@@ -586,7 +586,7 @@ def train(config: TrainConfig):
             log_dict = trainer.train(batch)
 
             # Optionally log results periodically
-            if t % 50 == 0:
+            if (t+1) % 50 == 0:
                 wandb.log(log_dict, step=trainer.total_it)
 
         # evaluate the policy

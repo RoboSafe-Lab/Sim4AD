@@ -438,35 +438,33 @@ def qlearning_dataset(dataset=None):
     }
 
 
-def evaluate(config, env, actor, trainer, t, evaluations, ref_max_score, ref_min_score):
+def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score):
     """evaluate the policy at certain evaluation frequency"""
     # Evaluate episode
-    if (t + 1) % config.eval_freq == 0:
-        logger.info(f"Time steps: {t + 1}")
-        eval_scores = eval_actor(
-            env,
-            actor,
-            device=config.device,
-            n_episodes=config.n_episodes,
-            seed=config.seed,
+    eval_scores = eval_actor(
+        env,
+        actor,
+        device=config.device,
+        n_episodes=config.n_episodes,
+        seed=config.seed,
+    )
+    eval_score = eval_scores.mean()
+    normalized_eval_score = get_normalized_score(eval_score, ref_max_score, ref_min_score) * 100.0
+    evaluations.append(normalized_eval_score)
+
+    logger.info(f"Evaluation over {config.n_episodes} episodes: ")
+    logger.info(f"{eval_score:.3f} , Agent score: {normalized_eval_score:.3f}")
+
+    if config.checkpoints_path is not None:
+        torch.save(
+            trainer.state_dict(),
+            os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
         )
-        eval_score = eval_scores.mean()
-        normalized_eval_score = get_normalized_score(eval_score, ref_max_score, ref_min_score) * 100.0
-        evaluations.append(normalized_eval_score)
 
-        logger.info(f"Evaluation over {config.n_episodes} episodes: ")
-        logger.info(f"{eval_score:.3f} , Agent score: {normalized_eval_score:.3f}")
-
-        if config.checkpoints_path is not None:
-            torch.save(
-                trainer.state_dict(),
-                os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
-            )
-
-        wandb.log(
-            {"normalized_score": normalized_eval_score},
-            step=trainer.total_it,
-        )
+    wandb.log(
+        {"normalized_score": normalized_eval_score},
+        step=trainer.total_it,
+    )
 
 
 def get_normalized_score(score, ref_max_score, ref_min_score):
@@ -592,7 +590,7 @@ def train(config: TrainConfig):
                 wandb.log(log_dict, step=trainer.total_it)
 
         # evaluate the policy
-        evaluate(config, env, actor, trainer, config.max_timesteps, evaluations, ref_max_score, ref_min_score)
+        evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score)
 
 
 if __name__ == "__main__":

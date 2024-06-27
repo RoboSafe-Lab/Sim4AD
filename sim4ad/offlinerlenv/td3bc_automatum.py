@@ -438,7 +438,7 @@ def qlearning_dataset(dataset=None):
     }
 
 
-def evaluate(config, env, actor, trainer, inx, evaluations, ref_max_score, ref_min_score):
+def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score):
     """evaluate the policy at certain evaluation frequency"""
     # Evaluate episode
     eval_scores = eval_actor(
@@ -458,7 +458,7 @@ def evaluate(config, env, actor, trainer, inx, evaluations, ref_max_score, ref_m
     if config.checkpoints_path is not None:
         torch.save(
             trainer.state_dict(),
-            os.path.join(config.checkpoints_path, f"checkpoint_{inx+1}.pt"),
+            os.path.join(config.checkpoints_path, f"checkpoint.pt"),
         )
 
     wandb.log(
@@ -590,7 +590,7 @@ def train(config: TrainConfig):
                 wandb.log(log_dict, step=trainer.total_it)
 
         # evaluate the policy
-        evaluate(config, env, actor, trainer, inx, evaluations, ref_max_score, ref_min_score)
+        evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score)
 
 
 if __name__ == "__main__":

@@ -29,7 +29,7 @@ class TrainConfig:
     eval_freq: int = int(5e3)  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
     max_timesteps: int = 500  # Max time steps to run environment
-    checkpoints_path: Optional[str] = None  # Save path
+    checkpoints_path: Optional[str] = 'results/offlineRL'  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
     # TD3
     buffer_size: int = 2_000_000  # Replay buffer size
@@ -438,7 +438,7 @@ def qlearning_dataset(dataset=None):
     }
 
 
-def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score):
+def evaluate(config, env, actor, trainer, inx, evaluations, ref_max_score, ref_min_score):
     """evaluate the policy at certain evaluation frequency"""
     # Evaluate episode
     eval_scores = eval_actor(
@@ -458,7 +458,7 @@ def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_sc
     if config.checkpoints_path is not None:
         torch.save(
             trainer.state_dict(),
-            os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
+            os.path.join(config.checkpoints_path, f"checkpoint_{inx+1}.pt"),
         )
 
     wandb.log(
@@ -562,7 +562,7 @@ def train(config: TrainConfig):
     env = wrap_env(env, state_mean=state_mean, state_std=state_std)
 
     evaluations = []
-    for agent_data in agents_data:
+    for inx, agent_data in enumerate(agents_data):
         # normalization for all data
         agent_data["observations"] = normalize_states(
             agent_data["observations"], state_mean, state_std
@@ -579,7 +579,7 @@ def train(config: TrainConfig):
         )
         replay_buffer.load_automatum_dataset(agent_data)
 
-        logger.info(f"Training for a NEW agent!")
+        logger.info(f"Training for a NEW agent {inx+1}/{len(agents_data)}!")
         for t in range(int(config.max_timesteps)):
             batch = replay_buffer.sample(config.batch_size)
             batch = [b.to(config.device) for b in batch]
@@ -590,7 +590,7 @@ def train(config: TrainConfig):
                 wandb.log(log_dict, step=trainer.total_it)
 
         # evaluate the policy
-        evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score)
+        evaluate(config, env, actor, trainer, inx, evaluations, ref_max_score, ref_min_score)
 
 
 if __name__ == "__main__":

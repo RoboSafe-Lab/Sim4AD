@@ -28,7 +28,7 @@ class TrainConfig:
     seed: int = 0  # Sets Gym, PyTorch and Numpy seeds
     eval_freq: int = int(5e3)  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
-    max_timesteps: int = 500  # Max time steps to run environment
+    max_timesteps: int = int(1e6)  # Max time steps to run environment
     checkpoints_path: Optional[str] = 'results/offlineRL'  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
     # TD3
@@ -548,49 +548,48 @@ def train(config: TrainConfig):
 
     # Combine all agent data to compute global normalization statistics
     agents_data = []
-    all_observations = []
     for agent_mdp in dataset['clustered']:
         agent_data = qlearning_dataset(dataset=agent_mdp)
         agents_data.append(agent_data)
-        all_observations = np.concatenate([agent_data['observations']], axis=0)
+    keys = agents_data[0].keys()
+    data = {key: np.concatenate([agent_data[key] for agent_data in agents_data]) for key in keys}
 
     if config.normalize:
-        state_mean, state_std = compute_mean_std(all_observations, eps=1e-3)
+        state_mean, state_std = compute_mean_std(data['observations'], eps=1e-3)
     else:
         state_mean, state_std = 0, 1
 
     env = wrap_env(env, state_mean=state_mean, state_std=state_std)
 
     evaluations = []
-    for inx, agent_data in enumerate(agents_data):
-        # normalization for all data
-        agent_data["observations"] = normalize_states(
-            agent_data["observations"], state_mean, state_std
-        )
-        agent_data["next_observations"] = normalize_states(
-            agent_data["next_observations"], state_mean, state_std
-        )
 
-        replay_buffer = ReplayBuffer(
-            state_dim,
-            action_dim,
-            config.buffer_size,
-            config.device,
-        )
-        replay_buffer.load_automatum_dataset(agent_data)
+    # normalization for all data
+    data["observations"] = normalize_states(
+        data["observations"], state_mean, state_std
+    )
+    data["next_observations"] = normalize_states(
+        data["next_observations"], state_mean, state_std
+    )
 
-        logger.info(f"Training for a NEW agent {inx+1}/{len(agents_data)}!")
-        for t in range(int(config.max_timesteps)):
-            batch = replay_buffer.sample(config.batch_size)
-            batch = [b.to(config.device) for b in batch]
-            log_dict = trainer.train(batch)
+    replay_buffer = ReplayBuffer(
+        state_dim,
+        action_dim,
+        config.buffer_size,
+        config.device,
+    )
+    replay_buffer.load_automatum_dataset(data)
 
-            # Optionally log results periodically
-            if (t+1) % 50 == 0:
-                wandb.log(log_dict, step=trainer.total_it)
+    for t in range(int(config.max_timesteps)):
+        batch = replay_buffer.sample(config.batch_size)
+        batch = [b.to(config.device) for b in batch]
+        log_dict = trainer.train(batch)
+        wandb.log(log_dict, step=trainer.total_it)
 
-        # evaluate the policy
-        evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score)
+        # Evaluate episode
+        if (t+1) % config.eval_freq == 0:
+            logger.info(f'evaluate at time step: {t+1}')
+            # evaluate the policy
+            evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score)
 
 
 if __name__ == "__main__":

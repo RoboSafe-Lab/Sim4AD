@@ -143,8 +143,6 @@ class ReplayBuffer:
         self._size += n_transitions
         self._pointer = min(self._size, n_transitions)
 
-        print(f"Dataset size: {n_transitions}")
-
     def sample(self, batch_size: int) -> TensorBatch:
         indices = np.random.randint(0, min(self._size, self._pointer), size=batch_size)
         states = self._states[indices]
@@ -209,13 +207,13 @@ def eval_actor(
     return np.asarray(episode_rewards)
 
 
-def return_reward_range(dataset, max_episode_steps):
+def return_reward_range(dataset):
     returns, lengths = [], []
     ep_ret, ep_len = 0.0, 0
     for r, d in zip(dataset["rewards"], dataset["terminals"]):
         ep_ret += float(r)
         ep_len += 1
-        if d or ep_len == max_episode_steps:
+        if d:
             returns.append(ep_ret)
             lengths.append(ep_len)
             ep_ret, ep_len = 0.0, 0
@@ -489,12 +487,15 @@ def train(config: TrainConfig):
     # get maximum and minimum score for normalization
     ref_max_score = -float('inf')
     ref_min_score = float('inf')
+    all_observations = []
     for agent_mdp in dataset['clustered']:
         score = sum(agent_mdp.rewards)
         if score > ref_max_score:
             ref_max_score = score
         if score < ref_min_score:
             ref_min_score = score
+        # get all observations for normalization
+        all_observations = np.concatenate([agent_mdp.observations], axis=0)
 
     if config.checkpoints_path is not None:
         print(f"Checkpoints path: {config.checkpoints_path}")
@@ -546,44 +547,44 @@ def train(config: TrainConfig):
 
     wandb_init(asdict(config))
 
-    # Combine all agent data to compute global normalization statistics
-    agents_data = []
-    for agent_mdp in dataset['clustered']:
-        agent_data = qlearning_dataset(dataset=agent_mdp)
-        agents_data.append(agent_data)
-    keys = agents_data[0].keys()
-    data = {key: np.concatenate([agent_data[key] for agent_data in agents_data]) for key in keys}
-
     if config.normalize:
-        state_mean, state_std = compute_mean_std(data['observations'], eps=1e-3)
+        state_mean, state_std = compute_mean_std(all_observations, eps=1e-3)
     else:
         state_mean, state_std = 0, 1
 
     env = wrap_env(env, state_mean=state_mean, state_std=state_std)
 
+    # create a replay buffer for each vehicle
+    replay_buffers = []
+    for agent_mdp in dataset['clustered']:
+        agent_data = qlearning_dataset(dataset=agent_mdp)
+
+        # normalization for all data
+        agent_data["observations"] = normalize_states(
+            agent_data["observations"], state_mean, state_std
+        )
+        agent_data["next_observations"] = normalize_states(
+            agent_data["next_observations"], state_mean, state_std
+        )
+
+        replay_buffer = ReplayBuffer(
+            state_dim,
+            action_dim,
+            config.buffer_size,
+            config.device,
+        )
+        replay_buffer.load_automatum_dataset(agent_data)
+        replay_buffers.append(replay_buffer)
+
+    # Training loop
+    logger.info("Training on data from each agent separately!")
     evaluations = []
-
-    # normalization for all data
-    data["observations"] = normalize_states(
-        data["observations"], state_mean, state_std
-    )
-    data["next_observations"] = normalize_states(
-        data["next_observations"], state_mean, state_std
-    )
-
-    replay_buffer = ReplayBuffer(
-        state_dim,
-        action_dim,
-        config.buffer_size,
-        config.device,
-    )
-    replay_buffer.load_automatum_dataset(data)
-
     for t in range(int(config.max_timesteps)):
-        batch = replay_buffer.sample(config.batch_size)
-        batch = [b.to(config.device) for b in batch]
-        log_dict = trainer.train(batch)
-        wandb.log(log_dict, step=trainer.total_it)
+        for replay_buffer in replay_buffers:
+            batch = replay_buffer.sample(config.batch_size)
+            batch = [b.to(config.device) for b in batch]
+            log_dict = trainer.train(batch)
+            wandb.log(log_dict, step=trainer.total_it)
 
         # Evaluate episode
         if (t+1) % config.eval_freq == 0:

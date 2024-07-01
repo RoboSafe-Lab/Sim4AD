@@ -49,9 +49,11 @@ class SimulatorEnv(gym.Env):
                                            spawn_method=self.SPAWN_METHOD)
 
         # At each step, the agent must choose the acceleration and yaw rate.
+        self.MIN_YAW_RATE = -0.08
+        self.MAX_YAW_RATE = 0.07
         self.action_space = Box(
-            low=np.array([-5, -np.pi]),
-            high=np.array([5, np.pi])
+            low=np.array([-5, self.MIN_YAW_RATE]),
+            high=np.array([5, self.MAX_YAW_RATE])
         )
 
         # The observation will be a set of 34 features.

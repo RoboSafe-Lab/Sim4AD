@@ -384,10 +384,10 @@ class IRLEnv:
         normalized_features = [None for _ in range(len(features))]
         for inx, feature in enumerate(features):
             # skip THW, collision
-            if inx == 4 or 5 or 6:
+            if inx == 4 or inx == 5 or inx == 6:
                 normalized_features[inx] = feature
             else:
-                normalized_features[inx] = np.exp(-1 / feature)
+                normalized_features[inx] = np.exp(-1 / feature) if feature else 0
 
         return normalized_features
 

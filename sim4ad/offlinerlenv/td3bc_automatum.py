@@ -27,9 +27,9 @@ class TrainConfig:
     device: str = "cuda"
     env: str = "SimulatorEnv-v0"  # OpenAI gym environment name
     seed: int = 0  # Sets Gym, PyTorch and Numpy seeds
-    eval_freq: int = int(5e3)  # How often (time steps) we evaluate
+    eval_freq: int = 10  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
-    max_timesteps: int = int(1e6)  # Max time steps to run environment
+    max_timesteps: int = 5000  # Max time steps to run environment
     checkpoints_path: Optional[str] = 'results/offlineRL'  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
     # TD3

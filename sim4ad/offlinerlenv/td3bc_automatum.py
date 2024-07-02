@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 from loguru import logger
+from tqdm import tqdm
 
 import gymnasium as gym
 import gym_env
@@ -32,7 +33,7 @@ class TrainConfig:
     checkpoints_path: Optional[str] = 'results/offlineRL'  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
     # TD3
-    buffer_size: int = 2_000_000  # Replay buffer size
+    buffer_size: int = 2_000  # Replay buffer size
     batch_size: int = 256  # Batch size for all networks
     discount: float = 0.99  # Discount ffor
     expl_noise: float = 0.1  # Std of Gaussian exploration noise
@@ -279,6 +280,7 @@ class TD3_BC:
             noise_clip: float = 0.5,
             policy_freq: int = 2,
             alpha: float = 2.5,
+            grad_clip: float = 2.0,
             device: str = "cuda",
     ):
         self.actor = actor.to(device)
@@ -301,6 +303,7 @@ class TD3_BC:
 
         self.total_it = 0
         self.device = device
+        self.grad_clip = grad_clip
 
     def train(self, batch: TensorBatch) -> Dict[str, float]:
         log_dict = {}
@@ -336,6 +339,9 @@ class TD3_BC:
         self.critic_1_optimizer.zero_grad()
         self.critic_2_optimizer.zero_grad()
         critic_loss.backward()
+        # Gradient clipping
+        torch.nn.utils.clip_grad_norm_(self.critic_1.parameters(), self.grad_clip)
+        torch.nn.utils.clip_grad_norm_(self.critic_2.parameters(), self.grad_clip)
         self.critic_1_optimizer.step()
         self.critic_2_optimizer.step()
 
@@ -579,7 +585,7 @@ def train(config: TrainConfig):
     # Training loop
     logger.info("Training on data from each agent separately!")
     evaluations = []
-    for t in range(int(config.max_timesteps)):
+    for t in tqdm(range(int(config.max_timesteps))):
         for replay_buffer in replay_buffers:
             batch = replay_buffer.sample(config.batch_size)
             batch = [b.to(config.device) for b in batch]

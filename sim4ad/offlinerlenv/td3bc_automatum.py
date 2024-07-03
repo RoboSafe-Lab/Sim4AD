@@ -18,6 +18,7 @@ import torch.nn.functional as F
 import wandb
 import pickle
 
+from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 TensorBatch = List[torch.Tensor]
 
 
@@ -66,13 +67,22 @@ def soft_update(target: nn.Module, source: nn.Module, tau: float):
 
 
 def compute_mean_std(states: np.ndarray, eps: float) -> Tuple[np.ndarray, np.ndarray]:
-    mean = states.mean(0)
-    std = states.std(0) + eps
+    # Replace MISSING_NEARBY_AGENT_VALUE with NaN
+    states = np.where(states == MISSING_NEARBY_AGENT_VALUE, np.nan, states)
+    mean = np.nanmean(states, axis=0)
+    std = np.nanstd(states, axis=0) + eps
     return mean, std
 
 
 def normalize_states(states: np.ndarray, mean: np.ndarray, std: np.ndarray):
-    return (states - mean) / std
+    # Create a mask for valid values (those that are not MISSING_NEARBY_AGENT_VALUE)
+    mask = states != MISSING_NEARBY_AGENT_VALUE
+
+    # Normalize the states element-wise where mask is True
+    for i in range(states.shape[1]):  # Iterate over each column
+        col_mask = mask[:, i]  # Mask for the current column
+        states[col_mask, i] = (states[col_mask, i] - mean[i]) / std[i]
+    return states
 
 
 def wrap_env(
@@ -312,6 +322,10 @@ class TD3_BC:
         state, action, reward, next_state, done = batch
         not_done = 1 - done
 
+        # Create masks for valid states
+        state_mask = (state != MISSING_NEARBY_AGENT_VALUE)
+        next_state_mask = (next_state != MISSING_NEARBY_AGENT_VALUE)
+
         with torch.no_grad():
             # Select action according to actor and add clipped noise
             noise = (torch.randn_like(action) * self.policy_noise).clamp(
@@ -323,14 +337,14 @@ class TD3_BC:
             )
 
             # Compute the target Q value
-            target_q1 = self.critic_1_target(next_state, next_action)
-            target_q2 = self.critic_2_target(next_state, next_action)
+            target_q1 = self.critic_1_target(next_state * next_state_mask, next_action)
+            target_q2 = self.critic_2_target(next_state * next_state_mask, next_action)
             target_q = torch.min(target_q1, target_q2)
             target_q = reward + not_done * self.discount * target_q
 
         # Get current Q estimates
-        current_q1 = self.critic_1(state, action)
-        current_q2 = self.critic_2(state, action)
+        current_q1 = self.critic_1(state * state_mask, action)
+        current_q2 = self.critic_2(state * state_mask, action)
 
         # Compute critic loss
         critic_loss = F.mse_loss(current_q1, target_q) + F.mse_loss(current_q2, target_q)
@@ -348,8 +362,8 @@ class TD3_BC:
         # Delayed actor updates
         if self.total_it % self.policy_freq == 0:
             # Compute actor loss
-            pi = self.actor(state)
-            q = self.critic_1(state, pi)
+            pi = self.actor(state * state_mask)
+            q = self.critic_1(state * state_mask, pi)
             # using detach to prevent lmbda from affecting q
             lmbda = self.alpha / q.abs().mean().detach()
 
@@ -493,15 +507,37 @@ def train(config: TrainConfig):
     # get maximum and minimum score for normalization
     ref_max_score = -float('inf')
     ref_min_score = float('inf')
-    all_observations = []
+    total_count = np.zeros(34)
+    mean_obs = np.zeros(34)
+    m2 = np.zeros(34)
     for agent_mdp in dataset['clustered']:
         score = sum(agent_mdp.rewards)
         if score > ref_max_score:
             ref_max_score = score
         if score < ref_min_score:
             ref_min_score = score
-        # get all observations for normalization
-        all_observations = np.concatenate([agent_mdp.observations], axis=0)
+
+        if config.normalize:
+            # Iterate over each observation
+            for obs in agent_mdp.observations:
+                # Create a mask for valid observations
+                mask = obs != MISSING_NEARBY_AGENT_VALUE
+
+                # Update total count
+                total_count[mask] += 1
+
+                # Compute mean and m2 incrementally for valid observations
+                delta = obs[mask] - mean_obs[mask]
+                mean_obs[mask] += delta / total_count[mask]
+                delta2 = obs[mask] - mean_obs[mask]
+                m2[mask] += delta * delta2
+
+    # Compute final mean and standard deviation
+    if config.normalize:
+        state_mean = mean_obs
+        state_std = np.sqrt(m2 / total_count)
+    else:
+        state_mean, state_std = 0, 1
 
     if config.checkpoints_path is not None:
         print(f"Checkpoints path: {config.checkpoints_path}")
@@ -553,11 +589,6 @@ def train(config: TrainConfig):
 
     wandb_init(asdict(config))
 
-    if config.normalize:
-        state_mean, state_std = compute_mean_std(all_observations, eps=1e-3)
-    else:
-        state_mean, state_std = 0, 1
-
     env = wrap_env(env, state_mean=state_mean, state_std=state_std)
 
     # create a replay buffer for each vehicle
@@ -586,15 +617,26 @@ def train(config: TrainConfig):
     logger.info("Training on data from each agent separately!")
     evaluations = []
     for t in tqdm(range(int(config.max_timesteps))):
+        iteration_log_dict = {}
         for replay_buffer in replay_buffers:
             batch = replay_buffer.sample(config.batch_size)
             batch = [b.to(config.device) for b in batch]
             log_dict = trainer.train(batch)
-            wandb.log(log_dict, step=trainer.total_it)
+
+            # Accumulate logs from this batch into the iteration log dictionary
+            for key, value in log_dict.items():
+                if key in iteration_log_dict:
+                    iteration_log_dict[key].append(value)
+                else:
+                    iteration_log_dict[key] = [value]
+
+        # Calculate the average of the accumulated logs for this iteration
+        averaged_log_dict = {key: sum(values) / len(values) for key, values in iteration_log_dict.items()}
+        wandb.log(averaged_log_dict, step=trainer.total_it)
 
         # Evaluate episode
-        if (t+1) % config.eval_freq == 0:
-            logger.info(f'evaluate at time step: {t+1}')
+        if (t + 1) % config.eval_freq == 0:
+            logger.info(f'evaluate at time step: {t + 1}')
             # evaluate the policy
             evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score)
 

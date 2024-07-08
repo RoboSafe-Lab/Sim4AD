@@ -19,6 +19,7 @@ import wandb
 import pickle
 
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
+
 TensorBatch = List[torch.Tensor]
 
 
@@ -66,14 +67,6 @@ def soft_update(target: nn.Module, source: nn.Module, tau: float):
         target_param.data.copy_((1 - tau) * target_param.data + tau * source_param.data)
 
 
-def compute_mean_std(states: np.ndarray, eps: float) -> Tuple[np.ndarray, np.ndarray]:
-    # Replace MISSING_NEARBY_AGENT_VALUE with NaN
-    states = np.where(states == MISSING_NEARBY_AGENT_VALUE, np.nan, states)
-    mean = np.nanmean(states, axis=0)
-    std = np.nanstd(states, axis=0) + eps
-    return mean, std
-
-
 def normalize_states(states: np.ndarray, mean: np.ndarray, std: np.ndarray):
     # Create a mask for valid values (those that are not MISSING_NEARBY_AGENT_VALUE)
     mask = states != MISSING_NEARBY_AGENT_VALUE
@@ -83,6 +76,13 @@ def normalize_states(states: np.ndarray, mean: np.ndarray, std: np.ndarray):
         col_mask = mask[:, i]  # Mask for the current column
         states[col_mask, i] = (states[col_mask, i] - mean[i]) / std[i]
     return states
+
+
+def normalized_rewards(rewards: np.ndarray, mean: float, std: float):
+    for i in range(rewards.shape[1]):
+        rewards[i] = (rewards[i] - mean) / std
+        rewards[i] = np.clip(rewards[i], -1, 1)
+    return rewards
 
 
 def wrap_env(
@@ -195,7 +195,7 @@ def wandb_init(config: dict) -> None:
 
 @torch.no_grad()
 def eval_actor(
-        env: gym.Env, actor: nn.Module, device: str, n_episodes: int, seed: int
+        env: gym.Env, actor: nn.Module, device: str, n_episodes: int, seed: int, reward_mean: float, reward_std: float
 ) -> np.ndarray:
     env.reset(seed=seed)
     actor.eval()
@@ -211,26 +211,11 @@ def eval_actor(
         while not terminated and not truncated:
             action = actor.act(state, device)
             state, reward, terminated, truncated, _ = env.step(action)
-            episode_reward += reward
+            episode_reward += (float(reward) - reward_mean) / reward_std
         episode_rewards.append(episode_reward)
 
     actor.train()
     return np.asarray(episode_rewards)
-
-
-def return_reward_range(dataset):
-    returns, lengths = [], []
-    ep_ret, ep_len = 0.0, 0
-    for r, d in zip(dataset["rewards"], dataset["terminals"]):
-        ep_ret += float(r)
-        ep_len += 1
-        if d:
-            returns.append(ep_ret)
-            lengths.append(ep_len)
-            ep_ret, ep_len = 0.0, 0
-    lengths.append(ep_len)  # but still keep track of number of steps
-    assert sum(lengths) == len(dataset["rewards"])
-    return min(returns), max(returns)
 
 
 class Actor(nn.Module):
@@ -456,7 +441,7 @@ def qlearning_dataset(dataset=None):
     }
 
 
-def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score):
+def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score, reward_mean, reward_std):
     """evaluate the policy at certain evaluation frequency"""
     # Evaluate episode
     eval_scores = eval_actor(
@@ -465,6 +450,8 @@ def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_sc
         device=config.device,
         n_episodes=config.n_episodes,
         seed=config.seed,
+        reward_mean=reward_mean,
+        reward_std=reward_std
     )
     eval_score = eval_scores.mean()
     normalized_eval_score = get_normalized_score(eval_score, ref_max_score, ref_min_score) * 100.0
@@ -504,20 +491,14 @@ def train(config: TrainConfig):
     with open('scenarios/data/train/' + driving_style + map_name + '_demonstration.pkl', 'rb') as file:
         dataset = pickle.load(file)
 
-    # get maximum and minimum score for normalization
-    ref_max_score = -float('inf')
-    ref_min_score = float('inf')
+    # get mean and std for observation and reward normalization
     total_count = np.zeros(34)
     mean_obs = np.zeros(34)
     m2 = np.zeros(34)
+    all_rewards = []
     for agent_mdp in dataset['clustered']:
-        score = sum(agent_mdp.rewards)
-        if score > ref_max_score:
-            ref_max_score = score
-        if score < ref_min_score:
-            ref_min_score = score
-
         if config.normalize:
+            all_rewards.extend(agent_mdp.rewards)
             # Iterate over each observation
             for obs in agent_mdp.observations:
                 # Create a mask for valid observations
@@ -536,8 +517,11 @@ def train(config: TrainConfig):
     if config.normalize:
         state_mean = mean_obs
         state_std = np.sqrt(m2 / total_count)
+        reward_mean = np.mean(all_rewards)
+        reward_std = np.std(all_rewards)
     else:
         state_mean, state_std = 0, 1
+        reward_mean, reward_std = 0, 1
 
     if config.checkpoints_path is not None:
         print(f"Checkpoints path: {config.checkpoints_path}")
@@ -591,18 +575,31 @@ def train(config: TrainConfig):
 
     env = wrap_env(env, state_mean=state_mean, state_std=state_std)
 
+    ref_max_score = -float('inf')
+    ref_min_score = float('inf')
     # create a replay buffer for each vehicle
     replay_buffers = []
     for agent_mdp in dataset['clustered']:
         agent_data = qlearning_dataset(dataset=agent_mdp)
 
-        # normalization for all data
+        # observation normalization
         agent_data["observations"] = normalize_states(
             agent_data["observations"], state_mean, state_std
         )
         agent_data["next_observations"] = normalize_states(
             agent_data["next_observations"], state_mean, state_std
         )
+
+        # reward normalization
+        agent_data["rewards"] = normalized_rewards(
+            agent_data["rewards"], reward_mean, reward_std
+        )
+
+        score = sum(agent_data["rewards"])
+        if score > ref_max_score:
+            ref_max_score = score
+        if score < ref_min_score:
+            ref_min_score = score
 
         replay_buffer = ReplayBuffer(
             state_dim,
@@ -638,7 +635,7 @@ def train(config: TrainConfig):
         if (t + 1) % config.eval_freq == 0:
             logger.info(f'evaluate at time step: {t + 1}')
             # evaluate the policy
-            evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score)
+            evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score, reward_mean, reward_std)
 
 
 if __name__ == "__main__":

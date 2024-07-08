@@ -207,12 +207,13 @@ def eval_actor(
         truncated = False
         # State is tuple from simulator_env
         state = state[0]
-        episode_reward = 0.0
+        episode_reward = []
         while not terminated and not truncated:
             action = actor.act(state, device)
             state, reward, terminated, truncated, _ = env.step(action)
-            episode_reward += (float(reward) - reward_mean) / reward_std
-        episode_rewards.append(episode_reward)
+            episode_reward.append(reward)
+        episode_reward = normalized_rewards(np.array(episode_reward), reward_mean, reward_std)
+        episode_rewards.append(sum(episode_reward))
 
     actor.train()
     return np.asarray(episode_rewards)

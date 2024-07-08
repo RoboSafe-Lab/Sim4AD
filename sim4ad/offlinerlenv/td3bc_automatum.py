@@ -79,7 +79,7 @@ def normalize_states(states: np.ndarray, mean: np.ndarray, std: np.ndarray):
 
 
 def normalized_rewards(rewards: np.ndarray, mean: float, std: float):
-    for i in range(rewards.shape[1]):
+    for i in range(rewards.shape[0]):
         rewards[i] = (rewards[i] - mean) / std
         rewards[i] = np.clip(rewards[i], -1, 1)
     return rewards

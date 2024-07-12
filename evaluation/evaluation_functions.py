@@ -36,6 +36,7 @@ class EvaluationFeaturesExtractor:
         Save the trajectory of the agent in the simulation for evaluation.
         :param agent: agent
         :param death_cause: cause of death
+        :param episode_id:
         """
 
         states = agent.state_trajectory

@@ -78,8 +78,8 @@ class Sim4ADSimulation:
 
         self.__spawn_method = spawn_method
 
-        assert policy_type in ["follow_dataset", "rl", "idm"] or "bc" in policy_type.lower() or "sac" in policy_type.lower(), \
-            f"Policy type {policy_type} not found."
+        assert policy_type in ["follow_dataset", "rl", "idm", "offlinerl"] or "bc" in policy_type.lower() \
+               or "sac" in policy_type.lower(), f"Policy type {policy_type} not found."
         if policy_type == "follow_dataset":
             assert spawn_method != "random", "Policy type 'follow_dataset' is not compatible with 'random' spawn"
 
@@ -92,7 +92,7 @@ class Sim4ADSimulation:
         self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
         if self.clustering != "all":
             self.__agents_to_add = self.cluster_agents(self.__episode_agents)
-                
+
         self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
         self.__last_agent_id = 0  # ID when creating a new random agent
         # Dictionary (agent_id, DeathCause) of agents that have been removed from the simulation.
@@ -100,7 +100,8 @@ class Sim4ADSimulation:
         self.__agent_evaluated = None  # If we spawn_method is "dataset_one", then this is the agent we are evaluating.
 
     def cluster_agents(self, agents: Dict[str, droneDataset]):
-        episode_name = self.__all_episode_names[self.episode_idx-1]
+        """Return agents of a specific cluster"""
+        episode_name = self.__all_episode_names[self.episode_idx - 1]
         scenario_name = episode_name.split("-")[2]
         with open(f"scenarios/configs/{scenario_name}_drivingStyle.json", "rb") as f:
             import json
@@ -115,7 +116,7 @@ class Sim4ADSimulation:
         """ Add a new agent to the simulation.
 
         Args:
-            new_agent: Agent to add.
+            agent: Agent to add.
         """
 
         if policy == "idm":
@@ -173,6 +174,8 @@ class Sim4ADSimulation:
             return "follow_dataset"
         elif policy == "rl":
             return "rl"
+        elif policy == 'offlinerl':
+            return "offlinerl"
         else:
             raise ValueError(f"Policy {policy} not found.")
 
@@ -211,6 +214,7 @@ class Sim4ADSimulation:
 
         Args:
             agent_id: Agent ID to remove.
+            death_cause: reason for death
         """
 
         agent_removed = self.__agents.pop(agent_id)
@@ -257,6 +261,7 @@ class Sim4ADSimulation:
         self.__simulation_history = []
 
         initial_obs = None
+        info = None
         if len(self.__agents_to_add.keys()) > 0:
             initial_obs, info = self.__update_vehicles(soft_reset=True)
 
@@ -326,7 +331,6 @@ class Sim4ADSimulation:
 
             if self.__agent_evaluated is None:
                 if self.__policy_type == "rl":
-
                     assert soft_reset, "Agent evaluated is None, but soft_reset (we want a new RL episode) is False"
 
                 # Get the first agent in the dataset
@@ -418,7 +422,7 @@ class Sim4ADSimulation:
 
         raise ValueError("Could not spawn a vehicle after 1000 attempts.")
 
-    def __safe_to_spawn(self, position: np.array, width: float, length: float, heading:float, current_lane) -> bool:
+    def __safe_to_spawn(self, position: np.array, width: float, length: float, heading: float, current_lane) -> bool:
         # Check if the position is free
         bbox = Box(center=position, length=length, width=width, heading=heading)
 
@@ -479,124 +483,24 @@ class Sim4ADSimulation:
             if agent is None and agent_id not in self.__dead_agents:
                 continue
 
-            assert len(agent.observation_trajectory) == len(agent.action_trajectory)+1 == len(agent.state_trajectory)
+            assert len(agent.observation_trajectory) == len(agent.action_trajectory) + 1 == len(agent.state_trajectory)
 
             if agent.policy == "follow_dataset":
-
-                dataset_agent = self.__episode_agents[agent_id]
-                # Check if the current gap with the vehicle in front is less than the minimum gap
-                vehicle_in_front = agent.last_vehicle_in_front_ego()
-                dataset_time_step = round((self.__time - agent.original_initial_time) / self.__dt)
-                if vehicle_in_front is not None and not agent.idm.activated():
-                    # agent died at the previous time step
-                    vehicle_front_not_alive_anymore = vehicle_in_front["agent_id"] not in self.__agents
-                    if vehicle_front_not_alive_anymore:
-                        pass
-                    else:
-                        # The gap is the distance between the bounding boxes of the two vehicles
-                        bbox_i = LineString(agent.state.bbox.boundary)
-                        vehicle_in_front_simulator = self.__agents[vehicle_in_front["agent_id"]]
-                        bbox_j = LineString(vehicle_in_front_simulator.state.bbox.boundary)
-                        gap = bbox_i.distance(bbox_j)
-
-                        if gap < agent.idm.s0:
-                            # Check if the gap appears in the dataset or it changed tue to external reasons (e.g., policy
-                            # pi causing the vehicle in front to brake)
-                            if dataset_time_step + 1 < len(dataset_agent.x_vec):
-                                expected_v_front = self.__episode_agents[vehicle_in_front["agent_id"]]
-                                # find timestep for j corresponding to the current time step
-                                time_j = round((self.__time - expected_v_front.time[0]) / self.__dt)
-
-                                try:
-                                    expected_j_bbox = Box(center=Point(expected_v_front.x_vec[time_j],
-                                                                        expected_v_front.y_vec[time_j]),
-                                                            length=expected_v_front.length, width=expected_v_front.width,
-                                                            heading=expected_v_front.psi_vec[time_j])
-                                    expected_gap = bbox_i.distance(LineString(expected_j_bbox.boundary))
-
-                                    if (gap - expected_gap) < 1e-4:
-                                        debug = False
-                                        if debug:
-                                            fig, ax = plt.subplots()
-                                            plot_map(self.__scenario_map, markings=True, hide_road_bounds_in_junction=True, ax=ax)
-                                            for ajd, aj in self.__agents.items():
-                                                color = "red" if ajd == self.__agent_evaluated else "blue"
-                                                plt.plot(aj.state.position.x, aj.state.position.y, "o")
-                                                # blot bonding
-                                                # Plot the bounding box of the agent
-                                                bbox = aj.state.bbox.boundary
-                                                # repeat the first point to create a 'closed loop'
-                                                bbox = [*bbox, bbox[0]]
-                                                ax.plot([point[0] for point in bbox], [point[1] for point in bbox], color=color)
-                                            # plot the expected bounding box of the vehicle in front in white
-                                            bbox = expected_j_bbox.boundary
-                                            # repeat the first point to create a 'closed loop'
-                                            bbox = [*bbox, bbox[0]]
-                                            ax.plot([point[0] for point in bbox], [point[1] for point in bbox],
-                                                    color="green")
-                                            plt.show()
-
-                                        # The gap is critical and different than what it should be
-                                        agent.idm.activate(v0=agent.state.speed)
-                                        self.__agents[self.__agent_evaluated].add_interference(
-                                            agent_id=vehicle_in_front["agent_id"])
-
-                                except IndexError:
-                                    if vehicle_in_front_simulator.policy not in ["follow_dataset"]:
-                                        # the vehicle in front is not following the dataset and thus we cannot compare
-                                        # its position to the original one.
-                                        # The gap is critical and different from what it should be
-                                        agent.idm.activate(v0=agent.state.speed)
-                                        self.__agents[self.__agent_evaluated].add_interference(
-                                            agent_id=vehicle_in_front["agent_id"])
-                                        pass
-
-                if agent.idm.activated():
-                    action = agent.idm.compute_idm_action(state_i=agent.state, agent_in_front=vehicle_in_front,
-                                                          agent_meta=agent.meta, previous_state_i=agent.state_trajectory[-2] if len(agent.state_trajectory) > 1 else agent.state)
-
-                else:
-                    # Get the acceleration and steering angle from the dataset
-                    deltas = ExtractObservationAction.extract_yaw_rate(agent=dataset_agent)
-                    acceleration = np.sqrt(float(dataset_agent.ax_vec[dataset_time_step]) ** 2 +
-                                           float(dataset_agent.ay_vec[dataset_time_step]) ** 2)
-                    action = Action(acceleration=acceleration,
-                                    steer_angle=deltas[dataset_time_step])
+                action, new_state = self.__handle_follow_dataset(agent, agent_id)
             elif isinstance(agent.policy, BC) or isinstance(agent.policy, SAC):
                 action = agent.next_action(history=agent.observation_trajectory)
+                # Use the bicycle model to find where the agent will be at t+1
+                new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
             elif agent.policy == "rl":
                 assert agent_id == self.__agent_evaluated, "Only the agent being evaluated can have policy 'rl'"
                 action = Action(acceleration=ego_action[0], steer_angle=ego_action[1])
+                new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
             else:
                 raise NotImplementedError(f"Policy {agent.policy} not found.")
 
-            # Use the bicycle model to find where the agent will be at t+1
-            new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
+            goal_reached, truncated = self.__check_goal_and_termination(agent, new_state, agent_id)
 
-            goal_reached, truncated = False, False
-            if agent.policy == "follow_dataset" and not agent.idm.activated():
-
-                if dataset_time_step + 1 < len(dataset_agent.x_vec):
-                    position = Point(dataset_agent.x_vec[dataset_time_step + 1],
-                                     dataset_agent.y_vec[dataset_time_step + 1])
-                    speed = np.sqrt(float(dataset_agent.vx_vec[dataset_time_step + 1]) ** 2 +
-                                    float(dataset_agent.vy_vec[dataset_time_step + 1]) ** 2)
-                    heading = dataset_agent.psi_vec[dataset_time_step + 1]
-                    acceleration = np.sqrt(float(dataset_agent.ax_vec[dataset_time_step + 1]) ** 2 +
-                                           float(dataset_agent.ay_vec[dataset_time_step + 1]) ** 2)
-                    new_state = State(time=new_state.time, position=position, speed=speed, acceleration=acceleration,
-                                      heading=heading, lane=new_state.lane, agent_width=agent.meta.width,
-                                      agent_length=agent.meta.length)
-                else:
-                    # The agent has reached the end of the dataset
-                    goal_reached = True
-            else:
-                goal_reached = agent.reached_goal(new_state)
-                truncated = agent.terminated(max_steps=1000)
-
-            off_road = new_state.lane is None
-
-            if off_road:
+            if new_state.lane is None:
                 self.__dead_agents[agent_id] = DeathCause.OFF_ROAD
             elif truncated:
                 self.__dead_agents[agent_id] = DeathCause.TRUNCATED
@@ -613,6 +517,118 @@ class Sim4ADSimulation:
         self.__state = new_frame
 
         return self._get_current_observations(return_obs_for_aid=self.__agent_evaluated)
+
+    def __check_goal_and_termination(self, agent, new_state, agent_id):
+        if agent.policy == "follow_dataset" and not agent.idm.activated():
+            dataset_agent = self.__episode_agents[agent_id]
+            dataset_time_step = round((self.__time - agent.original_initial_time) / self.__dt)
+            if dataset_time_step + 1 >= len(dataset_agent.x_vec):
+                return True, False
+        goal_reached = agent.reached_goal(new_state)
+        truncated = agent.terminated(max_steps=1000)
+        return goal_reached, truncated
+
+    def __handle_follow_dataset(self, agent, agent_id):
+        dataset_agent = self.__episode_agents[agent_id]
+        # Check if the current gap with the vehicle in front is less than the minimum gap
+        vehicle_in_front = agent.last_vehicle_in_front_ego()
+        dataset_time_step = round((self.__time - agent.original_initial_time) / self.__dt)
+
+        if vehicle_in_front is not None and not agent.idm.activated():
+            self.__check_and_activate_idm(agent, dataset_agent, vehicle_in_front, dataset_time_step)
+
+        if agent.idm.activated():
+            action = agent.idm.compute_idm_action(
+                state_i=agent.state, agent_in_front=vehicle_in_front,
+                agent_meta=agent.meta,
+                previous_state_i=agent.state_trajectory[-2] if len(agent.state_trajectory) > 1 else agent.state
+            )
+            new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
+        else:
+            deltas = ExtractObservationAction.extract_yaw_rate(agent=dataset_agent)
+            acceleration = np.sqrt(float(dataset_agent.ax_vec[dataset_time_step]) ** 2 +
+                                   float(dataset_agent.ay_vec[dataset_time_step]) ** 2)
+            action = Action(acceleration=acceleration, steer_angle=deltas[dataset_time_step])
+
+            if dataset_time_step + 1 < len(dataset_agent.x_vec):
+                position = Point(dataset_agent.x_vec[dataset_time_step + 1], dataset_agent.y_vec[dataset_time_step + 1])
+                speed = np.sqrt(float(dataset_agent.vx_vec[dataset_time_step + 1]) ** 2 +
+                                float(dataset_agent.vy_vec[dataset_time_step + 1]) ** 2)
+                heading = dataset_agent.psi_vec[dataset_time_step + 1]
+                acceleration = np.sqrt(float(dataset_agent.ax_vec[dataset_time_step + 1]) ** 2 +
+                                       float(dataset_agent.ay_vec[dataset_time_step + 1]) ** 2)
+                new_state = State(time=self.__time + self.__dt, position=position, speed=speed,
+                                  acceleration=acceleration,
+                                  heading=heading, lane=agent.state.lane, agent_width=agent.meta.width,
+                                  agent_length=agent.meta.length)
+            else:
+                new_state = agent.state
+                self.__dead_agents[agent_id] = DeathCause.GOAL_REACHED
+
+        return action, new_state
+
+    def __check_and_activate_idm(self, agent, dataset_agent, vehicle_in_front, dataset_time_step):
+        # agent died at the previous time step
+        vehicle_front_not_alive_anymore = vehicle_in_front["agent_id"] not in self.__agents
+        if vehicle_front_not_alive_anymore:
+            return
+
+        bbox_i = LineString(agent.state.bbox.boundary)
+        vehicle_in_front_simulator = self.__agents[vehicle_in_front["agent_id"]]
+        bbox_j = LineString(vehicle_in_front_simulator.state.bbox.boundary)
+        gap = bbox_i.distance(bbox_j)
+
+        if gap < agent.idm.s0 and dataset_time_step + 1 < len(dataset_agent.x_vec):
+            self.__compare_and_activate_idm_if_needed(agent, vehicle_in_front, bbox_i, gap,
+                                                      vehicle_in_front_simulator)
+
+    def __compare_and_activate_idm_if_needed(self, agent, vehicle_in_front, bbox_i, gap, vehicle_in_front_simulator):
+        expected_v_front = self.__episode_agents[vehicle_in_front["agent_id"]]
+        time_j = round((self.__time - expected_v_front.time[0]) / self.__dt)
+
+        try:
+            expected_j_bbox = Box(
+                center=Point(expected_v_front.x_vec[time_j], expected_v_front.y_vec[time_j]),
+                length=expected_v_front.length, width=expected_v_front.width,
+                heading=expected_v_front.psi_vec[time_j]
+            )
+            expected_gap = bbox_i.distance(LineString(expected_j_bbox.boundary))
+
+            if (gap - expected_gap) < 1e-4:
+                debug = False
+                if debug:
+                    fig, ax = plt.subplots()
+                    plot_map(self.__scenario_map, markings=True,
+                             hide_road_bounds_in_junction=True, ax=ax)
+                    for ajd, aj in self.__agents.items():
+                        color = "red" if ajd == self.__agent_evaluated else "blue"
+                        plt.plot(aj.state.position.x, aj.state.position.y, "o")
+                        # blot bonding
+                        # Plot the bounding box of the agent
+                        bbox = aj.state.bbox.boundary
+                        # repeat the first point to create a 'closed loop'
+                        bbox = [*bbox, bbox[0]]
+                        ax.plot([point[0] for point in bbox], [point[1] for point in bbox],
+                                color=color)
+                    # plot the expected bounding box of the front vehicle in white
+                    bbox = expected_j_bbox.boundary
+                    # repeat the first point to create a 'closed loop'
+                    bbox = [*bbox, bbox[0]]
+                    ax.plot([point[0] for point in bbox], [point[1] for point in bbox],
+                            color="green")
+                    plt.show()
+                self.__activate_idm(agent, vehicle_in_front, agent.state.speed)
+
+        except IndexError:
+            # the vehicle in front is not following the dataset, and thus we cannot compare
+            # its position to the original one.
+            # The gap is critical and different from what it should be
+            if vehicle_in_front_simulator.policy not in ["follow_dataset"]:
+                self.__activate_idm(agent, vehicle_in_front, agent.state.speed)
+
+    def __activate_idm(self, agent, vehicle_in_front, speed):
+        agent.idm.activate(v0=speed)
+        self.__agents[self.__agent_evaluated].add_interference(agent_id=vehicle_in_front["agent_id"])
 
     def _get_current_observations(self, return_obs_for_aid: str = None):
         """
@@ -631,7 +647,6 @@ class Sim4ADSimulation:
                 obs_to_return = obs
 
         return obs_to_return
-
 
     def _next_state(self, agent: PolicyAgent, current_state: State, action: Action) -> State:
         """
@@ -671,7 +686,8 @@ class Sim4ADSimulation:
         if agent.idm.activated():
             # we move along the midline of the road, rather than following the current one
             new_lane = current_state.lane
-            center = np.array([current_state.position.x, current_state.position.y]) + np.array([speed * np.cos(current_state.heading), speed * np.sin(current_state.heading)]) * self.__dt
+            center = np.array([current_state.position.x, current_state.position.y]) + np.array(
+                [speed * np.cos(current_state.heading), speed * np.sin(current_state.heading)]) * self.__dt
             center_ds = new_lane.distance_at(Point(center[0], center[1]))
             center = new_lane.point_at(center_ds)
             heading = new_lane.get_heading_at(center_ds)
@@ -686,32 +702,13 @@ class Sim4ADSimulation:
             new_lane = self.__scenario_map.best_lane_at(center, heading)
 
         return State(time=self.time + self.dt, position=center, speed=speed, acceleration=acceleration,
-                      heading=heading, lane=new_lane, agent_width=agent.meta.width, agent_length=agent.meta.length)
+                     heading=heading, lane=new_lane, agent_width=agent.meta.width, agent_length=agent.meta.length)
 
-    def _get_observation(self, agent: PolicyAgent, state: State) -> Tuple[Observation, dict]:
-        """
-        Get the current observation of the agent.
-
-        :param agent: The agent.
-        :return: The observation and the nearby agents.
-        """
-
-        if state.lane is not None:
-            # If it is, the agent went off the road.
-            distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=state)
-
-            # nearby_agents_features contains dx, dy, v, a, heading for each nearby agent
-            # vehicles_nearby contains the agent object
-            nearby_agents_features, vehicles_nearby = get_nearby_vehicles(agent=agent, state=state,
-                                                                          all_agents=self.__agents)
-
-            if collision_check(agent_state=self.__state[agent.agent_id], nearby_vehicles=vehicles_nearby) :
-                self.__dead_agents[agent.agent_id] = DeathCause.COLLISION
-
+    def _check_death_cause(self, agent):
         collision, off_road, truncated, reached_goal = False, False, False, False
+
         if agent.agent_id in self.__dead_agents:
             death_cause = self.__dead_agents[agent.agent_id]
-
             if death_cause == DeathCause.COLLISION:
                 collision = True
             elif death_cause == DeathCause.OFF_ROAD:
@@ -723,78 +720,59 @@ class Sim4ADSimulation:
             else:
                 raise ValueError(f"Death cause {death_cause} not found.")
 
+        return collision, off_road, truncated, reached_goal
+
+    def _handle_none_lane(self, agent, off_road):
+        if not off_road:
+            plot_map(self.__scenario_map, markings=True, hide_road_bounds_in_junction=True)
+            for agent_id, agent in self.__agents.items():
+                color = "red" if agent_id == self.__agent_evaluated else "blue"
+                plt.plot(agent.state.position.x, agent.state.position.y, "o", color=color)
+                bbox = agent.state.bbox.boundary + [agent.state.bbox.boundary[0]]
+                plt.plot([point[0] for point in bbox], [point[1] for point in bbox], color=color)
+            plt.show()
+            print()
+
+        assert off_road, f"Agent {agent.agent_id} went off the road but off_road is False. Death cause: " \
+                         f"{self.__dead_agents.get(agent.agent_id)}"
+
+    def _get_observation(self, agent: PolicyAgent, state: State) -> Tuple[Observation, dict]:
+        """
+        Get the current observation of the agent.
+
+        :param agent: The agent.
+        :return: The observation and the nearby agents.
+        """
+        # Initialize variables
+        nearby_agents_features, vehicles_nearby = {}, []
+        distance_left_lane_marking, distance_right_lane_marking = None, None
+
+        if state.lane is not None:
+            # If it is, the agent went off the road.
+            distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=state)
+
+            # nearby_agents_features contains dx, dy, v, a, heading for each nearby agent
+            # vehicles_nearby contains the agent object
+            nearby_agents_features, vehicles_nearby = get_nearby_vehicles(agent=agent, state=state,
+                                                                          all_agents=self.__agents)
+
+            if collision_check(agent_state=self.__state[agent.agent_id], nearby_vehicles=vehicles_nearby):
+                self.__dead_agents[agent.agent_id] = DeathCause.COLLISION
+
+        collision, off_road, truncated, reached_goal = self._check_death_cause(agent)
+
+        # for debug
         if state.lane is None:
-
-            if off_road is False:
-                # plot the map
-                plot_map(self.__scenario_map, markings=True, hide_road_bounds_in_junction=True)
-                # plot the agents
-                for agent_id, agent in self.__agents.items():
-                    color = "red" if agent_id == self.__agent_evaluated else "blue"
-                    plt.plot(agent.state.position.x, agent.state.position.y, "o")
-                    # blot bonding
-                    # Plot the bounding box of the agent
-                    bbox = agent.state.bbox.boundary
-                    # repeat the first point to create a 'closed loop'
-                    bbox = [*bbox, bbox[0]]
-                    plt.plot([point[0] for point in bbox], [point[1] for point in bbox], color=color)
-                plt.show()
-                print() # TODO: remove
-
-            assert off_road, f"Agent {agent.agent_id} went off the road but off_road is False. Death cause: {self.__dead_agents[agent.agent_id]}"
+            self._handle_none_lane(agent, off_road)
 
         done = collision or off_road or truncated or reached_goal
-
-        ax, ay, long_jerk, thw_front, thw_rear = None, None, 0, None, None
-        behind_ego = {"": MISSING_NEARBY_AGENT_VALUE}  # There is no vehicle behind the ego, as per the check later in the code
         if not done:
-            front_ego = nearby_agents_features[PNA.CENTER_IN_FRONT]
-            behind_ego = nearby_agents_features[PNA.CENTER_BEHIND]
-            left_front = nearby_agents_features[PNA.LEFT_IN_FRONT]
-            left_behind = nearby_agents_features[PNA.LEFT_BEHIND]
-            right_front = nearby_agents_features[PNA.RIGHT_IN_FRONT]
-            right_behind = nearby_agents_features[PNA.RIGHT_BEHIND]
-
-            observation = {
-                "speed": state.speed,
-                "heading": state.heading,
-                "distance_left_lane_marking": distance_left_lane_marking,
-                "distance_right_lane_marking": distance_right_lane_marking,
-                "front_ego_rel_dx": front_ego["rel_dx"],
-                "front_ego_rel_dy": front_ego["rel_dy"],
-                "front_ego_rel_speed": front_ego["speed"] - state.speed,
-                "front_ego_rel_a": front_ego["a"] - state.acceleration,
-                "front_ego_heading": front_ego["heading"],
-                "behind_ego_rel_dx": behind_ego["rel_dx"],
-                "behind_ego_rel_dy": behind_ego["rel_dy"],
-                "behind_ego_rel_speed": behind_ego["speed"] - state.speed,
-                "behind_ego_rel_a": behind_ego["a"] - state.acceleration,
-                "behind_ego_heading": behind_ego["heading"],
-                "front_left_rel_dx": left_front["rel_dx"],
-                "front_left_rel_dy": left_front["rel_dy"],
-                "front_left_rel_speed": left_front["speed"] - state.speed,
-                "front_left_rel_a": left_front["a"] - state.acceleration,
-                "front_left_heading": left_front["heading"],
-                "behind_left_rel_dx": left_behind["rel_dx"],
-                "behind_left_rel_dy": left_behind["rel_dy"],
-                "behind_left_rel_speed": left_behind["speed"] - state.speed,
-                "behind_left_rel_a": left_behind["a"] - state.acceleration,
-                "behind_left_heading": left_behind["heading"],
-                "front_right_rel_dx": right_front["rel_dx"],
-                "front_right_rel_dy": right_front["rel_dy"],
-                "front_right_rel_speed": right_front["speed"] - state.speed,
-                "front_right_rel_a": right_front["a"] - state.acceleration,
-                "front_right_heading": right_front["heading"],
-                "behind_right_rel_dx": right_behind["rel_dx"],
-                "behind_right_rel_dy": right_behind["rel_dy"],
-                "behind_right_rel_speed": right_behind["speed"] - state.speed,
-                "behind_right_rel_a": right_behind["a"] - state.acceleration,
-                "behind_right_heading": right_behind["heading"]
-            }
+            observation = self._build_observation(state, nearby_agents_features, distance_left_lane_marking,
+                                                  distance_right_lane_marking)
 
             obs = Observation(state=observation)
-
             # Compute the evaluation features for the agent
+            info = None
             assert self.evaluation or self.__policy_type != "rl", "We need these features to use the IRL reward"
             if self.evaluation:
                 nearby_vehicles = agent.add_nearby_vehicles(vehicles_nearby)
@@ -804,41 +782,62 @@ class Sim4ADSimulation:
                 agent.add_distance_midline(d_midline)
 
                 # Compute the features needed to use the IRL reward (and evaluation)
-                ax, ay = agent.compute_current_lat_lon_acceleration()
-                long_jerk = agent.compute_current_long_jerk()
-                _, tths = self.evaluator.compute_ttc_tth(agent, state=state, nearby_vehicles=nearby_vehicles,
-                                                         episode_id=None, add=False)
-                thw_front = tths[PNA.CENTER_IN_FRONT]
-                thw_rear = tths[PNA.CENTER_BEHIND]
+                info = self._build_info(agent, nearby_vehicles, state, collision, off_road,
+                                        truncated, reached_goal, observation, done)
 
             # Put the observation in a tuple, as the policy expects it
-            obs = obs.get_tuple()
+            obs = Observation(state=observation).get_tuple()
             agent.add_observation(obs)
         else:
             obs = None
-
-        info = None
-        if self.__policy_type == "rl":
-
-            induced_deceleration = 0
-            # Check if there is a vehicle behind the ego.
-
-            info = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated,
-                    "ego_speed": state.speed, "ego_long_acc": ax, "ego_lat_acc": ay, "ego_long_jerk": long_jerk,
-                    "thw_front": thw_front, "thw_rear": thw_rear, "induced_deceleration": DEFAULT_DECELERATION_VALUE}
-
-            behind_ego_missing = sum([x == MISSING_NEARBY_AGENT_VALUE for x in behind_ego.values()]) == len(behind_ego)
-            if not done and not behind_ego_missing:
-                ego_rear_d = np.sqrt((behind_ego["rel_dx"]) ** 2 + (behind_ego["rel_dy"]) ** 2)
-                rear_position = np.array([state.position.x + behind_ego["rel_dx"], state.position.y + behind_ego["rel_dy"]])
-                induced_deceleration = self.compute_induced_deceleration(ego_v=state.speed, ego_length=agent.meta.length,
-                                                                         rear_agent=behind_ego,
-                                                                         ego_rear_d=ego_rear_d,
-                                                                         rear_a=behind_ego["a"],
-                                                                         rear_position=rear_position)
-                info["induced_deceleration"] = induced_deceleration
+            info = None
 
         return obs, info
+
+    def _build_info(self, agent, nearby_vehicles, state, collision, off_road,
+                    truncated, reached_goal, observation, done):
+        ax, ay = agent.compute_current_lat_lon_acceleration()
+        long_jerk = agent.compute_current_long_jerk()
+        _, tths = self.evaluator.compute_ttc_tth(agent, state=state, nearby_vehicles=nearby_vehicles,
+                                                 episode_id=None, add=False)
+        thw_front, thw_rear = tths[PNA.CENTER_IN_FRONT], tths[PNA.CENTER_BEHIND]
+
+        info = {
+            "reached_goal": reached_goal,
+            "collision": collision,
+            "off_road": off_road,
+            "truncated": truncated,
+            "ego_speed": state.speed,
+            "ego_long_acc": ax,
+            "ego_lat_acc": ay,
+            "ego_long_jerk": long_jerk,
+            "thw_front": thw_front,
+            "thw_rear": thw_rear,
+            "induced_deceleration": DEFAULT_DECELERATION_VALUE
+        }
+
+        if self.__policy_type == "rl":
+            induced_deceleration = 0
+            behind_ego = {
+                "": MISSING_NEARBY_AGENT_VALUE
+            }  # There is no vehicle behind the ego, as per the check later in the code
+            behind_ego_missing = sum([x == MISSING_NEARBY_AGENT_VALUE for x in behind_ego.values()]) == len(behind_ego)
+
+            if not done and not behind_ego_missing:
+                ego_rear_d = np.sqrt((observation["behind_ego_rel_dx"]) ** 2 + (observation["behind_ego_rel_dy"]) ** 2)
+                rear_position = np.array([state.position.x + observation["behind_ego_rel_dx"],
+                                          state.position.y + observation["behind_ego_rel_dy"]])
+                induced_deceleration = self.compute_induced_deceleration(
+                    ego_v=state.speed,
+                    ego_length=agent.meta.length,
+                    rear_agent=behind_ego,
+                    ego_rear_d=ego_rear_d,
+                    rear_a=observation["behind_ego_rel_a"],
+                    rear_position=rear_position
+                )
+                info["induced_deceleration"] = induced_deceleration
+
+        return info
 
     def compute_induced_deceleration(self, ego_v, ego_length, rear_agent, ego_rear_d, rear_a,
                                      rear_position) -> float:
@@ -861,7 +860,7 @@ class Sim4ADSimulation:
         idm = IDMVehicle(scenario_map=self.__scenario_map, position=rear_position, heading=rear_agent["heading"],
                          velocity=rear_agent["speed"])
         safe_d = idm.desired_gap(ego_vehicle=DummyVehicle(rear_agent["speed"], rear_agent["length"]),
-                                        front_vehicle=DummyVehicle(ego_v, ego_length))
+                                 front_vehicle=DummyVehicle(ego_v, ego_length))
 
         # If the distance is less than the minimum distance, then return the deceleration of the vehicle behind
         if ego_rear_d < safe_d:
@@ -949,7 +948,7 @@ class Sim4ADSimulation:
         self.__state = {}
         self.__agents = {}
         self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
-        
+
         if self.clustering != "all":
             self.__episode_agents = self.cluster_agents(self.__episode_agents)
         self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
@@ -957,6 +956,46 @@ class Sim4ADSimulation:
         # Dictionary (agent_id, DeathCause) of agents that have been removed from the simulation.
         self.__dead_agents = {}
         self.__agent_evaluated = None  # If we spawn_method is "dataset_one", then this is the agent we are evaluating.
+
+    @staticmethod
+    def _build_observation(state, nearby_agents_features, distance_left_lane_marking,
+                           distance_right_lane_marking):
+        return {
+            "speed": state.speed,
+            "heading": state.heading,
+            "distance_left_lane_marking": distance_left_lane_marking,
+            "distance_right_lane_marking": distance_right_lane_marking,
+            "front_ego_rel_dx": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_dx", 0),
+            "front_ego_rel_dy": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_dy", 0),
+            "front_ego_rel_speed": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("speed", 0) - state.speed,
+            "front_ego_rel_a": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("a", 0) - state.acceleration,
+            "front_ego_heading": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("heading", 0),
+            "behind_ego_rel_dx": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_dx", 0),
+            "behind_ego_rel_dy": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_dy", 0),
+            "behind_ego_rel_speed": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("speed", 0) - state.speed,
+            "behind_ego_rel_a": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("a", 0) - state.acceleration,
+            "behind_ego_heading": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("heading", 0),
+            "front_left_rel_dx": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_dx", 0),
+            "front_left_rel_dy": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_dy", 0),
+            "front_left_rel_speed": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("speed", 0) - state.speed,
+            "front_left_rel_a": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("a", 0) - state.acceleration,
+            "front_left_heading": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("heading", 0),
+            "behind_left_rel_dx": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_dx", 0),
+            "behind_left_rel_dy": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_dy", 0),
+            "behind_left_rel_speed": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("speed", 0) - state.speed,
+            "behind_left_rel_a": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("a", 0) - state.acceleration,
+            "behind_left_heading": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("heading", 0),
+            "front_right_rel_dx": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_dx", 0),
+            "front_right_rel_dy": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_dy", 0),
+            "front_right_rel_speed": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("speed", 0) - state.speed,
+            "front_right_rel_a": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("a", 0) - state.acceleration,
+            "front_right_heading": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("heading", 0),
+            "behind_right_rel_dx": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_dx", 0),
+            "behind_right_rel_dy": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_dy", 0),
+            "behind_right_rel_speed": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("speed", 0) - state.speed,
+            "behind_right_rel_a": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("a", 0) - state.acceleration,
+            "behind_right_heading": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("heading", 0)
+        }
 
     def __change_episode(self):
         self.__load_datasets()
@@ -979,7 +1018,8 @@ class Sim4ADSimulation:
 
     def _get_current_episode_id(self):
         # We need -1 because we increment the episode_idx before using it.
-        return self.__all_episode_names[self.episode_idx-1] if isinstance(self.__all_episode_names, list) else self.__all_episode_names
+        return self.__all_episode_names[self.episode_idx - 1] if isinstance(self.__all_episode_names,
+                                                                            list) else self.__all_episode_names
 
     @property
     def agents_to_add(self):
@@ -992,9 +1032,10 @@ if __name__ == "__main__":
                "hw-a9-appershofen-002-2234a9ae-2de1-4ad4-9f43-65c2be9696d6"]
 
     spawn_method = "dataset_one"
-    policy_type = "sac_5_rl"  # "bc-all-obs-5_pi_cluster_Aggressive"  # "bc-all-obs-1.5_pi" "idm"
+    policy_type = "idm"  # "bc-all-obs-5_pi_cluster_Aggressive"  # "bc-all-obs-1.5_pi" "idm"
     clustering = "all"
-    sim = Sim4ADSimulation(episode_name=ep_name, spawn_method=spawn_method, policy_type=policy_type, clustering=clustering)
+    sim = Sim4ADSimulation(episode_name=ep_name, spawn_method=spawn_method, policy_type=policy_type,
+                           clustering=clustering)
     sim.full_reset()
 
     # done = False # TODO: uncomment this to run until we use all vehicles

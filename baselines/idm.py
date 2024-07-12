@@ -23,7 +23,7 @@ class IDM:
         """
         self.v0 = None
 
-    def compute_idm_action(self, state_i, agent_in_front, agent_meta, previous_state_i) -> float:
+    def compute_idm_action(self, state_i, agent_in_front, agent_meta, previous_state_i) -> Action:
         """
         Compute the acceleration of the vehicle.
         :param state_i: state of i
@@ -38,7 +38,7 @@ class IDM:
         if agent_in_front is None:
             acc = self.a * (1 - np.power(v / self.v0, self.DELTA))
             acc = np.clip(acc, -self.a, self.a)
-            return Action(acceleration=acc, steer_angle=0.0)
+            return Action(acceleration=float(acc), steer_angle=0.0)
 
         x_front = agent_in_front["position"]
         v_front = agent_in_front["speed"]
@@ -50,7 +50,7 @@ class IDM:
 
         acc = np.clip(acc, -self.a, self.a)
 
-        return Action(acceleration=acc, steer_angle=0)
+        return Action(acceleration=float(acc), steer_angle=0)
 
     def activated(self):
         return self.v0 is not None

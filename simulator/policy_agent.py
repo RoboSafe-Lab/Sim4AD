@@ -40,7 +40,8 @@ class PolicyAgent:
         self._state_trajectory = [initial_state]
         self._obs_trajectory = []
         self._action_trajectory = []
-        self.__evaluation_features_trajectory = defaultdict(list)  # List of all the features used for evaluation at each time step.
+        # List of all the features used for evaluation at each time step.
+        self.__evaluation_features_trajectory = defaultdict(list)
         self._initial_state = initial_state
         self._original_initial_time = original_initial_time
         self.__long_acc = []
@@ -86,7 +87,7 @@ class PolicyAgent:
         reached_end_lane = state.lane.distance_at(state.position) > 0.97 * state.lane.length
         return reached_end_lane
 
-    def __call__(self, history: [[Observation]]) -> tuple[Observation, Action]:
+    def __call__(self, history: [[Observation]]) -> Action:
         """
         Get the action for the given state history.
 
@@ -128,7 +129,8 @@ class PolicyAgent:
 
         long_jerk = 0
         if len(self.__long_acc) > 2:
-            long_jerk = (self.__long_acc[-1] - self.__long_acc[-2]) / (self._state_trajectory[-1].time - self._state_trajectory[-2].time)
+            long_jerk = (self.__long_acc[-1] - self.__long_acc[-2]) / \
+                        (self._state_trajectory[-1].time - self._state_trajectory[-2].time)
 
         self.__long_jerk.append(long_jerk)
         return long_jerk

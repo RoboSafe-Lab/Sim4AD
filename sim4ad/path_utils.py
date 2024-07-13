@@ -63,6 +63,10 @@ def get_path_irl_weights(cluster):
     return f"{get_base_dir()}/results/{cluster}training_log.pkl"
 
 
+def get_path_offlinerl_model():
+    return f"{get_base_dir()}/results/offlineRL/checkpoint.pt"
+
+
 def get_processed_demonstrations(split_type, scenario, cluster):
     return f"{get_base_dir()}/scenarios/data/{split_type}/{cluster}{scenario}_demonstration.pkl"
 
@@ -86,6 +90,7 @@ def get_file_name_trajectories(policy_type, spwan_method, irl_weights, episode_n
 
     return f"{folder_path}/{episode_name}_{policy_type}_{spwan_method}_{irl_weights}_{simulation_length}steps.pkl"
 
+
 def get_file_name_evaluation(policy_type, spawn_method, irl_weights, episode_name):
     """
     Get the file name for the evaluation.
@@ -104,6 +109,7 @@ def get_file_name_evaluation(policy_type, spawn_method, irl_weights, episode_nam
 
     filename = f"{episode_name}_{policy_type}_{spawn_method}_{irl_weights}steps"
     return f"{folder_path}{filename}.pkl", filename
+
 
 def get_agent_id_combined(episode_name, agent_id):
     return f"{episode_name}/{agent_id}"

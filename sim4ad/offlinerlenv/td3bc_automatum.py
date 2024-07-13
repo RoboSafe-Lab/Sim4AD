@@ -4,7 +4,7 @@ import random
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 from loguru import logger
 from tqdm import tqdm
 
@@ -17,7 +17,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import wandb
 import pickle
-
+from numpy import ndarray
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 
 TensorBatch = List[torch.Tensor]
@@ -195,7 +195,9 @@ def wandb_init(config: dict) -> None:
 
 @torch.no_grad()
 def eval_actor(
-        env: gym.Env, actor: nn.Module, device: str, n_episodes: int, seed: int, reward_mean: float, reward_std: float
+        env: gym.Env, actor: nn.Module, device: str, n_episodes: int, seed: int, state_mean: ndarray,
+        state_std: ndarray,
+        reward_mean: float, reward_std: float
 ) -> np.ndarray:
     env.reset(seed=seed)
     actor.eval()
@@ -207,11 +209,13 @@ def eval_actor(
         truncated = False
         # State is tuple from simulator_env
         state = state[0]
+        state = normalize_states(state.reshape(1, -1), state_mean, state_std)
         episode_reward = []
         while not terminated and not truncated:
             action = actor.act(state, device)
             state, reward, terminated, truncated, _ = env.step(action)
             episode_reward.append(reward)
+            state = normalize_states(state.reshape(1, -1), state_mean, state_std)
         episode_reward = normalized_rewards(np.array(episode_reward), reward_mean, reward_std)
         episode_rewards.append(sum(episode_reward))
 
@@ -442,7 +446,8 @@ def qlearning_dataset(dataset=None):
     }
 
 
-def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score, reward_mean, reward_std):
+def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score,
+             state_mean, state_std, reward_mean, reward_std):
     """evaluate the policy at certain evaluation frequency"""
     # Evaluate episode
     eval_scores = eval_actor(
@@ -451,6 +456,8 @@ def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_sc
         device=config.device,
         n_episodes=config.n_episodes,
         seed=config.seed,
+        state_mean=state_mean,
+        state_std=state_std,
         reward_mean=reward_mean,
         reward_std=reward_std
     )
@@ -479,26 +486,21 @@ def get_normalized_score(score, ref_max_score, ref_min_score):
     return (score - ref_min_score) / (ref_max_score - ref_min_score)
 
 
-@pyrallis.wrap()
-def train(config: TrainConfig):
-    env = gym.make(config.env)
+def load_demonstration_data(driving_style: str, map_name: str):
+    """load demonstration data"""
+    with open(f'scenarios/data/train/{driving_style}{map_name}_demonstration.pkl', 'rb') as file:
+        return pickle.load(file)
 
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
 
-    driving_style = config.driving_style
-    map_name = config.map_name
-    # load demonstration data
-    with open('scenarios/data/train/' + driving_style + map_name + '_demonstration.pkl', 'rb') as file:
-        dataset = pickle.load(file)
-
-    # get mean and std for observation and reward normalization
-    total_count = np.zeros(34)
-    mean_obs = np.zeros(34)
-    m2 = np.zeros(34)
+def compute_normalization_parameters(state_dim, dataset, normalize):
+    """Get state mean, std and reward mean and std for normalization"""
+    total_count = np.zeros(state_dim)
+    mean_obs = np.zeros(state_dim)
+    m2 = np.zeros(state_dim)
     all_rewards = []
+
     for agent_mdp in dataset['clustered']:
-        if config.normalize:
+        if normalize:
             all_rewards.extend(agent_mdp.rewards)
             # Iterate over each observation
             for obs in agent_mdp.observations:
@@ -514,8 +516,7 @@ def train(config: TrainConfig):
                 delta2 = obs[mask] - mean_obs[mask]
                 m2[mask] += delta * delta2
 
-    # Compute final mean and standard deviation
-    if config.normalize:
+    if normalize:
         state_mean = mean_obs
         state_std = np.sqrt(m2 / total_count)
         reward_mean = np.mean(all_rewards)
@@ -524,18 +525,10 @@ def train(config: TrainConfig):
         state_mean, state_std = 0, 1
         reward_mean, reward_std = 0, 1
 
-    if config.checkpoints_path is not None:
-        print(f"Checkpoints path: {config.checkpoints_path}")
-        os.makedirs(config.checkpoints_path, exist_ok=True)
-        with open(os.path.join(config.checkpoints_path, "config.yaml"), "w") as f:
-            pyrallis.dump(config, f)
+    return state_mean, state_std, reward_mean, reward_std
 
-    max_action = env.action_space.high
 
-    # Set seeds
-    seed = config.seed
-    set_seed(seed, env)
-
+def initialize_model(state_dim, action_dim, max_action, config):
     actor = Actor(state_dim, action_dim, max_action).to(config.device)
     actor_optimizer = torch.optim.Adam(actor.parameters(), lr=3e-4)
 
@@ -563,37 +556,83 @@ def train(config: TrainConfig):
         "alpha": config.alpha,
     }
 
-    # Initialize actor
     trainer = TD3_BC(**kwargs)
-    logger.info(f"Training TD3 + BC, Env: {config.env}")
+    return trainer, actor
 
-    if config.load_model != "":
-        policy_file = Path(config.load_model)
-        trainer.load_state_dict(torch.load(policy_file))
-        actor = trainer.actor
+
+class TD3_BC_TrainerLoader:
+    def __init__(self, config):
+        self.config = config
+        self.env = gym.make(config.env)
+        self.state_dim = self.env.observation_space.shape[0]
+        self.action_dim = self.env.action_space.shape[0]
+        self.max_action = self.env.action_space.high
+
+        self.dataset = load_demonstration_data(config.driving_style, config.map_name)
+        self.state_mean, self.state_std, self.reward_mean, self.reward_std = compute_normalization_parameters(
+            self.state_dim, self.dataset, config.normalize)
+
+        # Set seeds
+        self.set_seed(config.seed)
+        self.trainer, self.actor = initialize_model(self.state_dim, self.action_dim, self.max_action, config)
+
+        if config.load_model:
+            self.load_model(config.load_model)
+
+        if config.checkpoints_path:
+            self.save_checkpoints()
+
+    def set_seed(self, seed: int):
+        set_seed(seed, self.env)
+
+    def load_model(self, model_path: str):
+        policy_file = Path(model_path)
+        self.trainer.load_state_dict(torch.load(policy_file))
+        self.actor = self.trainer.actor
+        logger.info(f"Loaded model from {model_path}")
+
+    def save_checkpoints(self):
+        logger.info(f"Checkpoints path: {self.config.checkpoints_path}")
+        os.makedirs(self.config.checkpoints_path, exist_ok=True)
+        with open(os.path.join(self.config.checkpoints_path, "config.yaml"), "w") as f:
+            pyrallis.dump(self.config, f)
+
+    def get_trainer(self):
+        return self.trainer
+
+    def get_actor(self):
+        return self.actor
+
+
+@pyrallis.wrap()
+def train(config: TrainConfig):
+    logger.info(f"Training TD3 + BC, Env: {config.env}")
+    trainer_loader = TD3_BC_TrainerLoader(config)
+    trainer = trainer_loader.get_trainer()
+    actor = trainer_loader.get_actor()
 
     wandb_init(asdict(config))
 
-    env = wrap_env(env, state_mean=state_mean, state_std=state_std)
+    env = wrap_env(trainer_loader.env, state_mean=trainer_loader.state_mean, state_std=trainer_loader.state_std)
 
     ref_max_score = -float('inf')
     ref_min_score = float('inf')
     # create a replay buffer for each vehicle
     replay_buffers = []
-    for agent_mdp in dataset['clustered']:
+    for agent_mdp in trainer_loader.dataset['clustered']:
         agent_data = qlearning_dataset(dataset=agent_mdp)
 
         # observation normalization
         agent_data["observations"] = normalize_states(
-            agent_data["observations"], state_mean, state_std
+            agent_data["observations"], trainer_loader.state_mean, trainer_loader.state_std
         )
         agent_data["next_observations"] = normalize_states(
-            agent_data["next_observations"], state_mean, state_std
+            agent_data["next_observations"], trainer_loader.state_mean, trainer_loader.state_std
         )
 
         # reward normalization
         agent_data["rewards"] = normalized_rewards(
-            agent_data["rewards"], reward_mean, reward_std
+            agent_data["rewards"], trainer_loader.reward_mean, trainer_loader.reward_std
         )
 
         score = sum(agent_data["rewards"])
@@ -603,8 +642,8 @@ def train(config: TrainConfig):
             ref_min_score = score
 
         replay_buffer = ReplayBuffer(
-            state_dim,
-            action_dim,
+            trainer_loader.state_dim,
+            trainer_loader.action_dim,
             config.buffer_size,
             config.device,
         )
@@ -636,7 +675,9 @@ def train(config: TrainConfig):
         if (t + 1) % config.eval_freq == 0:
             logger.info(f'evaluate at time step: {t + 1}')
             # evaluate the policy
-            evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score, reward_mean, reward_std)
+            evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score,
+                     trainer_loader.state_mean, trainer_loader.state_std,
+                     trainer_loader.reward_mean, trainer_loader.reward_std)
 
 
 if __name__ == "__main__":

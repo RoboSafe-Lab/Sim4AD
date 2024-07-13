@@ -21,12 +21,14 @@ from tqdm import tqdm
 
 from baselines.bc_baseline import BCBaseline as BC
 from baselines.idm import IDM
+from sim4ad.offlinerlenv.td3bc_automatum import TD3_BC_TrainerLoader, TrainConfig
 from extract_observation_action import ExtractObservationAction
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 from sim4ad.data import DatasetDataLoader, ScenarioConfig, DatasetScenario
 from sim4ad.irlenv.vehicle.behavior import IDMVehicle
 from sim4ad.opendrive import plot_map, Map
-from sim4ad.path_utils import get_path_to_automatum_scenario, get_path_to_automatum_map, get_config_path
+from sim4ad.path_utils import get_path_to_automatum_scenario, get_path_to_automatum_map, \
+    get_config_path, get_path_offlinerl_model
 from sim4ad.util import Box
 from simulator.policy_agent import PolicyAgent, DummyRandomAgent
 from simulator.state_action import State, Action, Observation
@@ -175,7 +177,9 @@ class Sim4ADSimulation:
         elif policy == "rl":
             return "rl"
         elif policy == 'offlinerl':
-            return "offlinerl"
+            model_path = get_path_offlinerl_model()
+            trainer_loader = TD3_BC_TrainerLoader(TrainConfig)
+            return trainer_loader.load_model(model_path)
         else:
             raise ValueError(f"Policy {policy} not found.")
 
@@ -1032,7 +1036,8 @@ if __name__ == "__main__":
                "hw-a9-appershofen-002-2234a9ae-2de1-4ad4-9f43-65c2be9696d6"]
 
     spawn_method = "dataset_one"
-    policy_type = "idm"  # "bc-all-obs-5_pi_cluster_Aggressive"  # "bc-all-obs-1.5_pi" "idm"
+    # "bc-all-obs-5_pi_cluster_Aggressive"  # "bc-all-obs-1.5_pi" "idm"  "offlinerl"
+    policy_type = "sac"
     clustering = "all"
     sim = Sim4ADSimulation(episode_name=ep_name, spawn_method=spawn_method, policy_type=policy_type,
                            clustering=clustering)

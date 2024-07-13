@@ -770,13 +770,13 @@ class Sim4ADSimulation:
             self._handle_none_lane(agent, off_road)
 
         done = collision or off_road or truncated or reached_goal
+        info = None
         if not done:
             observation = self._build_observation(state, nearby_agents_features, distance_left_lane_marking,
                                                   distance_right_lane_marking)
 
             obs = Observation(state=observation)
             # Compute the evaluation features for the agent
-            info = None
             assert self.evaluation or self.__policy_type != "rl", "We need these features to use the IRL reward"
             if self.evaluation:
                 nearby_vehicles = agent.add_nearby_vehicles(vehicles_nearby)
@@ -794,7 +794,6 @@ class Sim4ADSimulation:
             agent.add_observation(obs)
         else:
             obs = None
-            info = None
 
         return obs, info
 

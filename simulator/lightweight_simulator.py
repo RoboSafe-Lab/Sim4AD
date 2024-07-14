@@ -770,7 +770,7 @@ class Sim4ADSimulation:
             self._handle_none_lane(agent, off_road)
 
         done = collision or off_road or truncated or reached_goal
-        info = None
+        info = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated}
         if not done:
             observation = self._build_observation(state, nearby_agents_features, distance_left_lane_marking,
                                                   distance_right_lane_marking)
@@ -786,8 +786,7 @@ class Sim4ADSimulation:
                 agent.add_distance_midline(d_midline)
 
                 # Compute the features needed to use the IRL reward (and evaluation)
-                info = self._build_info(agent, nearby_vehicles, state, collision, off_road,
-                                        truncated, reached_goal, observation, done)
+                info = self._build_info(agent, nearby_vehicles, state, observation, done, info)
 
             # Put the observation in a tuple, as the policy expects it
             obs = Observation(state=observation).get_tuple()
@@ -797,19 +796,14 @@ class Sim4ADSimulation:
 
         return obs, info
 
-    def _build_info(self, agent, nearby_vehicles, state, collision, off_road,
-                    truncated, reached_goal, observation, done):
+    def _build_info(self, agent, nearby_vehicles, state, observation, done, info):
         ax, ay = agent.compute_current_lat_lon_acceleration()
         long_jerk = agent.compute_current_long_jerk()
         _, tths = self.evaluator.compute_ttc_tth(agent, state=state, nearby_vehicles=nearby_vehicles,
                                                  episode_id=None, add=False)
         thw_front, thw_rear = tths[PNA.CENTER_IN_FRONT], tths[PNA.CENTER_BEHIND]
 
-        info = {
-            "reached_goal": reached_goal,
-            "collision": collision,
-            "off_road": off_road,
-            "truncated": truncated,
+        info.update({
             "ego_speed": state.speed,
             "ego_long_acc": ax,
             "ego_lat_acc": ay,
@@ -817,7 +811,7 @@ class Sim4ADSimulation:
             "thw_front": thw_front,
             "thw_rear": thw_rear,
             "induced_deceleration": DEFAULT_DECELERATION_VALUE
-        }
+        })
 
         if self.__policy_type == "rl":
             induced_deceleration = 0

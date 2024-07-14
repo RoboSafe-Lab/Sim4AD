@@ -25,14 +25,15 @@ def get_reward(terminated, truncated, info, irl_weights=None):
     if use_rl_reward:
 
         # TODO Check that the alternative values are crrect: e.g., that if None the value should be 0 or 1
-        speed = 0 if info["ego_speed"] == 0 else np.exp(-1 / abs(info["ego_speed"]))
-        long_acc = np.exp(-1 / abs(info["ego_long_acc"])) if info["ego_long_acc"] is not None else 0
-        lat_acc = np.exp(-1 / abs(info["ego_lat_acc"])) if info["ego_lat_acc"] is not None else 0
-        long_jerk = np.exp(-1 / abs(info["ego_long_jerk"])) if info["ego_long_jerk"] != 0 else 0
-        thw_front = np.exp(-1 / abs(info["thw_front"])) if info["thw_front"] is not None else 1
-        thw_rear = np.exp(-1 / abs(info["thw_rear"])) if info["thw_rear"] is not None else 1
+        speed = np.exp(-1 / abs(info["ego_speed"])) if info["ego_speed"] else 0
+        long_acc = np.exp(-1 / abs(info["ego_long_acc"])) if info["ego_long_acc"] else 0
+        lat_acc = np.exp(-1 / abs(info["ego_lat_acc"])) if info["ego_lat_acc"] else 0
+        long_jerk = np.exp(-1 / abs(info["ego_long_jerk"])) if info["ego_long_jerk"] else 0
+        thw_front = np.exp(-1 / abs(info["thw_front"])) if info["thw_front"] else 1
+        thw_rear = np.exp(-1 / abs(info["thw_rear"])) if info["thw_rear"] else 1
         collision = info["collision"]
-        induced_deceleration = np.exp(-1 / abs(info["induced_deceleration"])) if info["induced_deceleration"] != DEFAULT_DECELERATION_VALUE else DEFAULT_DECELERATION_VALUE # TODO: check else statement
+        induced_deceleration = np.exp(-1 / abs(info["induced_deceleration"])) \
+            if info["induced_deceleration"] != DEFAULT_DECELERATION_VALUE else DEFAULT_DECELERATION_VALUE
 
         features = np.array([speed, long_acc, lat_acc, long_jerk,
                              thw_front, thw_rear, collision, induced_deceleration])

@@ -4,7 +4,7 @@ scenario.
 
 The basic structure was initially vaguely based on https://github.com/uoe-agents/IGP2/blob/main/igp2/simplesim/simulation.py
 """
-import json
+import copy
 import logging
 import random
 from collections import defaultdict
@@ -369,10 +369,11 @@ class Sim4ADSimulation:
                 continue
 
             agent = self.__agents[agent_id]
-            obs_, info_ = self._get_observation(agent, self.__state[agent_id], info)
+            obs_, info_ = self._get_observation(agent, self.__state[agent_id])
 
             if soft_reset and agent_id == self.__agent_evaluated:
-                obs, info = obs_, info_
+                obs = copy.deepcopy(obs_)
+                info = copy.deepcopy(info_)
 
         # Remove any agents that couldn't be added due to collisions at spawn.
         self.__remove_dead_agents()
@@ -648,9 +649,10 @@ class Sim4ADSimulation:
             if agent is None:
                 continue
 
-            obs_, info_ = self._get_observation(agent=agent, state=self.__state[agent_id], info=info)
+            obs_, info_ = self._get_observation(agent=agent, state=self.__state[agent_id])
             if return_obs_for_aid is not None and agent_id == return_obs_for_aid:
-                obs, info = obs_, info_
+                obs = copy.deepcopy(obs_)
+                info = copy.deepcopy(info_)
 
         return obs, info
 
@@ -742,7 +744,7 @@ class Sim4ADSimulation:
         assert off_road, f"Agent {agent.agent_id} went off the road but off_road is False. Death cause: " \
                          f"{self.__dead_agents.get(agent.agent_id)}"
 
-    def _get_observation(self, agent: PolicyAgent, state: State, info: dict) -> Tuple[Observation, dict]:
+    def _get_observation(self, agent: PolicyAgent, state: State) -> Tuple[Observation, dict]:
         """
         Get the current observation of the agent.
 
@@ -772,7 +774,10 @@ class Sim4ADSimulation:
             self._handle_none_lane(agent, off_road)
 
         done = collision or off_road or truncated or reached_goal
-        info.update({"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated})
+        info = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated,
+                "ego_speed": None, "ego_long_acc": None, "ego_lat_acc": None, "ego_long_jerk": None,
+                "thw_front": None, "thw_rear": None, "induced_deceleration": DEFAULT_DECELERATION_VALUE
+                }
         if not done:
             observation = self._build_observation(state, nearby_agents_features, distance_left_lane_marking,
                                                   distance_right_lane_marking)
@@ -812,7 +817,6 @@ class Sim4ADSimulation:
             "ego_long_jerk": long_jerk,
             "thw_front": thw_front,
             "thw_rear": thw_rear,
-            "induced_deceleration": DEFAULT_DECELERATION_VALUE
         })
 
         if self.__policy_type == "rl":

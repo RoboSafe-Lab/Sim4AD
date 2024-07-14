@@ -357,7 +357,8 @@ class Sim4ADSimulation:
             self._add_agent(agent=agent, policy=policy)
 
         # Generate the first observation for the new agents
-        obs_to_return = None, None
+        obs = None
+        info = {}
         for agent_id, _ in add_agents.items():
 
             if agent_id in self.__dead_agents:
@@ -368,15 +369,15 @@ class Sim4ADSimulation:
                 continue
 
             agent = self.__agents[agent_id]
-            obs = self._get_observation(agent, self.__state[agent_id])
+            obs_, info_ = self._get_observation(agent, self.__state[agent_id], info)
 
             if soft_reset and agent_id == self.__agent_evaluated:
-                obs_to_return = obs
+                obs, info = obs_, info_
 
         # Remove any agents that couldn't be added due to collisions at spawn.
         self.__remove_dead_agents()
 
-        return obs_to_return
+        return obs, info
 
     def __remove_dead_agents(self):
         # REMOVE DEAD AGENTS
@@ -640,17 +641,18 @@ class Sim4ADSimulation:
         :return:
         """
         # Compute the observation for each agent for the current state
-        obs_to_return = None
+        obs = None
+        info = {}
         for agent_id, agent in self.__agents.items():
 
             if agent is None:
                 continue
 
-            obs = self._get_observation(agent=agent, state=self.__state[agent_id])
+            obs_, info_ = self._get_observation(agent=agent, state=self.__state[agent_id], info=info)
             if return_obs_for_aid is not None and agent_id == return_obs_for_aid:
-                obs_to_return = obs
+                obs, info = obs_, info_
 
-        return obs_to_return
+        return obs, info
 
     def _next_state(self, agent: PolicyAgent, current_state: State, action: Action) -> State:
         """
@@ -740,7 +742,7 @@ class Sim4ADSimulation:
         assert off_road, f"Agent {agent.agent_id} went off the road but off_road is False. Death cause: " \
                          f"{self.__dead_agents.get(agent.agent_id)}"
 
-    def _get_observation(self, agent: PolicyAgent, state: State) -> Tuple[Observation, dict]:
+    def _get_observation(self, agent: PolicyAgent, state: State, info: dict) -> Tuple[Observation, dict]:
         """
         Get the current observation of the agent.
 
@@ -770,7 +772,7 @@ class Sim4ADSimulation:
             self._handle_none_lane(agent, off_road)
 
         done = collision or off_road or truncated or reached_goal
-        info = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated}
+        info.update({"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated})
         if not done:
             observation = self._build_observation(state, nearby_agents_features, distance_left_lane_marking,
                                                   distance_right_lane_marking)
@@ -786,7 +788,7 @@ class Sim4ADSimulation:
                 agent.add_distance_midline(d_midline)
 
                 # Compute the features needed to use the IRL reward (and evaluation)
-                info = self._build_info(agent, nearby_vehicles, state, observation, done, info)
+                self._update_info(agent, nearby_vehicles, state, observation, done, info)
 
             # Put the observation in a tuple, as the policy expects it
             obs = Observation(state=observation).get_tuple()
@@ -796,7 +798,7 @@ class Sim4ADSimulation:
 
         return obs, info
 
-    def _build_info(self, agent, nearby_vehicles, state, observation, done, info):
+    def _update_info(self, agent, nearby_vehicles, state, observation, done, info):
         ax, ay = agent.compute_current_lat_lon_acceleration()
         long_jerk = agent.compute_current_long_jerk()
         _, tths = self.evaluator.compute_ttc_tth(agent, state=state, nearby_vehicles=nearby_vehicles,
@@ -843,6 +845,7 @@ class Sim4ADSimulation:
         :param ego_v:               velocity of the ego vehicle
         :param ego_length:          length of the ego vehicle
         :param ego_rear_d:          distance between the ego vehicle and the rear vehicle
+        :param rear_agent:
         :param rear_a:              acceleration of the rear vehicle
         :param rear_position:       position of the rear vehicle
         :return:

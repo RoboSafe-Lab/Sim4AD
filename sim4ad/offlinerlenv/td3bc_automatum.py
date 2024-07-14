@@ -215,7 +215,8 @@ def eval_actor(
             action = actor.act(state, device)
             state, reward, terminated, truncated, _ = env.step(action)
             episode_reward.append(reward)
-            state = normalize_states(state.reshape(1, -1), state_mean, state_std)
+            if state is not None:
+                state = normalize_states(state.reshape(1, -1), state_mean, state_std)
         episode_reward = normalized_rewards(np.array(episode_reward), reward_mean, reward_std)
         episode_rewards.append(sum(episode_reward))
 

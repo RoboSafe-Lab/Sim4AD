@@ -29,7 +29,7 @@ class SimulatorEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 4, "cluster": DEFAULT_CLUSTER} # todo: change cluster name
     SPAWN_METHOD = "dataset_one"  # We assume there is a todo: change spawn method
 
-    def __init__(self, render_mode: str = None, config: dict = None, seed: int = None):
+    def __init__(self, render_mode: str = None, config: dict = None, seed: int = None, clustering: str = "all"):
         """
         Args:s
             config: Configuration for the environment.
@@ -46,7 +46,7 @@ class SimulatorEnv(gym.Env):
 
         self.simulation = Sim4ADSimulation(episode_name=self.episode_names, policy_type="rl",
                                            simulation_name=f"gym_sim_{self.episode_names}",
-                                           spawn_method=self.SPAWN_METHOD)
+                                           spawn_method=self.SPAWN_METHOD, clustering=clustering)
 
         # At each step, the agent must choose the acceleration and yaw rate.
         self.MIN_YAW_RATE = -0.08

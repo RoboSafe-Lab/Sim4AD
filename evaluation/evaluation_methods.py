@@ -338,8 +338,8 @@ def get_results(policies_to_evaluate, map_to_use):
     return results
 
 def main():
-    RUN = False
-    policies_to_evaluate = ["bc-all-obs-5_pi_cluster_all", "sac_5_rl","idm" ]
+    RUN = True
+    policies_to_evaluate =  ['results/offlineRL/checkpoint'] # ["bc-all-obs-5_pi_cluster_General"]
     normal_map = "appershofen"
     generalisation_map = "hausen"
 

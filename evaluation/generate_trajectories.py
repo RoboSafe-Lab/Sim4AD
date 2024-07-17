@@ -1,7 +1,7 @@
 from sim4ad.path_utils import get_file_name_trajectories, get_path_to_automatum_scenario, get_path_to_automatum_map, \
     get_config_path, get_path_offlinerl_model
 from simulator.lightweight_simulator import Sim4ADSimulation
-from sim4ad.offlinerlenv.td3bc_automatum import TD3_BC_TrainerLoader, TrainConfig
+from sim4ad.offlinerlenv.td3bc_automatum import TD3_BC_TrainerLoader, TrainConfig, normalize_states
 
 import os
 import pickle
@@ -49,6 +49,7 @@ def generate_trajectories(policy_type, spawn_method, irl_weights, episode_name:L
     model_path = get_path_offlinerl_model()
     trainer_loader = TD3_BC_TrainerLoader(TrainConfig)
     trainer_loader.load_model(model_path)
+    trainer_loader.actor.eval()
 
     simulation_length = "done" # seconds
 
@@ -69,14 +70,19 @@ def generate_trajectories(policy_type, spawn_method, irl_weights, episode_name:L
     assert simulation_length == "done"
     while not looped_dataset:
         obs, info = gym_env.reset(seed=0) # TODO: set seed!
+        # normalize the obs before using the offline rl policy
+        obs = normalize_states(np.array(obs).reshape(1, -1), trainer_loader.state_mean, trainer_loader.state_std)
 
         episode_done = False
         while not episode_done:
             # TODO done = sim.step(return_done=True)
             action = trainer_loader.actor(torch.tensor(obs, dtype=torch.float32, device='cuda')) # TODO: deterministic=True) # TODO: deterministic?
             action = action.cpu().detach().numpy()
-            next_obs, reward, terminated, truncated, info = gym_env.step(action)
+            next_obs, reward, terminated, truncated, info = gym_env.step(action[0])
             done = terminated or truncated
+            if next_obs is not None:
+                next_obs = normalize_states(np.array(next_obs).reshape(1, -1), trainer_loader.state_mean,
+                                            trainer_loader.state_std)
             obs = next_obs
 
             steps += 1
@@ -88,6 +94,7 @@ def generate_trajectories(policy_type, spawn_method, irl_weights, episode_name:L
                 break
 
         looped_dataset = gym_env.unwrapped.simulation.done_full_cycle
+        gym_env.unwrapped.simulation.replay_simulation()
 
     gym_env.unwrapped.simulation.kill_all_agents()
 

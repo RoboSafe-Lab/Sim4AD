@@ -898,7 +898,9 @@ class Sim4ADSimulation:
                     original_agent = self.__episode_agents[agent_id]
                     initial_time = original_agent.time[0]
                     time_idx = int((time - initial_time) / self.__dt)
-                    ax.plot(original_agent.x_vec[time_idx], original_agent.y_vec[time_idx], marker=",", color=color)
+                    if time_idx < len(original_agent.x_vec):
+                        ax.plot(original_agent.x_vec[time_idx], original_agent.y_vec[time_idx],
+                                marker='o', markersize=5, color=color)
 
                 position = np.array([state.position.x, state.position.y])
                 ax.plot(*position, marker=".", color=color)

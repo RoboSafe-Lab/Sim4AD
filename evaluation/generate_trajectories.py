@@ -73,7 +73,7 @@ def generate_trajectories(policy_type, spawn_method, irl_weights, episode_name:L
         episode_done = False
         while not episode_done:
             # TODO done = sim.step(return_done=True)
-            action = trainer_loader.actor(torch.tensor(obs, dtype=torch.float32, device='cuda')) # TODO: deterministic=True) # TODO: deterministic?
+            action = trainer_loader.actor(torch.tensor(obs, dtype=torch.float32, device='mps')) # TODO: deterministic=True) # TODO: deterministic?
             action = action.cpu().detach().numpy()
             next_obs, reward, terminated, truncated, info = gym_env.step(action)
             done = terminated or truncated
@@ -88,6 +88,7 @@ def generate_trajectories(policy_type, spawn_method, irl_weights, episode_name:L
                 break
 
         looped_dataset = gym_env.unwrapped.simulation.done_full_cycle
+        gym_env.unwrapped.simulation.replay_simulation()
 
     gym_env.unwrapped.simulation.kill_all_agents()
 

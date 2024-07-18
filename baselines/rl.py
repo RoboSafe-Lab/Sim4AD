@@ -44,6 +44,7 @@ if __name__ == "__main__":
     def evaluate_model(model, env, num_episodes=10):
         total_rewards = []
         for _ in range(num_episodes):
+            # TODO: use fixed seeding for evaluation episodes
             obs = env.reset()
             done = False
             total_reward = 0.0

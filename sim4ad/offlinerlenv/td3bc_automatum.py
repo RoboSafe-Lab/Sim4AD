@@ -308,7 +308,6 @@ class TD3_BC:
 
     def train(self, batch: TensorBatch) -> Dict[str, float]:
         log_dict = {}
-        self.total_it += 1
 
         state, action, reward, next_state, done = batch
         not_done = 1 - done
@@ -667,6 +666,7 @@ def train(config: TrainConfig):
                     iteration_log_dict[key].append(value)
                 else:
                     iteration_log_dict[key] = [value]
+        trainer.total_it += 1
 
         # Calculate the average of the accumulated logs for this iteration
         averaged_log_dict = {key: sum(values) / len(values) for key, values in iteration_log_dict.items()}

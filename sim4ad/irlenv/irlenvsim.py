@@ -320,26 +320,16 @@ class IRLEnv:
         # time headway front (thw_front) and time headway behind (thw_rear)
         thw_front, thw_rear = self._get_thw()
 
-        # avoid collision
-        collision = 1 if self.vehicle.crashed or not self.vehicle.on_road else 0
-
-        # induced decelerations
-        induced_deceleration = 0
-        _, rear_vehicle = DatasetVehicle.get_front_rear_vehicle(self.active_vehicles, self.vehicle)
-        # find the nearest rear vehicle
-        v = rear_vehicle[0]
-        if v is not None and v.overridden and (v.velocity[0] != 0 or v.velocity[1] != 0):
-            induced_deceleration = np.abs(v.velocity[0] - v.velocity_history[-1][0]) / self.delta_t \
-                if v.velocity[0] - v.velocity_history[-1][0] < 0 else 0
-
-        induced_deceleration = abs(induced_deceleration)
+        # centerline deviation
+        _, d = utils.local2frenet(self.vehicle.position, self.vehicle.lane.midline)
+        d_centerline = abs(d)
 
         # ego vehicle human-likeness
         ego_likeness = self.vehicle.calculate_human_likeness()
 
         # feature array
         features = np.array([ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk,
-                             thw_front, thw_rear, collision, induced_deceleration])
+                             thw_front, thw_rear, d_centerline])
 
         # normalize features using exponential
         normalized_features = self.exponential_normalization(features)
@@ -383,8 +373,8 @@ class IRLEnv:
         """Using exponential for normalization"""
         normalized_features = [None for _ in range(len(features))]
         for inx, feature in enumerate(features):
-            # skip THW, collision
-            if inx == 4 or inx == 5 or inx == 6:
+            # skip THW
+            if inx == 4 or inx == 5:
                 normalized_features[inx] = feature
             else:
                 normalized_features[inx] = np.exp(-1 / feature) if feature else 0

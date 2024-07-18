@@ -37,7 +37,7 @@ class TrainConfig:
     # TD3
     buffer_size: int = 2_000  # Replay buffer size
     batch_size: int = 256  # Batch size for all networks
-    discount: float = 0.99  # Discount ffor
+    discount: float = 0.99  # Discount
     expl_noise: float = 0.1  # Std of Gaussian exploration noise
     tau: float = 0.005  # Target network update rate
     policy_noise: float = 0.2  # Noise added to target actor during critic update
@@ -45,8 +45,8 @@ class TrainConfig:
     policy_freq: int = 2  # Frequency of delayed actor updates
     # TD3 + BC
     alpha: float = 2.5  # Coefficient for Q function in actor loss
-    normalize: bool = True  # Normalize states
-    normalize_reward: bool = False  # Normalize reward
+    normalize: bool = True  # get mean and std of state and reward
+    normalize_reward: bool = True  # Normalize reward
     # Wandb logging
     project: str = "CORL"
     group: str = "TD3_BC-Automatum"
@@ -89,23 +89,31 @@ def wrap_env(
         env: gym.Env,
         state_mean: Union[np.ndarray, float] = 0.0,
         state_std: Union[np.ndarray, float] = 1.0,
-        reward_scale: float = 1.0,
+        reward_mean: float = 0.0,
+        reward_std: float = 1.0,
+        reward_normalization: bool = False,
 ) -> gym.Env:
     # PEP 8: E731 do not assign a lambda expression, use a def
     def normalize_state(state):
         if state is None:
             return state
-        return (
-                state - state_mean
-        ) / state_std  # epsilon should be already added in std.
+        else:
+            mask = state != MISSING_NEARBY_AGENT_VALUE
+            for i in range(state.shape[1]):
+                col_mask = mask[:, i]
+                state[col_mask, i] = (state[col_mask, i] - state_mean[i]) / state_std[i]
+            return state
 
-    def scale_reward(reward):
-        # Please be careful, here reward is multiplied by scale!
-        return reward_scale * reward
+    def normalize_reward(reward):
+        if reward is None:
+            return reward
+        return (
+            reward - reward_mean
+        ) / reward_std  # epsilon should be already added in std.
 
     env = gym.wrappers.TransformObservation(env, normalize_state)
-    if reward_scale != 1.0:
-        env = gym.wrappers.TransformReward(env, scale_reward)
+    if reward_normalization:
+        env = gym.wrappers.TransformReward(env, normalize_reward)
     return env
 
 
@@ -205,20 +213,16 @@ def eval_actor(
     # one agent is evaluated for n_episodes times
     for _ in range(n_episodes):
         state = env.reset()
-        terminated = False
-        truncated = False
+        terminated,truncated = False, False
         # State is tuple from simulator_env
         state = state[0]
-        state = normalize_states(state.reshape(1, -1), state_mean, state_std)
-        episode_reward = []
+        episode_reward = 0.0
         while not terminated and not truncated:
             action = actor.act(state, device)
             state, reward, terminated, truncated, _ = env.step(action)
-            episode_reward.append(reward)
-            if state is not None:
-                state = normalize_states(state.reshape(1, -1), state_mean, state_std)
-        episode_reward = normalized_rewards(np.array(episode_reward), reward_mean, reward_std)
-        episode_rewards.append(sum(episode_reward))
+            episode_reward += reward
+
+        episode_rewards.append(episode_reward)
 
     actor.train()
     return np.asarray(episode_rewards)
@@ -613,7 +617,9 @@ def train(config: TrainConfig):
 
     wandb_init(asdict(config))
 
-    env = wrap_env(trainer_loader.env, state_mean=trainer_loader.state_mean, state_std=trainer_loader.state_std)
+    env = wrap_env(trainer_loader.env, state_mean=trainer_loader.state_mean, state_std=trainer_loader.state_std,
+                   reward_mean=trainer_loader.reward_mean, reward_std=trainer_loader.reward_std,
+                   reward_normalization=config.normalize_reward)
 
     ref_max_score = -float('inf')
     ref_min_score = float('inf')

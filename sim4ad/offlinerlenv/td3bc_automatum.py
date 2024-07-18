@@ -17,7 +17,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import wandb
 import pickle
-from numpy import ndarray
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 
 TensorBatch = List[torch.Tensor]
@@ -98,6 +97,7 @@ def wrap_env(
         if state is None:
             return state
         else:
+            state = np.array(state).reshape(1, -1)
             mask = state != MISSING_NEARBY_AGENT_VALUE
             for i in range(state.shape[1]):
                 col_mask = mask[:, i]
@@ -105,11 +105,9 @@ def wrap_env(
             return state
 
     def normalize_reward(reward):
-        if reward is None:
-            return reward
-        return (
-            reward - reward_mean
-        ) / reward_std  # epsilon should be already added in std.
+        reward = (reward - reward_mean) / reward_std  # epsilon should be already added in std.
+        reward = np.clip(reward, -1, 1)
+        return float(reward)
 
     env = gym.wrappers.TransformObservation(env, normalize_state)
     if reward_normalization:
@@ -203,9 +201,7 @@ def wandb_init(config: dict) -> None:
 
 @torch.no_grad()
 def eval_actor(
-        env: gym.Env, actor: nn.Module, device: str, n_episodes: int, seed: int, state_mean: ndarray,
-        state_std: ndarray,
-        reward_mean: float, reward_std: float
+        env: gym.Env, actor: nn.Module, device: str, n_episodes: int, seed: int
 ) -> np.ndarray:
     env.reset(seed=seed)
     actor.eval()
@@ -213,7 +209,7 @@ def eval_actor(
     # one agent is evaluated for n_episodes times
     for _ in range(n_episodes):
         state = env.reset()
-        terminated,truncated = False, False
+        terminated, truncated = False, False
         # State is tuple from simulator_env
         state = state[0]
         episode_reward = 0.0
@@ -450,8 +446,7 @@ def qlearning_dataset(dataset=None):
     }
 
 
-def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score,
-             state_mean, state_std, reward_mean, reward_std):
+def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score):
     """evaluate the policy at certain evaluation frequency"""
     # Evaluate episode
     eval_scores = eval_actor(
@@ -460,10 +455,6 @@ def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_sc
         device=config.device,
         n_episodes=config.n_episodes,
         seed=config.seed,
-        state_mean=state_mean,
-        state_std=state_std,
-        reward_mean=reward_mean,
-        reward_std=reward_std
     )
     eval_score = eval_scores.mean()
     normalized_eval_score = get_normalized_score(eval_score, ref_max_score, ref_min_score) * 100.0
@@ -682,9 +673,7 @@ def train(config: TrainConfig):
         if (t + 1) % config.eval_freq == 0:
             logger.info(f'evaluate at time step: {t + 1}')
             # evaluate the policy
-            evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score,
-                     trainer_loader.state_mean, trainer_loader.state_std,
-                     trainer_loader.reward_mean, trainer_loader.reward_std)
+            evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score)
 
 
 if __name__ == "__main__":

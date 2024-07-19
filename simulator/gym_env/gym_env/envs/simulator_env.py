@@ -86,8 +86,10 @@ class SimulatorEnv(gym.Env):
 
         if seed is None:
             seed = self.seed_used
-        super().reset(seed=seed)
-        self.seed(seed)
+
+        if seed is not None:
+            super().reset(seed=seed)
+            self.seed(seed)
 
         obs, info = self.simulation.soft_reset()
         return np.array(obs, dtype=np.float32), info

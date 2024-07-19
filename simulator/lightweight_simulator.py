@@ -274,7 +274,7 @@ class Sim4ADSimulation:
         """
         Advance simulation by one time step.
         If action is provided, we will use that action for the agent being evaluated (only if policy is "rl").
-        Order is (acceleration, steering angle).
+        Order is (acceleration, yaw_rate).
         """
 
         logger.debug(f"Simulation time {self.__time}")
@@ -473,7 +473,7 @@ class Sim4ADSimulation:
         """
         Advance all agents by one time step.
         :param ego_action: only used it if the policy is "rl" for the ego vehicle (self.__agent_evaluated).
-                            order is (acceleration, steering angle)
+                            order is (acceleration, yaw_rate)
         """
 
         # A frame is a dictionary (agent_id, State)
@@ -494,7 +494,7 @@ class Sim4ADSimulation:
                 new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
             elif agent.policy == "rl":
                 assert agent_id == self.__agent_evaluated, "Only the agent being evaluated can have policy 'rl'"
-                action = Action(acceleration=ego_action[0], steer_angle=ego_action[1])
+                action = Action(acceleration=ego_action[0], yaw_rate=ego_action[1])
                 new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
             else:
                 raise NotImplementedError(f"Policy {agent.policy} not found.")
@@ -549,19 +549,20 @@ class Sim4ADSimulation:
             deltas = ExtractObservationAction.extract_yaw_rate(agent=dataset_agent)
             acceleration = np.sqrt(float(dataset_agent.ax_vec[dataset_time_step]) ** 2 +
                                    float(dataset_agent.ay_vec[dataset_time_step]) ** 2)
-            action = Action(acceleration=acceleration, steer_angle=deltas[dataset_time_step])
+            action = Action(acceleration=acceleration, yaw_rate=deltas[dataset_time_step])
 
             if dataset_time_step + 1 < len(dataset_agent.x_vec):
-                position = Point(dataset_agent.x_vec[dataset_time_step + 1], dataset_agent.y_vec[dataset_time_step + 1])
-                speed = np.sqrt(float(dataset_agent.vx_vec[dataset_time_step + 1]) ** 2 +
-                                float(dataset_agent.vy_vec[dataset_time_step + 1]) ** 2)
-                heading = dataset_agent.psi_vec[dataset_time_step + 1]
-                acceleration = np.sqrt(float(dataset_agent.ax_vec[dataset_time_step + 1]) ** 2 +
-                                       float(dataset_agent.ay_vec[dataset_time_step + 1]) ** 2)
-                new_state = State(time=self.__time + self.__dt, position=position, speed=speed,
-                                  acceleration=acceleration,
-                                  heading=heading, lane=agent.state.lane, agent_width=agent.meta.width,
-                                  agent_length=agent.meta.length)
+                # position = Point(dataset_agent.x_vec[dataset_time_step + 1], dataset_agent.y_vec[dataset_time_step + 1])
+                # speed = np.sqrt(float(dataset_agent.vx_vec[dataset_time_step + 1]) ** 2 +
+                #                 float(dataset_agent.vy_vec[dataset_time_step + 1]) ** 2)
+                # heading = dataset_agent.psi_vec[dataset_time_step + 1]
+                # acceleration = np.sqrt(float(dataset_agent.ax_vec[dataset_time_step + 1]) ** 2 +
+                #                        float(dataset_agent.ay_vec[dataset_time_step + 1]) ** 2)
+                # new_state = State(time=self.__time + self.__dt, position=position, speed=speed,
+                #                   acceleration=acceleration,
+                #                   heading=heading, lane=agent.state.lane, agent_width=agent.meta.width,
+                #                   agent_length=agent.meta.length)
+                new_state = self.__get_original_current_state(dataset_agent)
             else:
                 new_state = agent.state
                 self.__dead_agents[agent_id] = DeathCause.GOAL_REACHED
@@ -655,13 +656,13 @@ class Sim4ADSimulation:
         """
         Compute the next state based on the current state and action using the bicycle model.
 
-        Apply acceleration and steering according to the bicycle model centered at the center-of-gravity (i.e. cg)
+        Apply acceleration and yaw rate according to the bicycle model centered at the center-of-gravity (i.e. cg)
         of the vehicle.
 
         Ref: https://dingyan89.medium.com/simple-understanding-of-kinematic-bicycle-model-81cac6420357
 
         :param current_state: The current State.
-        :param action: Acceleration and steering action to execute
+        :param action: Acceleration and yaw rate action to execute
         :return: The next State.
         """
 
@@ -671,14 +672,14 @@ class Sim4ADSimulation:
         # speed = current_state.speed + acceleration * self.__dt
         # speed = max(0, speed)
         #
-        # beta = np.arctan(agent._l_r * np.tan(action.steer_angle) / agent.meta.wheelbase)
+        # beta = np.arctan(agent._l_r * np.tan(action.yaw_rate) / agent.meta.wheelbase)
         # d_position = np.array(
         #     [speed * np.cos(beta + current_state.heading),
         #      speed * np.sin(beta + current_state.heading)]
         # )
         #
         # center = np.array([current_state.position.x, current_state.position.y]) + d_position * self.__dt
-        # d_theta = speed * np.tan(action.steer_angle) * np.cos(beta) / agent.meta.wheelbase
+        # d_theta = speed * np.tan(action.yaw_rate) * np.cos(beta) / agent.meta.wheelbase
         # d_theta = np.clip(d_theta, - agent.meta.max_angular_vel, agent.meta.max_angular_vel)
         # heading = (current_state.heading + d_theta * self.__dt + np.pi) % (2 * np.pi) - np.pi
 
@@ -696,7 +697,7 @@ class Sim4ADSimulation:
             heading = new_lane.get_heading_at(center_ds)
 
         else:
-            d_theta = action.steer_angle
+            d_theta = action.yaw_rate
 
             # update heading but respect the (-pi, pi) convention
             heading = (current_state.heading + d_theta * self.__dt + np.pi) % (2 * np.pi) - np.pi
@@ -1034,7 +1035,7 @@ if __name__ == "__main__":
 
     spawn_method = "dataset_one"
     # "bc-all-obs-5_pi_cluster_Aggressive"  # "bc-all-obs-1.5_pi" "idm"
-    policy_type = "sac"
+    policy_type = "follow_dataset"
     clustering = "all"
     sim = Sim4ADSimulation(episode_name=ep_name, spawn_method=spawn_method, policy_type=policy_type,
                            clustering=clustering)

@@ -66,14 +66,17 @@ class Args:
     hidden_layer_dim = 256
     """the hidden layer dimension of (all) the networks"""
 
-    evaluation_seeds: List[int] = (0, 1, 2, 3, 4)  # TODO: change this to 5 different seeds
+    use_irl_reward: bool = False
+    """whether to use the IRL reward or the basic default reward"""
+
+    evaluation_seeds: List[int] = (0, 1, 2, 3, 4)  # TODO: change this to 5 different seeds -- currently not used
 
 
 def make_env(env_id, seed, run_name, evaluation=False):
     if evaluation:
-        env = gym.make(env_id, dataset_split="valid")
+        env = gym.make(env_id, dataset_split="valid", use_irl_reward=args.use_irl_reward)
     else:
-        env = gym.make(env_id)
+        env = gym.make(env_id, use_irl_reward=args.use_irl_reward)
     env = gym.wrappers.RecordEpisodeStatistics(env)
     env.action_space.seed(seed)
     return env
@@ -164,6 +167,7 @@ def evaluate(evaluation_seeds):
 
 if __name__ == "__main__":
     import stable_baselines3 as sb3
+    import argparse
 
     if sb3.__version__ < "2.0":
         raise ValueError(
@@ -235,6 +239,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     obs, _ = env.reset(seed=args.seed)
     episodic_return = 0
     episodic_length = 0
+    best_eval = -1e6
     for global_step in range(args.total_timesteps):
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
@@ -345,7 +350,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
             # Evaluate the agent on 5 different seeds
             if global_step % 1000 == 0:
-                evaluate(args.evaluation_seeds)
+                eval_return = evaluate(args.evaluation_seeds)
+                if eval_return > best_eval:
+                    best_eval = eval_return
+                    print("Saving new best model")
+                    torch.save(actor.state_dict(), "best_model_sac.pth")
 
     env.close()
     eval_env.close()

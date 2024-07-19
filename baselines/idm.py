@@ -38,7 +38,7 @@ class IDM:
         if agent_in_front is None:
             acc = self.a * (1 - np.power(v / self.v0, self.DELTA))
             acc = np.clip(acc, -self.a, self.a)
-            return Action(acceleration=float(acc), steer_angle=0.0)
+            return Action(acceleration=float(acc), yaw_rate=0.0)
 
         x_front = agent_in_front["position"]
         v_front = agent_in_front["speed"]
@@ -50,7 +50,7 @@ class IDM:
 
         acc = np.clip(acc, -self.a, self.a)
 
-        return Action(acceleration=float(acc), steer_angle=0)
+        return Action(acceleration=float(acc), yaw_rate=0)
 
     def activated(self):
         return self.v0 is not None

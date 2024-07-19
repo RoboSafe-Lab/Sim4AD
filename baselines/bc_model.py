@@ -30,9 +30,9 @@ class LSTMModel(nn.Module):
         out = self.fc(out)
 
         MAX_ACCELERATION = 5 # [m/s]
-        MAX_STEERING_ANGLE = np.pi
+        MAX_YAW_RATE = 0.7 # [rad/s]
 
         # We want the output to be between -max_acceleration and max_acceleration and
-        # between -max_steering_angle and max_steering_angle
-        scaling = torch.tensor([MAX_ACCELERATION, MAX_STEERING_ANGLE]).to(out.device)
+        # between -MAX_YAW_RATE and MAX_YAW_RATE
+        scaling = torch.tensor([MAX_ACCELERATION, MAX_YAW_RATE]).to(out.device)
         return out * scaling

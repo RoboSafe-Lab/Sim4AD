@@ -67,7 +67,7 @@ class PolicyAgent:
             (acceleration, delta), _ = self.policy.predict(obs, deterministic=True)
         else:
             acceleration, delta = self.policy(history)[0].tolist()
-        action = Action(acceleration=acceleration, steer_angle=delta)
+        action = Action(acceleration=acceleration, yaw_rate=delta)
 
         return action
 

@@ -21,8 +21,7 @@ def get_reward(terminated, truncated, info, irl_weights=None):
     Currently, it is a sparse reward function that is zero but when agent reaches the goal, collides or goes off-road.
     """
 
-    use_rl_reward = True # TODO: set as variable
-    if use_rl_reward:
+    if irl_weights is not None:
 
         # TODO Check that the alternative values are crrect: e.g., that if None the value should be 0 or 1
         speed = np.exp(-1 / abs(info["ego_speed"])) if info["ego_speed"] else 0

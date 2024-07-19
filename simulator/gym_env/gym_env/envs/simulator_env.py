@@ -30,7 +30,7 @@ class SimulatorEnv(gym.Env):
     SPAWN_METHOD = "dataset_one"  # We assume there is a todo: change spawn method
 
     def __init__(self, render_mode: str = None, config: dict = None, seed: int = None, clustering: str = "all",
-                 dataset_split: str = "train"):
+                 dataset_split: str = "train", use_irl_reward: bool = False):
         """
         Args:
             config: Configuration for the environment.
@@ -65,7 +65,9 @@ class SimulatorEnv(gym.Env):
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
-        self.load_weights()
+
+        if use_irl_reward:
+            self.load_weights()
         self.seed_used = seed
 
     def seed(self, seed=None):
@@ -93,7 +95,7 @@ class SimulatorEnv(gym.Env):
     def step(self, action):
         """
 
-        :param action: (acceleration, steering_angle)
+        :param action: (acceleration, yaw_rate)
         :return:
         """
 

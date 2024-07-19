@@ -107,15 +107,15 @@ class Action:
     Class for an action in the simulator.
     """
 
-    def __init__(self, acceleration: float, steer_angle: float):
+    def __init__(self, acceleration: float, yaw_rate: float):
         self.__acceleration = acceleration
-        self.__steer_angle = steer_angle
+        self.__yaw_rate = yaw_rate
 
     @property
     def acceleration(self):
         return self.__acceleration
 
     @property
-    def steer_angle(self):
-        return self.__steer_angle
+    def yaw_rate(self):
+        return self.__yaw_rate
 

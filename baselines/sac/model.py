@@ -104,8 +104,9 @@ LOG_STD_MIN = -5
 
 
 class Actor(nn.Module):
-    def __init__(self, env):
+    def __init__(self, env, device):
         super().__init__()
+        self.device = device
         self.fc1 = nn.Linear(np.array(env.observation_space.shape).prod(), 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc_mean = nn.Linear(256, np.prod(env.action_space.shape))
@@ -129,6 +130,10 @@ class Actor(nn.Module):
         return mean, log_std
 
     def get_action(self, obs):
+
+        if not isinstance(obs, torch.Tensor):
+            obs = torch.Tensor(obs).to(self.device)
+
         # Given the observation, find the mean and log_std of the action distribution
         mean, log_std = self(obs)
         std = log_std.exp()
@@ -145,6 +150,17 @@ class Actor(nn.Module):
         log_prob = log_prob.sum()  # We want a scalar for the log probability of the different dimensions of the action
         mean = torch.tanh(mean) * self.action_scale + self.action_bias
         return action, log_prob, mean
+
+    def act(self, obs, deterministic=False):
+
+        action, log_prob, mean = self.get_action(obs)
+
+        if deterministic:
+            # Return the most likely action
+            return mean
+
+        # otherwise, sample an action from the distribution
+        return action
 
 def evaluate(evaluation_seeds):
     actor.eval()
@@ -163,6 +179,7 @@ def evaluate(evaluation_seeds):
                 break
     wandb.log({"charts/eval_return": np.mean(all_test_rets)})
     actor.train()
+    return np.mean(all_test_rets)
 
 
 if __name__ == "__main__":
@@ -206,7 +223,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     max_action = float(env.action_space.high[0])
 
-    actor = Actor(env).to(device)
+    actor = Actor(env, device=device).to(device)
     qf1 = SoftQNetwork(env).to(device)
     qf2 = SoftQNetwork(env).to(device)
     qf1_target = SoftQNetwork(env).to(device)
@@ -354,7 +371,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 if eval_return > best_eval:
                     best_eval = eval_return
                     print("Saving new best model")
-                    torch.save(actor.state_dict(), "best_model_sac.pth")
+                    torch.save(actor.state_dict(), f"best_model_sac_{run_name}.pth")
 
     env.close()
     eval_env.close()

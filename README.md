@@ -29,4 +29,5 @@ or "idm" for IDM
 - first install igp2 (sim4ad branch) with `pip3 install -e .` in the root folder of IGP2 after cloning
 - then pip install -e . in the root folder of sim4ad # todo update the requirements
 t
-- 
+- install Pytorch from the official website
+- `pip install -r requirements.txt` in the root folder of sim4ad

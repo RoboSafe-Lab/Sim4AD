@@ -3,6 +3,7 @@ import os
 import random
 import time
 from dataclasses import dataclass
+from typing import List
 
 import gymnasium as gym
 import numpy as np
@@ -12,9 +13,9 @@ import torch.nn.functional as F
 import torch.optim as optim
 import tyro
 from stable_baselines3.common.buffers import ReplayBuffer
-from torch.utils.tensorboard import SummaryWriter
 
 import gym_env  # If this fails, install it with `pip install -e .` from \simulator\gym_env
+
 
 @dataclass
 class Args:
@@ -36,7 +37,7 @@ class Args:
     """whether to capture videos of the agent performances (check out `videos` folder)"""
 
     # Algorithm specific arguments
-    env_id: str = "SimulatorEnv-v0" # "Hopper-v4"
+    env_id: str = "SimulatorEnv-v0"  # "Hopper-v4"
     """the environment id of the task"""
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
@@ -65,11 +66,12 @@ class Args:
     hidden_layer_dim = 256
     """the hidden layer dimension of (all) the networks"""
 
+    evaluation_seeds: List[int] = (0, 1, 2, 3, 4)  # TODO: change this to 5 different seeds
 
-def make_env(env_id, seed, idx, capture_video, run_name):
-    if capture_video and idx == 0:
-        env = gym.make(env_id, render_mode="rgb_array")
-        env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
+
+def make_env(env_id, seed, run_name, evaluation=False):
+    if evaluation:
+        env = gym.make(env_id, dataset_split="valid")
     else:
         env = gym.make(env_id)
     env = gym.wrappers.RecordEpisodeStatistics(env)
@@ -137,9 +139,27 @@ class Actor(nn.Module):
         log_prob = normal.log_prob(x_t)
         # Enforcing Action Bound
         log_prob -= torch.log(self.action_scale * (1 - y_t.pow(2)) + 1e-6)
-        log_prob = log_prob.sum() # We want a scalar for the log probability of the different dimensions of the action
+        log_prob = log_prob.sum()  # We want a scalar for the log probability of the different dimensions of the action
         mean = torch.tanh(mean) * self.action_scale + self.action_bias
         return action, log_prob, mean
+
+def evaluate(evaluation_seeds):
+    actor.eval()
+    all_test_rets = []
+    for seed in evaluation_seeds:
+        obs, _ = eval_env.reset(seed=seed)  # TODO: currently the seed may not do anything (?)
+        episodic_return = 0
+        while True:
+            action, _, _ = actor.get_action(torch.Tensor(obs).to(device))
+            action = action.detach().cpu().numpy()
+            next_obs, reward, termination, truncation, info = eval_env.step(action)
+            episodic_return += reward
+            obs = next_obs
+            if termination or truncation:
+                all_test_rets.append(episodic_return)
+                break
+    wandb.log({"charts/eval_return": np.mean(all_test_rets)})
+    actor.train()
 
 
 if __name__ == "__main__":
@@ -159,7 +179,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     wandb.init(
         project=args.wandb_project_name,
         entity=args.wandb_entity,
-        sync_tensorboard=True,
+        sync_tensorboard=False,
         config=vars(args),
         name=run_name,
         monitor_gym=True,
@@ -175,8 +195,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
     # env setup
-    env = make_env(args.env_id, args.seed, 0, args.capture_video, run_name)
+    env = make_env(args.env_id, seed=args.seed, run_name=run_name)
     assert isinstance(env.action_space, gym.spaces.Box), "only continuous action space is supported"
+
+    eval_env = make_env(args.env_id, seed=args.seed, run_name=run_name, evaluation=True)
 
     max_action = float(env.action_space.high[0])
 
@@ -230,7 +252,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         if termination or truncation:
             print(f"global_step={global_step}, episodic_return={episodic_return}")
             wandb.log({"charts/episodic_return": episodic_return,
-                        "charts/episodic_length": episodic_length})
+                       "charts/episodic_length": episodic_length})
             episodic_return = 0
             episodic_length = 0
         else:
@@ -238,17 +260,19 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
         if termination:
             # if the environment is done, the next_obs is nan; make it a goal state
-            next_obs = np.ones_like(next_obs) * 2 #TODO: check if this is correct
+            next_obs = np.ones_like(next_obs) * 2  # TODO: Does it make sense?
         elif truncation:
             next_obs = np.ones_like(next_obs) * 3
 
-        rb.add(obs, next_obs, action, reward, termination, info)
+        rb.add(np.array([obs]), np.array([next_obs]), np.array([action]), np.array([reward]), np.array([termination]),
+               [info])
 
-        # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
-        obs = next_obs
-
+        # TODO: need to reset env!!!
         if termination or truncation:
             obs, _ = env.reset(seed=args.seed)
+        else:
+            # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
+            obs = next_obs
 
         # ALGO LOGIC: training.
         if global_step > args.learning_starts:
@@ -260,7 +284,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 qf1_next_target = qf1_target(data.next_observations, next_state_actions)
                 qf2_next_target = qf2_target(data.next_observations, next_state_actions)
                 min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
-                next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (min_qf_next_target).view(-1)
+                next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (
+                    min_qf_next_target).view(-1)
 
             qf1_a_values = qf1(data.observations, data.actions).view(-1)
             qf2_a_values = qf2(data.observations, data.actions).view(-1)
@@ -275,7 +300,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
             if global_step % args.policy_frequency == 0:  # TD 3 Delayed update support
                 for _ in range(
-                    args.policy_frequency
+                        args.policy_frequency
                 ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
                     pi, log_pi, _ = actor.get_action(data.observations)
                     qf1_pi = qf1(data.observations, pi)
@@ -318,4 +343,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 if args.autotune:
                     wandb.log({"losses/alpha_loss": alpha_loss.item()})
 
+            # Evaluate the agent on 5 different seeds
+            if global_step % 1000 == 0:
+                evaluate(args.evaluation_seeds)
+
     env.close()
+    eval_env.close()
+
+

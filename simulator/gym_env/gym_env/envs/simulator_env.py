@@ -29,9 +29,10 @@ class SimulatorEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 4, "cluster": DEFAULT_CLUSTER} # todo: change cluster name
     SPAWN_METHOD = "dataset_one"  # We assume there is a todo: change spawn method
 
-    def __init__(self, render_mode: str = None, config: dict = None, seed: int = None, clustering: str = "all"):
+    def __init__(self, render_mode: str = None, config: dict = None, seed: int = None, clustering: str = "all",
+                 dataset_split: str = "train"):
         """
-        Args:s
+        Args:
             config: Configuration for the environment.
         """
 
@@ -39,7 +40,7 @@ class SimulatorEnv(gym.Env):
         if config is None:
             # Load all episodes in the training dataset
             configs = ScenarioConfig.load(get_config_path("appershofen"))  # todo: change scenario name
-            idx = configs.dataset_split["train"]
+            idx = configs.dataset_split[dataset_split]
             self.episode_names = [x.recording_id for i, x in enumerate(configs.episodes) if i in idx]
         else:
             raise NotImplementedError
@@ -59,7 +60,7 @@ class SimulatorEnv(gym.Env):
         # The observation will be a set of 34 features.
         self.observation_space = Box(
             low=np.array([-200, -np.pi] + [-500] * 32),  # velocity can max be 200, heading can min be -pi
-            high=np.array([200, np.pi] + [-500] * 32)
+            high=np.array([200, np.pi] + [500] * 32)
         )
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -87,7 +88,7 @@ class SimulatorEnv(gym.Env):
         self.seed(seed)
 
         obs, info = self.simulation.soft_reset()
-        return obs, info
+        return np.array(obs, dtype=np.float32), info
 
     def step(self, action):
         """
@@ -104,7 +105,7 @@ class SimulatorEnv(gym.Env):
         # An episode is terminated iff the agent has reached the target
         reward = get_reward(terminated=terminated, truncated=truncated, info=info, irl_weights=self.weights)
 
-        return next_obs, reward, terminated, truncated, info
+        return np.array(next_obs, dtype=np.float32), reward, terminated, truncated, info
 
     def render(self):
         """

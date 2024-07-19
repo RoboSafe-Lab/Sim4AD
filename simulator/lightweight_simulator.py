@@ -366,7 +366,7 @@ class Sim4ADSimulation:
             agent = self.__agents[agent_id]
             obs_, info_ = self._get_observation(agent, self.__state[agent_id])
 
-            if soft_reset and agent_id == self.__agent_evaluated:
+            if soft_reset and (agent_id == self.__agent_evaluated):
                 obs = copy.deepcopy(obs_)
                 info = copy.deepcopy(info_)
 

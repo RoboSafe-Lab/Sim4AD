@@ -17,7 +17,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import wandb
 import pickle
-from numpy import ndarray
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 
 TensorBatch = List[torch.Tensor]
@@ -37,7 +36,7 @@ class TrainConfig:
     # TD3
     buffer_size: int = 2_000  # Replay buffer size
     batch_size: int = 256  # Batch size for all networks
-    discount: float = 0.99  # Discount ffor
+    discount: float = 0.99  # Discount
     expl_noise: float = 0.1  # Std of Gaussian exploration noise
     tau: float = 0.005  # Target network update rate
     policy_noise: float = 0.2  # Noise added to target actor during critic update
@@ -45,8 +44,8 @@ class TrainConfig:
     policy_freq: int = 2  # Frequency of delayed actor updates
     # TD3 + BC
     alpha: float = 2.5  # Coefficient for Q function in actor loss
-    normalize: bool = True  # Normalize states
-    normalize_reward: bool = False  # Normalize reward
+    normalize: bool = True  # get mean and std of state and reward
+    normalize_reward: bool = True  # Normalize reward
     # Wandb logging
     project: str = "CORL"
     group: str = "TD3_BC-Automatum"
@@ -89,23 +88,30 @@ def wrap_env(
         env: gym.Env,
         state_mean: Union[np.ndarray, float] = 0.0,
         state_std: Union[np.ndarray, float] = 1.0,
-        reward_scale: float = 1.0,
+        reward_mean: float = 0.0,
+        reward_std: float = 1.0,
+        reward_normalization: bool = False,
 ) -> gym.Env:
     # PEP 8: E731 do not assign a lambda expression, use a def
     def normalize_state(state):
         if state is None:
             return state
-        return (
-                state - state_mean
-        ) / state_std  # epsilon should be already added in std.
+        else:
+            state = np.array(state).reshape(1, -1)
+            mask = state != MISSING_NEARBY_AGENT_VALUE
+            for i in range(state.shape[1]):
+                col_mask = mask[:, i]
+                state[col_mask, i] = (state[col_mask, i] - state_mean[i]) / state_std[i]
+            return state
 
-    def scale_reward(reward):
-        # Please be careful, here reward is multiplied by scale!
-        return reward_scale * reward
+    def normalize_reward(reward):
+        reward = (reward - reward_mean) / reward_std  # epsilon should be already added in std.
+        reward = np.clip(reward, -1, 1)
+        return float(reward)
 
     env = gym.wrappers.TransformObservation(env, normalize_state)
-    if reward_scale != 1.0:
-        env = gym.wrappers.TransformReward(env, scale_reward)
+    if reward_normalization:
+        env = gym.wrappers.TransformReward(env, normalize_reward)
     return env
 
 
@@ -195,9 +201,7 @@ def wandb_init(config: dict) -> None:
 
 @torch.no_grad()
 def eval_actor(
-        env: gym.Env, actor: nn.Module, device: str, n_episodes: int, seed: int, state_mean: ndarray,
-        state_std: ndarray,
-        reward_mean: float, reward_std: float
+        env: gym.Env, actor: nn.Module, device: str, n_episodes: int, seed: int
 ) -> np.ndarray:
     env.reset(seed=seed)
     actor.eval()
@@ -205,20 +209,16 @@ def eval_actor(
     # one agent is evaluated for n_episodes times
     for _ in range(n_episodes):
         state = env.reset()
-        terminated = False
-        truncated = False
+        terminated, truncated = False, False
         # State is tuple from simulator_env
         state = state[0]
-        state = normalize_states(state.reshape(1, -1), state_mean, state_std)
-        episode_reward = []
+        episode_reward = 0.0
         while not terminated and not truncated:
             action = actor.act(state, device)
             state, reward, terminated, truncated, _ = env.step(action)
-            episode_reward.append(reward)
-            if state is not None:
-                state = normalize_states(state.reshape(1, -1), state_mean, state_std)
-        episode_reward = normalized_rewards(np.array(episode_reward), reward_mean, reward_std)
-        episode_rewards.append(sum(episode_reward))
+            episode_reward += reward
+
+        episode_rewards.append(episode_reward)
 
     actor.train()
     return np.asarray(episode_rewards)
@@ -446,8 +446,7 @@ def qlearning_dataset(dataset=None):
     }
 
 
-def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score,
-             state_mean, state_std, reward_mean, reward_std):
+def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score):
     """evaluate the policy at certain evaluation frequency"""
     # Evaluate episode
     eval_scores = eval_actor(
@@ -456,10 +455,6 @@ def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_sc
         device=config.device,
         n_episodes=config.n_episodes,
         seed=config.seed,
-        state_mean=state_mean,
-        state_std=state_std,
-        reward_mean=reward_mean,
-        reward_std=reward_std
     )
     eval_score = eval_scores.mean()
     normalized_eval_score = get_normalized_score(eval_score, ref_max_score, ref_min_score) * 100.0
@@ -613,7 +608,9 @@ def train(config: TrainConfig):
 
     wandb_init(asdict(config))
 
-    env = wrap_env(trainer_loader.env, state_mean=trainer_loader.state_mean, state_std=trainer_loader.state_std)
+    env = wrap_env(trainer_loader.env, state_mean=trainer_loader.state_mean, state_std=trainer_loader.state_std,
+                   reward_mean=trainer_loader.reward_mean, reward_std=trainer_loader.reward_std,
+                   reward_normalization=config.normalize_reward)
 
     ref_max_score = -float('inf')
     ref_min_score = float('inf')
@@ -676,9 +673,7 @@ def train(config: TrainConfig):
         if (t + 1) % config.eval_freq == 0:
             logger.info(f'evaluate at time step: {t + 1}')
             # evaluate the policy
-            evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score,
-                     trainer_loader.state_mean, trainer_loader.state_std,
-                     trainer_loader.reward_mean, trainer_loader.reward_std)
+            evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_score)
 
 
 if __name__ == "__main__":

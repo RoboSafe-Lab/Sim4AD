@@ -1035,7 +1035,7 @@ if __name__ == "__main__":
 
     spawn_method = "dataset_one"
     # "bc-all-obs-5_pi_cluster_Aggressive"  # "bc-all-obs-1.5_pi" "idm"
-    policy_type = "follow_dataset"
+    policy_type = "sac" # "follow_dataset"
     clustering = "all"
     sim = Sim4ADSimulation(episode_name=ep_name, spawn_method=spawn_method, policy_type=policy_type,
                            clustering=clustering)

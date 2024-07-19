@@ -5,9 +5,7 @@ import gymnasium as gym
 
 import numpy as np
 import torch
-from stable_baselines3 import SAC
-from stable_baselines3.common.callbacks import EvalCallback
-from stable_baselines3.common.monitor import Monitor
+from baselines.sac.model import Actor as SACActor
 
 import wandb
 from wandb.integration.sb3 import WandbCallback
@@ -38,9 +36,6 @@ if __name__ == "__main__":
         "seeds": seeds  # Use generated seeds
     }
 
-    # Initialize WandB project
-    run = wandb.init(project="sim4ad", config=config, sync_tensorboard=True, monitor_gym=True, save_code=True)
-
     def evaluate_model(model, env, num_episodes=10):
         total_rewards = []
         for _ in range(num_episodes):
@@ -56,49 +51,19 @@ if __name__ == "__main__":
         return sum(total_rewards) / num_episodes
 
 
-    best_model = None
-    best_reward = -float('inf')
+    env = gym.make(config['env'], dataset_split="test")
 
-    for seed in config['seeds']:
-        try:
-            env = Monitor(gym.make(config['env']), filename=None)
-            env.seed(seed)
-            np.random.seed(seed)
+    # TODO: @Cheng, you can modify these next two lines to load your model
+    model = SACActor(env, device=device).to(device)
+    # TODO: @Cheng, enter here the path to the model you want to visualise.
+    model.load_state_dict(torch.load("best_model_sac_SimulatorEnv-v0__model__1__1721400747.pth"))
+    model.eval()
 
-            model = SAC(config['policy_type'], env, verbose=1, device=config['device'],
-                        tensorboard_log=f"runs/{run.id}/seed_{seed}")
-
-            model.learn(total_timesteps=config['total_timesteps'], log_interval=config['log_interval'],
-                        progress_bar=config['progress_bar'],
-                        callback=WandbCallback(gradient_save_freq=100, model_save_path=f"models/{run.id}/seed_{seed}",
-                                               verbose=2))
-
-            # Evaluate the model
-            avg_reward = evaluate_model(model, env)
-
-            # Save the model if it's the best one
-            if avg_reward > best_reward:
-                best_reward = avg_reward
-                best_model = model
-                best_model_path = f"models/{run.id}/best_model"
-        except Exception as e:
-            print(f"Error in seed {seed}: {e}")
-            continue
-
-    # Save the best model
-    if best_model:
-        best_model.save(best_model_path)
-        print(f"Best model saved with average reward: {best_reward}")
-
-    wandb.finish()
-
-    # # del model  # remove to demonstrate saving and loading
-    # model = SAC.load("sac_5_rl")
-    #
-    # obs, info = env.reset()
-    # while True:
-    #     action, _states = model.predict(obs, deterministic=True)
-    #     obs, reward, terminated, truncated, info = env.step(action)
-    #     if terminated or truncated:
-    #         env.render()
-    #         obs, info = env.reset()
+    obs, info = env.reset()
+    while True:
+        action = model.act(torch.Tensor(obs).to(device), deterministic=True)
+        action = action.detach().cpu().numpy()
+        obs, reward, terminated, truncated, info = env.step(action)
+        if terminated or truncated:
+            env.render()
+            obs, info = env.reset()

@@ -70,19 +70,14 @@ def generate_trajectories(policy_type, spawn_method, irl_weights, episode_name:L
     assert simulation_length == "done"
     while not looped_dataset:
         obs, info = gym_env.reset(seed=0) # TODO: set seed!
-        # normalize the obs before using the offline rl policy
-        obs = normalize_states(np.array(obs).reshape(1, -1), trainer_loader.state_mean, trainer_loader.state_std)
 
         episode_done = False
         while not episode_done:
             # TODO done = sim.step(return_done=True)
             action = trainer_loader.actor(torch.tensor(obs, dtype=torch.float32, device='mps')) # TODO: deterministic=True) # TODO: deterministic?
             action = action.cpu().detach().numpy()
-            next_obs, reward, terminated, truncated, info = gym_env.step(action[0])
+            next_obs, reward, terminated, truncated, info = gym_env.step(action)
             done = terminated or truncated
-            if next_obs is not None:
-                next_obs = normalize_states(np.array(next_obs).reshape(1, -1), trainer_loader.state_mean,
-                                            trainer_loader.state_std)
             obs = next_obs
 
             steps += 1

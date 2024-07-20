@@ -9,7 +9,7 @@ import logging
 import random
 from collections import defaultdict
 from copy import deepcopy
-from typing import Tuple, List, Dict, Any, Union
+from typing import Tuple, List, Dict, Union
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -20,10 +20,9 @@ from stable_baselines3 import SAC
 from tqdm import tqdm
 
 from baselines.bc_baseline import BCBaseline as BC
-from baselines.idm import IDM
 from extract_observation_action import ExtractObservationAction
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
-from sim4ad.data import DatasetDataLoader, ScenarioConfig, DatasetScenario
+from sim4ad.data import ScenarioConfig, DatasetScenario
 from sim4ad.irlenv.vehicle.behavior import IDMVehicle
 from sim4ad.opendrive import plot_map, Map
 from sim4ad.path_utils import get_path_to_automatum_scenario, get_path_to_automatum_map, get_config_path
@@ -802,17 +801,15 @@ class Sim4ADSimulation:
     def _update_info(self, agent, nearby_vehicles, state, observation, done, info):
         ax, ay = agent.compute_current_lat_lon_acceleration()
         long_jerk = agent.compute_current_long_jerk()
-        _, tths = self.evaluator.compute_ttc_tth(agent, state=state, nearby_vehicles=nearby_vehicles,
-                                                 episode_id=None, add=False)
-        thw_front, thw_rear = tths[PNA.CENTER_IN_FRONT], tths[PNA.CENTER_BEHIND]
+        _, thw = self.evaluator.compute_ttc_tth(agent, state=state, nearby_vehicles=nearby_vehicles,
+                                                episode_id=None, add=False)
 
         info.update({
             "ego_speed": state.speed,
             "ego_long_acc": ax,
             "ego_lat_acc": ay,
             "ego_long_jerk": long_jerk,
-            "thw_front": thw_front,
-            "thw_rear": thw_rear,
+            "thw_front": thw,
         })
 
         if self.__policy_type == "rl":
@@ -1035,7 +1032,7 @@ if __name__ == "__main__":
 
     spawn_method = "dataset_one"
     # "bc-all-obs-5_pi_cluster_Aggressive"  # "bc-all-obs-1.5_pi" "idm"
-    policy_type = "sac" # "follow_dataset"
+    policy_type = "sac"  # "follow_dataset"
     clustering = "all"
     sim = Sim4ADSimulation(episode_name=ep_name, spawn_method=spawn_method, policy_type=policy_type,
                            clustering=clustering)

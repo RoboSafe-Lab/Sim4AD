@@ -71,11 +71,12 @@ def get_processed_demonstrations(split_type, scenario, cluster):
     return f"{get_base_dir()}/scenarios/data/{split_type}/{cluster}{scenario}_demonstration.pkl"
 
 
-def get_file_name_trajectories(policy_type, spwan_method, irl_weights, episode_name: List[str], simulation_length):
+def get_file_name_trajectories(policy_type, spawn_method, irl_weights, episode_name: List[str]):
     """
     Get the file name for the trajectories.
 
     :param policy_type: The policy type.
+    :param spawn_method:
     :param irl_weights: The IRL weights.
     :param episode_name: The episode name.
     :return: The file name.
@@ -88,7 +89,7 @@ def get_file_name_trajectories(policy_type, spwan_method, irl_weights, episode_n
     folder_path = f"{get_base_dir()}/evaluation/trajectories/"
     pathlib.Path(folder_path).mkdir(parents=True, exist_ok=True)
 
-    return f"{folder_path}/{episode_name}_{policy_type}_{spwan_method}_{irl_weights}_{simulation_length}steps.pkl"
+    return f"{folder_path}/{episode_name}_{policy_type}_{spawn_method}_{irl_weights}steps.pkl"
 
 
 def get_file_name_evaluation(policy_type, spawn_method, irl_weights, episode_name):
@@ -96,6 +97,7 @@ def get_file_name_evaluation(policy_type, spawn_method, irl_weights, episode_nam
     Get the file name for the evaluation.
 
     :param policy_type: The policy type.
+    :param spawn_method:
     :param irl_weights: The IRL weights.
     :param episode_name: The episode nameS.
     :return: The file name.

@@ -7,7 +7,6 @@ from typing import List
 import time
 
 import numpy as np
-import pandas as pd
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
@@ -25,7 +24,7 @@ def evaluate_trajectories(policy_type, spawn_method, irl_weights, episode_names:
     :param policy_type: The policy type.
     :param spawn_method: The spawn method.
     :param irl_weights: The IRL weights.
-    :param episode_nams: The episode name.
+    :param episode_names: The episode name.
     """
 
     simulation_agent_features = generate_trajectories(policy_type, spawn_method, irl_weights, episode_names)
@@ -46,11 +45,11 @@ def evaluate_trajectories(policy_type, spawn_method, irl_weights, episode_names:
 
 
 def run_all_evaluation_types(pol_evaluated, irl_weights_used, evaluation_eps):
-    #### MICRO ANALYSIS ####
+    # MICRO ANALYSIS
     micro_agent_features = evaluate_trajectories(policy_type=pol_evaluated, spawn_method="dataset_one",
                                                  irl_weights=irl_weights_used, episode_names=evaluation_eps)
 
-    #### MACRO ANALYSIS ####
+    # MACRO ANALYSIS
     macro_agent_features = evaluate_trajectories(policy_type=pol_evaluated, spawn_method="dataset_all",
                                                  irl_weights=irl_weights_used, episode_names=evaluation_eps)
 
@@ -204,65 +203,6 @@ def evaluate_all(policies_to_evaluate, evaluation_episodes, generalisation_episo
     print(f"Time taken: {time.time() - start_time} seconds")
 
 
-def generate_latex_table(results, map):
-    micro_metrics = results["all_micro_metrics"]
-    macro_metrics = results["all_macro_metrics"]
-    micr_scores = results["all_micro"]
-    macro_scores = results["all_macro"]
-
-    # dataframe from micro_metrics
-    micro_df = pd.DataFrame(micro_metrics)
-    macro_df = pd.DataFrame(macro_metrics)
-    miicro_scores_df = pd.DataFrame(micr_scores)
-    macro_scores_df = pd.DataFrame(macro_scores)
-
-    def latex(df, type, map, metrics, caption=None):
-        df = df.round(2)
-
-        if metrics:
-            df.rename(index={"Interference": "Vehicle interference"}, inplace=True)
-            df.rename(index={"Distance_nearby": "Distance to neighbours"}, inplace=True)
-            df.rename(index={"Distance_right_marking": "Distance to markings"}, inplace=True)
-            df.rename(index={"JSD_Velocity": "JSD speed distribution"}, inplace=True)
-            df.rename(index={"Off_road_rate": "Off road rate"}, inplace=True)
-            df.rename(index={"Collision_rate": "Collision rate"}, inplace=True)
-            df.rename(index={"JSD_TTC": "JSD TTC"}, inplace=True)
-            df.rename(index={"JSD_TTH": "JSD TTH"}, inplace=True)
-        else:
-            df.rename(index={"S_ADE": "ADE", "S_FDE": "FDE", "S_TD_ADE": "TD-ADE", "S_Collision": "Collision",
-                             "S_Off_road": "Off road", "S_Distance_nearby": "Distance to neighbours",
-                             "S_Distance_right_marking": "Distance to markings", "S_Generalisation": "Generalisation",
-                             "S_TTC": "TTC", "S_TTH": "TTH", "S_Velocity": "Speed distribution",
-                             "S_Interference": "Vehicle interference"}, inplace=True)
-
-        names = {"sac_5_rl": "SAC", "bc-all-obs-5_pi_cluster_all": "BC", "idm": "IDM"}
-        df.rename(columns=names, inplace=True)
-
-        if caption is not None:
-            caption = caption
-        else:
-            if metrics:
-                caption = f"Evaluation metrics for the {type} experiment in {map}. "
-            else:
-                caption = f"Similarity scores for the {type} experiment in {map}"
-        label = f"tab:{type}_{map}"
-        latex_table = df.to_latex(index=True, header=True, column_format='||c | c | c | c | c||', caption=caption,
-                                  float_format="%.2f", label=label)
-        latex_table = latex_table.replace("\\begin{tabular}", "\\begin{center}\n\\begin{tabular}")
-        latex_table = latex_table.replace("\\end{tabular}", "\\end{tabular}\n\\end{center}")
-        return latex_table
-
-    print(latex(micro_df, type="micro", map=map, metrics=True))
-    print(latex(macro_df, type="macro", map=map, metrics=True))
-    print(latex(miicro_scores_df, type="micro", map=map, metrics=False))
-    print(latex(macro_scores_df, type="macro", map=map, metrics=False))
-
-    # average values between micro_df and macro_df
-    average_df = (micro_df + macro_df) / 2
-    print(latex(average_df, type="average", map=map, metrics=True,
-                caption=f"Average metrics for the evaluation in {map}"))
-
-
 def get_results(policies_to_evaluate, map_to_use):
     with open(f"evaluation/results/evaluation_results_all.pkl", "rb") as f:
         results = pickle.load(f)
@@ -368,7 +308,6 @@ def main():
             else:
                 evaluate_all(policies_to_evaluate, generalisation_episodes, None, USE_ADE=use_ade)
             results = get_results(policies_to_evaluate, to_use)
-            print(generate_latex_table(results, map=to_use))
 
 
 if __name__ == "__main__":

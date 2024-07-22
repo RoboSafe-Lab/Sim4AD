@@ -9,7 +9,9 @@ import logging
 import random
 from collections import defaultdict
 from copy import deepcopy
-from typing import Tuple, List, Dict, Union
+from typing import Tuple, List, Dict, Union, Any
+import json
+import torch
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -37,7 +39,6 @@ from sim4ad.common_constants import DEFAULT_DECELERATION_VALUE
 
 logger = logging.getLogger(__name__)
 
-
 class Sim4ADSimulation:
 
     def __init__(self,
@@ -46,7 +47,8 @@ class Sim4ADSimulation:
                  simulation_name: str = "sim4ad_simulation",
                  spawn_method: str = "dataset",
                  evaluation: bool = True,
-                 clustering: str = "all"):
+                 clustering: str = "all",
+                 driving_style_policies: Dict[str, Any] = None,):
 
         """ Initialise new simulation.
 
@@ -54,6 +56,7 @@ class Sim4ADSimulation:
             policy_type: The type of policy to use.
             simulation_name: The name of the simulation.
             spawn_method: The method to spawn the vehicles in the simulation. Either "dataset_all", "dataset_one" or "random".
+            driving_style_policies: A dictionary with the driving styles of the agents in the simulation.
         """
 
         self.episode_idx = 0  # Index of the episode we are currently evaluating
@@ -78,7 +81,11 @@ class Sim4ADSimulation:
         self.__spawn_method = spawn_method
 
         assert policy_type in ["follow_dataset", "rl", "idm"] or "bc" in policy_type.lower() \
-               or "sac" in policy_type.lower(), f"Policy type {policy_type} not found."
+               or "sac" in policy_type.lower(), f"Policy type {policy_type} not found." or driving_style_policies is not None
+
+        if driving_style_policies is not None:
+            assert spawn_method == "dataset_all", "Driving style policies are currently only compatible with 'dataset_all' spawn"
+
         if policy_type == "follow_dataset":
             assert spawn_method != "random", "Policy type 'follow_dataset' is not compatible with 'random' spawn"
 
@@ -97,15 +104,27 @@ class Sim4ADSimulation:
         # Dictionary (agent_id, DeathCause) of agents that have been removed from the simulation.
         self.__dead_agents = {}
         self.__agent_evaluated = None  # If we spawn_method is "dataset_one", then this is the agent we are evaluating.
+        self.__driving_style_policies = driving_style_policies if driving_style_policies is not None else {}
+
+        self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
     def cluster_agents(self, agents: Dict[str, droneDataset]):
         """Return agents of a specific cluster"""
         episode_name = self.__all_episode_names[self.episode_idx - 1]
+        clusters = self.get_clusters()
+        return {k: v for k, v in agents.items() if self.clustering == clusters[f"{episode_name}/{k}"]}
+
+    def get_clusters(self):
+        episode_name = self.__all_episode_names[self.episode_idx - 1]
         scenario_name = episode_name.split("-")[2]
         with open(f"scenarios/configs/{scenario_name}_drivingStyle.json", "rb") as f:
-            import json
-            clusterings = json.load(f)
-            return {k: v for k, v in agents.items() if self.clustering == clusterings[f"{episode_name}/{k}"]}
+            return json.load(f)
+
+    def get_driving_style_vehicle(self, agent_id: str):
+        episode_name = self.__all_episode_names[self.episode_idx - 1]
+        clusters = self.get_clusters()
+        return clusters[f"{episode_name}/{agent_id}"]
+
 
     @staticmethod
     def seed(seed: int):
@@ -163,8 +182,8 @@ class Sim4ADSimulation:
 
         logger.debug(f"Added Agent {new_agent.agent_id}")
 
-    @staticmethod
-    def _get_policy(policy):
+
+    def _get_policy(self, policy):
 
         if "bc" in policy.lower():
             return BC(name=policy, evaluation=True)
@@ -174,6 +193,8 @@ class Sim4ADSimulation:
             return "follow_dataset"
         elif policy == "rl":
             return "rl"
+        elif policy in self.__driving_style_policies:
+            return self.__driving_style_policies[policy].to(self.device)
         else:
             raise ValueError(f"Policy {policy} not found.")
 
@@ -184,7 +205,7 @@ class Sim4ADSimulation:
         policy = self._get_policy(policy)
 
         return PolicyAgent(agent=agent, policy=policy, initial_state=initial_state,
-                           original_initial_time=original_initial_time)
+                           original_initial_time=original_initial_time, device=self.device)
 
     def __get_original_current_state(self, agent):
         """
@@ -312,7 +333,13 @@ class Sim4ADSimulation:
             for agent_id, agent in self.__agents_to_add.items():
                 if (self.__time - agent.time[0]) > -1e-6 and (agent.time[-1] - self.time) > -1e-6:
                     if agent_id not in self.__agents:
-                        add_agents[agent_id] = (agent, self.__policy_type)
+                        if self.__driving_style_policies:
+                            policy_to_use = self.get_driving_style_vehicle(agent_id)
+
+                        else:
+                            policy_to_use = self.__policy_type
+
+                        add_agents[agent_id] = (agent, policy_to_use)
         elif self.__spawn_method == "random":
             if self.__time == 0:
                 self.__spawn_features, self.__possible_vehicle_dimensions = self._get_spawn_positions()
@@ -487,7 +514,8 @@ class Sim4ADSimulation:
 
             if agent.policy == "follow_dataset":
                 action, new_state = self.__handle_follow_dataset(agent, agent_id)
-            elif isinstance(agent.policy, BC) or isinstance(agent.policy, SAC):
+            elif (isinstance(agent.policy, BC) or isinstance(agent.policy, SAC)
+                  or agent.policy in self.__driving_style_policies.values()):
                 action = agent.next_action(history=agent.observation_trajectory)
                 # Use the bicycle model to find where the agent will be at t+1
                 new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
@@ -1030,7 +1058,7 @@ if __name__ == "__main__":
     ep_name = ["hw-a9-appershofen-001-d8087340-8287-46b6-9612-869b09e68448",
                "hw-a9-appershofen-002-2234a9ae-2de1-4ad4-9f43-65c2be9696d6"]
 
-    spawn_method = "dataset_one"
+    spawn_method = "dataset_all"
     # "bc-all-obs-5_pi_cluster_Aggressive"  # "bc-all-obs-1.5_pi" "idm"
     policy_type = "sac"  # "follow_dataset"
     clustering = "all"

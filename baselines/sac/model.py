@@ -118,6 +118,7 @@ class Actor(nn.Module):
         self.register_buffer(
             "action_bias", torch.tensor((env.action_space.high + env.action_space.low) / 2.0, dtype=torch.float32)
         )
+        self.name="SACActor"
 
     def forward(self, x):
         x = F.relu(self.fc1(x))

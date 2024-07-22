@@ -11,6 +11,7 @@ from baselines.idm import IDM
 from simulator.simulator_util import PositionNearbyAgent
 from simulator.state_action import Observation, Action, State
 from sim4ad.agentstate import AgentMetadata
+from baselines.bc_baseline import BCBaseline as BC
 
 import logging
 
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class PolicyAgent:
-    def __init__(self, agent: Any, policy, initial_state: State, original_initial_time: float):
+    def __init__(self, agent: Any, policy, initial_state: State, original_initial_time: float, device="cpu"):
         """
         Initialize a new PolicyAgent with the given policy.
 
@@ -54,6 +55,8 @@ class PolicyAgent:
         self._l_f = self._metadata.wheelbase / 2 + correction  # Distance of front axel from cg
         self._l_r = self._metadata.wheelbase / 2 - correction  # Distance of back axel from cg
 
+        self.device = device
+
     def next_action(self, history: [[Observation]]) -> Action:
         """
         Get the action for the given state history.
@@ -62,11 +65,14 @@ class PolicyAgent:
         :return: The desired acceleration and steering angle.
         """
 
+        obs = history[-1]
         if isinstance(self.policy, SAC):
-            obs = history[-1]
             (acceleration, delta), _ = self.policy.predict(obs, deterministic=True)
-        else:
+        elif isinstance(self.policy, BC):
             acceleration, delta = self.policy(history)[0].tolist()
+        else:
+            acceleration, delta = self.policy.act(obs, device=self.device, deterministic=True)
+
         action = Action(acceleration=acceleration, yaw_rate=delta)
 
         return action

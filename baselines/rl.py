@@ -53,9 +53,7 @@ if __name__ == "__main__":
 
     env = gym.make(config['env'], dataset_split="test")
 
-    # TODO: @Cheng, you can modify these next two lines to load your model
     model = SACActor(env, device=device).to(device)
-    # TODO: @Cheng, enter here the path to the model you want to visualise.
     model.load_state_dict(torch.load("best_model_sac_SimulatorEnv-v0__model__1__1721400747.pth"))
     model.eval()
 

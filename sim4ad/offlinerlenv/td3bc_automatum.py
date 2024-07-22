@@ -25,8 +25,10 @@ TensorBatch = List[torch.Tensor]
 @dataclass
 class TrainConfig:
     # Experiment
-    device: str = "cuda"
+    device: str = "cuda" # TODO: modified from "cuda" to "mlp"
     env: str = "SimulatorEnv-v0"  # OpenAI gym environment name
+    dataset_split: str = "train"  # Dataset split to use
+    use_irl_reward: bool = True  # Use IRL reward; if False, use basic reward (1 for reach goal, -1 for collisions)
     seed: int = 0  # Sets Gym, PyTorch and Numpy seeds
     eval_freq: int = 10  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
@@ -53,12 +55,18 @@ class TrainConfig:
 
     # need to be changed according to the policy to be trained
     map_name: str = "appershofen"
-    driving_style: str = "Aggressive"
+    driving_style: str = "General"
 
     def __post_init__(self):
         self.name = f"{self.name}-{self.env}-{str(uuid.uuid4())[:8]}"
         if self.checkpoints_path is not None:
             self.checkpoints_path = os.path.join(self.checkpoints_path, self.name)
+
+
+# Create an evalConfig which is the same as the TrainCofnig but with a different dataset_split
+@dataclass
+class EvalConfig(TrainConfig):
+    dataset_split: str = "test"
 
 
 def soft_update(target: nn.Module, source: nn.Module, tau: float):
@@ -98,6 +106,7 @@ def wrap_env(
             return state
         else:
             state = np.array(state).reshape(1, -1)
+            # Mask the states what do not have a nearby agent
             mask = state != MISSING_NEARBY_AGENT_VALUE
             for i in range(state.shape[1]):
                 col_mask = mask[:, i]
@@ -203,7 +212,7 @@ def wandb_init(config: dict) -> None:
 def eval_actor(
         env: gym.Env, actor: nn.Module, device: str, n_episodes: int, seed: int
 ) -> np.ndarray:
-    env.reset(seed=seed)
+    env.reset(seed=seed) # TODO: should we set it in a specific way?
     actor.eval()
     episode_rewards = []
     # one agent is evaluated for n_episodes times
@@ -237,13 +246,13 @@ class Actor(nn.Module):
             nn.Tanh(),
         )
 
-        self.max_action = torch.tensor(max_action, dtype=torch.float32, device="cuda")
+        self.max_action = torch.tensor(max_action, dtype=torch.float32, device=TrainConfig.device)
 
     def forward(self, state: torch.Tensor) -> torch.Tensor:
         return self.max_action * self.net(state)
 
     @torch.no_grad()
-    def act(self, state: np.ndarray, device: str = "cuda") -> np.ndarray:
+    def act(self, state: np.ndarray, device: str = TrainConfig.device) -> np.ndarray:
         state = torch.tensor(state.reshape(1, -1), device=device, dtype=torch.float32)
         return self(state).cpu().data.numpy().flatten()
 
@@ -282,7 +291,7 @@ class TD3_BC:
             policy_freq: int = 2,
             alpha: float = 2.5,
             grad_clip: float = 2.0,
-            device: str = "cuda",
+            device: str = TrainConfig.device
     ):
         self.actor = actor.to(device)
         self.actor_target = copy.deepcopy(self.actor)
@@ -481,9 +490,9 @@ def get_normalized_score(score, ref_max_score, ref_min_score):
     return (score - ref_min_score) / (ref_max_score - ref_min_score)
 
 
-def load_demonstration_data(driving_style: str, map_name: str):
+def load_demonstration_data(driving_style: str, map_name: str, dataset_split: str = "train"):
     """load demonstration data"""
-    with open(f'scenarios/data/train/{driving_style}{map_name}_demonstration.pkl', 'rb') as file:
+    with open(f'scenarios/data/{dataset_split}/{driving_style}{map_name}_demonstration.pkl', 'rb') as file:
         return pickle.load(file)
 
 
@@ -494,7 +503,8 @@ def compute_normalization_parameters(state_dim, dataset, normalize):
     m2 = np.zeros(state_dim)
     all_rewards = []
 
-    for agent_mdp in dataset['clustered']:
+    dataset_to_use = dataset['General'] if dataset['General'] else dataset['clustered']
+    for agent_mdp in dataset_to_use:
         if normalize:
             all_rewards.extend(agent_mdp.rewards)
             # Iterate over each observation
@@ -555,15 +565,15 @@ def initialize_model(state_dim, action_dim, max_action, config):
     return trainer, actor
 
 
-class TD3_BC_TrainerLoader:
+class TD3_BC_Loader:
     def __init__(self, config):
         self.config = config
-        self.env = gym.make(config.env)
+        self.env = gym.make(config.env, dataset_split=config.dataset_split, use_irl_reward=config.use_irl_reward)
         self.state_dim = self.env.observation_space.shape[0]
         self.action_dim = self.env.action_space.shape[0]
         self.max_action = self.env.action_space.high
 
-        self.dataset = load_demonstration_data(config.driving_style, config.map_name)
+        self.dataset = load_demonstration_data(config.driving_style, config.map_name, dataset_split=config.dataset_split)
         self.state_mean, self.state_std, self.reward_mean, self.reward_std = compute_normalization_parameters(
             self.state_dim, self.dataset, config.normalize)
 
@@ -582,7 +592,7 @@ class TD3_BC_TrainerLoader:
 
     def load_model(self, model_path: str):
         policy_file = Path(model_path)
-        self.trainer.load_state_dict(torch.load(policy_file))
+        self.trainer.load_state_dict(torch.load(policy_file, map_location=torch.device('cpu')))
         self.actor = self.trainer.actor
         logger.info(f"Loaded model from {model_path}")
 
@@ -602,7 +612,7 @@ class TD3_BC_TrainerLoader:
 @pyrallis.wrap()
 def train(config: TrainConfig):
     logger.info(f"Training TD3 + BC, Env: {config.env}")
-    trainer_loader = TD3_BC_TrainerLoader(config)
+    trainer_loader = TD3_BC_Loader(config)
     trainer = trainer_loader.get_trainer()
     actor = trainer_loader.get_actor()
 

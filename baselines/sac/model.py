@@ -151,16 +151,22 @@ class Actor(nn.Module):
         mean = torch.tanh(mean) * self.action_scale + self.action_bias
         return action, log_prob, mean
 
-    def act(self, obs, deterministic=False):
+    @torch.no_grad()
+    def act(self, obs, device=None, deterministic=False):
+        """TODO: Device is not used, but added for common interface!"""
+        assert device == self.device, "The device is not matching!"
+
+        if not isinstance(obs, torch.Tensor):
+            obs = torch.Tensor(obs).to(self.device)
 
         action, log_prob, mean = self.get_action(obs)
 
         if deterministic:
             # Return the most likely action
-            return mean
+            return mean.cpu().data.numpy().flatten()
 
-        # otherwise, sample an action from the distribution
-        return action
+        # otherwise, use the action that was sampled from the distribution
+        return action.cpu().data.numpy().flatten()
 
 def evaluate(evaluation_seeds):
     actor.eval()

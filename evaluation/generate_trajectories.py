@@ -1,7 +1,7 @@
 from sim4ad.path_utils import get_file_name_trajectories, get_path_to_automatum_scenario, get_path_to_automatum_map, \
     get_config_path, get_path_offlinerl_model
 from simulator.lightweight_simulator import Sim4ADSimulation
-from sim4ad.offlinerlenv.td3bc_automatum import TD3_BC_TrainerLoader, TrainConfig, normalize_states
+from sim4ad.offlinerlenv.td3bc_automatum import TD3_BC_Loader, TrainConfig, normalize_states
 
 import os
 import pickle
@@ -47,7 +47,7 @@ def generate_trajectories(policy_type, spawn_method, irl_weights, episode_name:L
 
     gym_env = gym.make(config['env'], **config['env_kwargs'])
     model_path = get_path_offlinerl_model()
-    trainer_loader = TD3_BC_TrainerLoader(TrainConfig)
+    trainer_loader = TD3_BC_Loader(TrainConfig)
     trainer_loader.load_model(model_path)
     trainer_loader.actor.eval()
 

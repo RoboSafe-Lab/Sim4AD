@@ -5,20 +5,22 @@ import os
 from typing import Dict
 
 from sim4ad.data import ScenarioConfig
-from sim4ad.path_utils import get_config_path, get_path_offlinerl_model, get_file_name_trajectories
-from sim4ad.offlinerlenv.td3bc_automatum import TD3_BC_TrainerLoader, TrainConfig, wrap_env
+from sim4ad.path_utils import get_config_path, get_path_offlinerl_model, get_file_name_trajectories, get_path_sac_model
+from sim4ad.offlinerlenv.td3bc_automatum import TD3_BC_Loader, EvalConfig, wrap_env
 from evaluation.evaluation_functions import EvaluationFeaturesExtractor
+from baselines.sac.model import Actor as SACActor
 
 
-class OfflineEva:
+class RLEvalaution:
     """Evaluate the offline rl for its diversity"""
 
-    def __init__(self):
-        model_path = get_path_offlinerl_model()
-        trainer_loader = TD3_BC_TrainerLoader(TrainConfig)
-        trainer_loader.load_model(model_path)
-        self.actor = trainer_loader.actor
+    def __init__(self, actor, trainer_loader: TD3_BC_Loader):
+        """
 
+        :param actor: The actor of the policy we want to evaluate
+        :param trainer_loader: the trainer loader which contains the environment and the normalization parameters
+        """
+        self.actor = actor
         self.env = wrap_env(trainer_loader.env, state_mean=trainer_loader.state_mean,
                             state_std=trainer_loader.state_std,
                             reward_mean=trainer_loader.reward_mean, reward_std=trainer_loader.reward_std,
@@ -27,16 +29,16 @@ class OfflineEva:
     @torch.no_grad()
     def simulation(self, spawn_method: str, visualization: bool = False) -> Dict:
         """Using the policy to generate trajectories"""
-        self.env.reset(seed=TrainConfig.seed)
         self.actor.eval()
         looped_dataset = False
         steps = 0
 
         while not looped_dataset:
-            obs, info = self.env.reset()
+            obs, info = self.env.reset(seed=EvalConfig.seed)
             terminated, truncated = False, False
             while not terminated and not truncated:
-                action = self.actor.act(obs, TrainConfig.device)
+                # TODO: @Cheng, you had action = self.actor.act(obs, TrainConfig.device)
+                action = self.actor.act(obs, device=EvalConfig.device, deterministic=True)
                 state, reward, terminated, truncated, _ = self.env.step(action)
                 obs = state
 
@@ -66,7 +68,7 @@ def begin_evaluation(simulation_agents: Dict):
 
 def main():
     # configuration
-    policy_type = 'offlinerl'
+    policy_type = 'sac'
     normal_map = "appershofen"
     spawn_method = "dataset_all"
 
@@ -74,7 +76,7 @@ def main():
     idx = configs.dataset_split["test"]
     evaluation_episodes = [x.recording_id for i, x in enumerate(configs.episodes) if i in idx]
 
-    output_dir = get_file_name_trajectories(policy_type, spawn_method, None, episode_name=evaluation_episodes)
+    output_dir = get_file_name_trajectories(policy_type, spawn_method, None, episode_name=evaluation_episodes, param_config=EvalConfig)
     # Check if the results are already saved
     if os.path.exists(output_dir):
         with open(output_dir, "rb") as f:
@@ -83,15 +85,28 @@ def main():
         begin_evaluation(simulation_agents)
     else:
         simulation_agents = None
+
+        # The loader is needed to get the normalization parameters of the environment
+        model_path = get_path_offlinerl_model()
+        parameter_loader = TD3_BC_Loader(EvalConfig)
+
         if policy_type == 'offlinerl':
-            offline_rl_eva = OfflineEva()
+            parameter_loader.load_model(model_path)
+            actor = parameter_loader.actor
+            offline_rl_eva = RLEvalaution(actor, parameter_loader)
             simulation_agents = offline_rl_eva.simulation(spawn_method=spawn_method)
 
         # TODO: add other policies
         elif policy_type == 'sac':
-            raise NotImplementedError
+            device = parameter_loader.config.device
+            actor = SACActor(parameter_loader.env, device=device).to(device)
+            actor.load_state_dict(torch.load(get_path_sac_model()))
+            sac_eval = RLEvalaution(actor, parameter_loader)
+            simulation_agents = sac_eval.simulation(spawn_method=spawn_method)
+
         elif policy_type == 'bc':
             raise NotImplementedError
+
         # Create the directory if it does not exist
         os.makedirs(os.path.dirname(output_dir), exist_ok=True)
         with open(output_dir, "wb") as f:

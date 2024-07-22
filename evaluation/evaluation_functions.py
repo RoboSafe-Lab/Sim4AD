@@ -112,8 +112,8 @@ class EvaluationFeaturesExtractor:
         """plot criticality distribution for diversity analysis"""
         ttc, thw = [], []
         for agent_id, features in self.__agents.items():
-            ttc.append(features["TTC"])
-            thw.append(features["TTH"])
+            ttc.extend([x for x in features["TTC"] if x is not None])
+            thw.extend([x for x in features["TTH"] if x is not None])
 
         def plot_distogram(label, data):
             # Plot histogram and PDFs

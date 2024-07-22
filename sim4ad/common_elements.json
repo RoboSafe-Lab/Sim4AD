@@ -38,5 +38,6 @@
     "FEATURES_IN_ACTIONS": [
         "acceleration",
         "yaw_rate"
-    ]
+    ],
+    "alpha2.5_batch_size256_buffer_size2000_dataset_splittest_devicecuda_discount0.99_driving_styleGeneral_envSimulatorEnv-v0_eval_freq10_expl_noise0.1_groupTD3_BC-Automatum_load_model_map_nameappershofen_max_timesteps5000_n_episodes10_noise_clip0.5_normalizeTrue_normalize_rewardTrue_policy_freq2_policy_noise0.2_projectCORL_seed0_tau0.005_use_irl_rewardTrue": "371782c41b507202a56fdf0a07992625"
 }

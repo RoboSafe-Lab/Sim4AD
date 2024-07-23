@@ -1040,6 +1040,10 @@ class Sim4ADSimulation:
         return self.__agents
 
     @property
+    def map_name(self):
+        return self.__scenario_name
+
+    @property
     def simulation_history(self):
         return self.__simulation_history
 

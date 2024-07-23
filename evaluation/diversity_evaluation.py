@@ -11,7 +11,7 @@ from evaluation.evaluation_functions import EvaluationFeaturesExtractor
 from baselines.sac.model import Actor as SACActor
 
 
-class RLEvalaution:
+class RLEvaluation:
     """Evaluate the offline rl for its diversity"""
 
     def __init__(self, actor, trainer_loader: TD3_BC_Loader):
@@ -93,7 +93,7 @@ def main():
         if policy_type == 'offlinerl':
             parameter_loader.load_model(model_path)
             actor = parameter_loader.actor
-            offline_rl_eva = RLEvalaution(actor, parameter_loader)
+            offline_rl_eva = RLEvaluation(actor, parameter_loader)
             simulation_agents = offline_rl_eva.simulation(spawn_method=spawn_method)
 
         # TODO: add other policies
@@ -101,7 +101,7 @@ def main():
             device = parameter_loader.config.device
             actor = SACActor(parameter_loader.env, device=device).to(device)
             actor.load_state_dict(torch.load(get_path_sac_model()))
-            sac_eval = RLEvalaution(actor, parameter_loader)
+            sac_eval = RLEvaluation(actor, parameter_loader)
             simulation_agents = sac_eval.simulation(spawn_method=spawn_method)
 
         elif policy_type == 'bc':

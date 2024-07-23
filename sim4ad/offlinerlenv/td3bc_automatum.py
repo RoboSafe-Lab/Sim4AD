@@ -252,7 +252,7 @@ class Actor(nn.Module):
         return self.max_action * self.net(state)
 
     @torch.no_grad()
-    def act(self, state: np.ndarray, device: str = TrainConfig.device) -> np.ndarray:
+    def act(self, state: np.ndarray, device: str = TrainConfig.device, deterministic: bool = True) -> np.ndarray:
         state = torch.tensor(state.reshape(1, -1), device=device, dtype=torch.float32)
         return self(state).cpu().data.numpy().flatten()
 

@@ -11,8 +11,8 @@ from evaluation.evaluation_functions import EvaluationFeaturesExtractor
 from baselines.sac.model import Actor as SACActor
 
 
-class RLEvalaution:
-    """Evaluate the offline rl for its diversity"""
+class RLEvaluation:
+    """Evaluate the offline rl and SAC for its diversity"""
 
     def __init__(self, actor, trainer_loader: TD3_BC_Loader):
         """
@@ -27,7 +27,7 @@ class RLEvalaution:
                             reward_normalization=True)
 
     @torch.no_grad()
-    def simulation(self, spawn_method: str, visualization: bool = False) -> Dict:
+    def simulation(self, spawn_method: str, visualization: bool = True) -> Dict:
         """Using the policy to generate trajectories"""
         self.actor.eval()
         looped_dataset = False
@@ -37,7 +37,6 @@ class RLEvalaution:
             obs, info = self.env.reset(seed=EvalConfig.seed)
             terminated, truncated = False, False
             while not terminated and not truncated:
-                # TODO: @Cheng, you had action = self.actor.act(obs, TrainConfig.device)
                 action = self.actor.act(obs, device=EvalConfig.device, deterministic=True)
                 state, reward, terminated, truncated, _ = self.env.step(action)
                 obs = state
@@ -59,30 +58,31 @@ class RLEvalaution:
         return simulation_agents
 
 
-def begin_evaluation(simulation_agents: Dict):
+def begin_evaluation(simulation_agents: Dict, evaluation_episodes):
     """Evaluate the criticality distribution under the current policy for diversity analysis"""
-    evaluator = EvaluationFeaturesExtractor("evaluator")
+    evaluator = EvaluationFeaturesExtractor("evaluator", evaluation_episodes)
     evaluator.load(simulation_agents)
     evaluator.plot_criticality_distribution()
 
 
 def main():
     # configuration
-    policy_type = 'sac'
+    policy_type = 'offlinerl'
     normal_map = "appershofen"
-    spawn_method = "dataset_all"
+    spawn_method = "dataset_one"
 
     configs = ScenarioConfig.load(get_config_path(normal_map))
     idx = configs.dataset_split["test"]
     evaluation_episodes = [x.recording_id for i, x in enumerate(configs.episodes) if i in idx]
 
-    output_dir = get_file_name_trajectories(policy_type, spawn_method, None, episode_name=evaluation_episodes, param_config=EvalConfig)
+    output_dir = get_file_name_trajectories(policy_type, spawn_method, None, episode_name=evaluation_episodes,
+                                            param_config=EvalConfig)
     # Check if the results are already saved
     if os.path.exists(output_dir):
         with open(output_dir, "rb") as f:
             simulation_agents = pickle.load(f)
         # Begin the evaluation function
-        begin_evaluation(simulation_agents)
+        begin_evaluation(simulation_agents, evaluation_episodes)
     else:
         simulation_agents = None
 
@@ -93,7 +93,7 @@ def main():
         if policy_type == 'offlinerl':
             parameter_loader.load_model(model_path)
             actor = parameter_loader.actor
-            offline_rl_eva = RLEvalaution(actor, parameter_loader)
+            offline_rl_eva = RLEvaluation(actor, parameter_loader)
             simulation_agents = offline_rl_eva.simulation(spawn_method=spawn_method)
 
         # TODO: add other policies
@@ -101,7 +101,7 @@ def main():
             device = parameter_loader.config.device
             actor = SACActor(parameter_loader.env, device=device).to(device)
             actor.load_state_dict(torch.load(get_path_sac_model()))
-            sac_eval = RLEvalaution(actor, parameter_loader)
+            sac_eval = RLEvaluation(actor, parameter_loader)
             simulation_agents = sac_eval.simulation(spawn_method=spawn_method)
 
         elif policy_type == 'bc':

@@ -72,8 +72,8 @@ class SimulatorEnv(gym.Env):
         self.seed_used = seed
 
     @property
-    def clustering(self):
-        return self.simulation.clustering
+    def driving_style(self):
+        return "General" if self.simulation.clustering == "all" else self.simulation.clustering
 
     @property
     def dataset_split(self):

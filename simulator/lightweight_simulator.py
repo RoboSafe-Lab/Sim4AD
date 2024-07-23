@@ -274,21 +274,21 @@ class Sim4ADSimulation:
         Reset the simulation for the gym env. It means that we change the agent we are evaluating.
 
         :return initial_obs: The initial observation for the agent being evaluated.
-                info_: None
+                info: None
         """
 
         self.__simulation_history = []
 
         initial_obs = None
-        info_ = None
+        info = None
         if len(self.__agents_to_add.keys()) > 0:
-            initial_obs, info_ = self.__update_vehicles(soft_reset=True)
+            initial_obs, info = self.__update_vehicles(soft_reset=True)
 
         if initial_obs is None:
             self.__change_episode()
-            initial_obs, info_ = self.__update_vehicles(soft_reset=True)
+            initial_obs, info = self.__update_vehicles(soft_reset=True)
 
-        return initial_obs, info_
+        return initial_obs, info
 
     def step(self, action: Tuple[float, float] = None, return_done: bool = False):
         """
@@ -379,7 +379,7 @@ class Sim4ADSimulation:
 
         # Generate the first observation for the new agents
         obs = None
-        info_ = {}
+        info = {}
         for agent_id, _ in add_agents.items():
 
             if agent_id in self.__dead_agents:
@@ -390,16 +390,16 @@ class Sim4ADSimulation:
                 continue
 
             agent = self.__agents[agent_id]
-            obs_, info_ = self._get_observation(agent, self.__state[agent_id])
+            obs_, info = self._get_observation(agent, self.__state[agent_id])
 
             if soft_reset and (agent_id == self.__agent_evaluated):
                 obs = copy.deepcopy(obs_)
-                info_ = copy.deepcopy(info_)
+                info = copy.deepcopy(info)
 
         # Remove any agents that couldn't be added due to collisions at spawn.
         self.__remove_dead_agents()
 
-        return obs, info_
+        return obs, info
 
     def __remove_dead_agents(self):
         # REMOVE DEAD AGENTS
@@ -666,7 +666,7 @@ class Sim4ADSimulation:
         """
         # Compute the observation for each agent for the current state
         obs = None
-        info_ = {}
+        info = {}
         for agent_id, agent in self.__agents.items():
 
             if agent is None:
@@ -675,9 +675,9 @@ class Sim4ADSimulation:
             obs_, info_ = self._get_observation(agent=agent, state=self.__state[agent_id])
             if return_obs_for_aid is not None and agent_id == return_obs_for_aid:
                 obs = copy.deepcopy(obs_)
-                info_ = copy.deepcopy(info_)
+                info = copy.deepcopy(info_)
 
-        return obs, info_
+        return obs, info
 
     def _next_state(self, agent: PolicyAgent, current_state: State, action: Action) -> State:
         """
@@ -797,7 +797,7 @@ class Sim4ADSimulation:
             self._handle_none_lane(agent, off_road)
 
         done = collision or off_road or truncated or reached_goal
-        info_ = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated,
+        info = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated,
                 "ego_speed": None, "ego_long_acc": None, "ego_lat_acc": None, "ego_long_jerk": None,
                 "thw_front": None, "thw_rear": None, "induced_deceleration": DEFAULT_DECELERATION_VALUE
                 }
@@ -816,7 +816,7 @@ class Sim4ADSimulation:
                 agent.add_distance_midline(d_midline)
 
                 # Compute the features needed to use the IRL reward (and evaluation)
-                self._update_info(agent, nearby_vehicles, state, observation, done, info_)
+                self._update_info(agent, nearby_vehicles, state, observation, done, info)
 
             # Put the observation in a tuple, as the policy expects it
             obs = Observation(state=observation).get_tuple()
@@ -824,15 +824,15 @@ class Sim4ADSimulation:
         else:
             obs = None
 
-        return obs, info_
+        return obs, info
 
-    def _update_info(self, agent, nearby_vehicles, state, observation, done, info_):
+    def _update_info(self, agent, nearby_vehicles, state, observation, done, info):
         ax, ay = agent.compute_current_lat_lon_acceleration()
         long_jerk = agent.compute_current_long_jerk()
         _, thw = self.evaluator.compute_ttc_tth(agent, state=state, nearby_vehicles=nearby_vehicles,
                                                 episode_id=None, add=False)
 
-        info_.update({
+        info.update({
             "ego_speed": state.speed,
             "ego_long_acc": ax,
             "ego_lat_acc": ay,
@@ -859,9 +859,9 @@ class Sim4ADSimulation:
                     rear_a=observation["behind_ego_rel_a"],
                     rear_position=rear_position
                 )
-                info_["induced_deceleration"] = induced_deceleration
+                info["induced_deceleration"] = induced_deceleration
 
-        return info_
+        return info
 
     def compute_induced_deceleration(self, ego_v, ego_length, rear_agent, ego_rear_d, rear_a,
                                      rear_position) -> float:

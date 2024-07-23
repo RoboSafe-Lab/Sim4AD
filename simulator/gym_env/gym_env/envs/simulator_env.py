@@ -104,8 +104,8 @@ class SimulatorEnv(gym.Env):
             super().reset(seed=seed)
             self.seed(seed)
 
-        obs, info_ = self.simulation.soft_reset()
-        return np.array(obs, dtype=np.float32), info_
+        obs, info = self.simulation.soft_reset()
+        return np.array(obs, dtype=np.float32), info
 
     def step(self, action):
         """
@@ -115,14 +115,14 @@ class SimulatorEnv(gym.Env):
         """
 
         # Info contains the cause of the death, if dead
-        next_obs, info_ = self.simulation.step(action)
-        terminated = info_["reached_goal"]
-        truncated = info_["truncated"] or info_["collision"] or info_["off_road"]
+        next_obs, info = self.simulation.step(action)
+        terminated = info["reached_goal"]
+        truncated = info["truncated"] or info["collision"] or info["off_road"]
 
         # An episode is terminated iff the agent has reached the target
-        reward = get_reward(terminated=terminated, truncated=truncated, info_=info_, irl_weights=self.weights)
+        reward = get_reward(terminated=terminated, truncated=truncated, info=info, irl_weights=self.weights)
 
-        return np.array(next_obs, dtype=np.float32), reward, terminated, truncated, info_
+        return np.array(next_obs, dtype=np.float32), reward, terminated, truncated, info
 
     def render(self):
         """

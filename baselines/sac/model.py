@@ -13,6 +13,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 import tyro
 from stable_baselines3.common.buffers import ReplayBuffer
+import stable_baselines3 as sb3
+import wandb
 
 import gym_env  # If this fails, install it with `pip install -e .` from \simulator\gym_env
 
@@ -84,7 +86,7 @@ class Args:
     evaluation_seeds: List[int] = (0, 1, 2, 3, 4)  # TODO: change this to 5 different seeds -- currently not used
 
 
-def make_env(env_id, seed, run_name, evaluation=False, normalisation: bool = False):
+def make_env(env_id, seed, run_name, args, evaluation=False, normalisation: bool = False):
 
     logging.info(f"[SAC] Using IRL reward: {args.use_irl_reward}")
     logging.info(f"[SAC] Using cluster: {args.cluster}")
@@ -195,7 +197,7 @@ class Actor(nn.Module):
         return action.cpu().data.numpy().flatten()
 
 
-def evaluate(evaluation_seeds):
+def evaluate(evaluation_seeds, actor, eval_env, device):
     actor.eval()
     all_test_rets = []
     for seed in evaluation_seeds:
@@ -213,18 +215,7 @@ def evaluate(evaluation_seeds):
     actor.train()
     return np.mean(all_test_rets)
 
-
-if __name__ == "__main__":
-    import stable_baselines3 as sb3
-    import argparse
-
-    if sb3.__version__ < "2.0":
-        raise ValueError(
-            """Ongoing migration: run the following command to install the new dependencies:
-poetry run pip install "stable_baselines3==2.0.0a1"
-"""
-        )
-
+def main():
     args = tyro.cli(Args)
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     import wandb
@@ -248,10 +239,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
     # env setup
-    env = make_env(args.env_id, seed=args.seed, run_name=run_name, normalisation=args.normalise_state)
+    env = make_env(args.env_id, seed=args.seed, args=args, run_name=run_name, normalisation=args.normalise_state)
     assert isinstance(env.action_space, gym.spaces.Box), "only continuous action space is supported"
 
-    eval_env = make_env(args.env_id, seed=args.seed, run_name=run_name, evaluation=True, normalisation=args.normalise_state)
+    eval_env = make_env(args.env_id, seed=args.seed, args=args, run_name=run_name, evaluation=True,
+                        normalisation=args.normalise_state)
 
     max_action = float(env.action_space.high[0])
 
@@ -398,11 +390,25 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
             # Evaluate the agent on 5 different seeds
             if global_step % 1000 == 0:
-                eval_return = evaluate(args.evaluation_seeds)
+                eval_return = evaluate(args.evaluation_seeds, actor, eval_env, device)
                 if eval_return > best_eval:
                     best_eval = eval_return
                     print("Saving new best model")
-                    torch.save(actor.state_dict(), f"best_model_sac_{args.cluster}_irl{args.use_irl_reward}_{run_name}.pth")
+                    torch.save(actor.state_dict(),
+                               f"best_model_sac_{args.cluster}_irl{args.use_irl_reward}_{run_name}.pth")
 
     env.close()
     eval_env.close()
+
+
+if __name__ == "__main__":
+
+
+    if sb3.__version__ < "2.0":
+        raise ValueError(
+            """Ongoing migration: run the following command to install the new dependencies:
+poetry run pip install "stable_baselines3==2.0.0a1"
+"""
+        )
+
+    main()

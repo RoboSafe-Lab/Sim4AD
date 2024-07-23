@@ -533,6 +533,20 @@ def compute_normalization_parameters(state_dim, dataset, normalize):
     return state_mean, state_std, reward_mean, reward_std
 
 
+def get_normalisation_parameters(driving_style: str, map_name: str, dataset_split: str, state_dim: int):
+    """
+
+    :param driving_style:
+    :param map_name:
+    :param dataset_split:
+    :param state_dim: dimension of the state space. e.g., 34 if using an observation space with 34 elements. Otherwise,
+                        self.env.observation_space.shape[0]
+    :return: state_mean, state_std, reward_mean, reward_std
+    """
+    demonstrations = load_demonstration_data(driving_style, map_name, dataset_split)
+    return compute_normalization_parameters(state_dim, demonstrations, normalize=True)
+
+
 def initialize_model(state_dim, action_dim, max_action, config):
     actor = Actor(state_dim, action_dim, max_action).to(config.device)
     actor_optimizer = torch.optim.Adam(actor.parameters(), lr=3e-4)

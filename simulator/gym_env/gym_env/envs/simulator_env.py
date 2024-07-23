@@ -65,10 +65,23 @@ class SimulatorEnv(gym.Env):
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
+        self._dataset_split = dataset_split
 
         if use_irl_reward:
             self.load_weights()
         self.seed_used = seed
+
+    @property
+    def driving_style(self):
+        return "General" if self.simulation.clustering == "all" else self.simulation.clustering
+
+    @property
+    def dataset_split(self):
+        return self._dataset_split
+
+    @property
+    def map_name(self):
+        return self.simulation.map_name
 
     def seed(self, seed=None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)

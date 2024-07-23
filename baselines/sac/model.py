@@ -13,8 +13,16 @@ import torch.nn.functional as F
 import torch.optim as optim
 import tyro
 from stable_baselines3.common.buffers import ReplayBuffer
+import stable_baselines3 as sb3
+import wandb
 
 import gym_env  # If this fails, install it with `pip install -e .` from \simulator\gym_env
+
+import logging
+
+from sim4ad.offlinerlenv.td3bc_automatum import wrap_env, TD3_BC_Loader, get_normalisation_parameters
+
+logging.basicConfig(level=logging.INFO)
 
 
 @dataclass
@@ -66,17 +74,36 @@ class Args:
     hidden_layer_dim = 256
     """the hidden layer dimension of (all) the networks"""
 
+    cluster: str = "all"
+    """the clustering method to use. Options include 'all', 'Aggressive', 'Normal', 'Cautious'"""
+
+    normalise_state: bool = True
+    """whether to normalise the state and the reward"""
+
     use_irl_reward: bool = False
     """whether to use the IRL reward or the basic default reward"""
 
     evaluation_seeds: List[int] = (0, 1, 2, 3, 4)  # TODO: change this to 5 different seeds -- currently not used
 
 
-def make_env(env_id, seed, run_name, evaluation=False):
+def make_env(env_id, seed, run_name, args, evaluation=False, normalisation: bool = False):
+
+    logging.info(f"[SAC] Using IRL reward: {args.use_irl_reward}")
+    logging.info(f"[SAC] Using cluster: {args.cluster}")
+
     if evaluation:
-        env = gym.make(env_id, dataset_split="valid", use_irl_reward=args.use_irl_reward)
+        env = gym.make(env_id, dataset_split="valid", use_irl_reward=args.use_irl_reward, clustering=args.cluster)
     else:
-        env = gym.make(env_id, use_irl_reward=args.use_irl_reward)
+        env = gym.make(env_id, use_irl_reward=args.use_irl_reward, clustering=args.cluster)
+
+    if normalisation:
+        state_mean, state_std, reward_mean, reward_std = get_normalisation_parameters(driving_style=env.unwrapped.driving_style,
+                                                                                      map_name=env.unwrapped.map_name,
+                                                                                      dataset_split=env.unwrapped.dataset_split,
+                                                                                      state_dim=env.observation_space.shape[0])
+        env = wrap_env(env, state_mean=state_mean, state_std=state_std, reward_mean=reward_mean, reward_std=reward_std,
+                       reward_normalization=True)
+
     env = gym.wrappers.RecordEpisodeStatistics(env)
     env.action_space.seed(seed)
     return env
@@ -118,7 +145,7 @@ class Actor(nn.Module):
         self.register_buffer(
             "action_bias", torch.tensor((env.action_space.high + env.action_space.low) / 2.0, dtype=torch.float32)
         )
-        self.name="SACActor"
+        self.name = "SACActor"
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -169,15 +196,15 @@ class Actor(nn.Module):
         # otherwise, use the action that was sampled from the distribution
         return action.cpu().data.numpy().flatten()
 
-def evaluate(evaluation_seeds):
+
+def evaluate(evaluation_seeds, actor, eval_env, device):
     actor.eval()
     all_test_rets = []
     for seed in evaluation_seeds:
         obs, _ = eval_env.reset(seed=seed)  # TODO: currently the seed may not do anything (?)
         episodic_return = 0
         while True:
-            action, _, _ = actor.get_action(torch.Tensor(obs).to(device))
-            action = action.detach().cpu().numpy()
+            action = actor.act(torch.Tensor(obs).to(device), device=device)
             next_obs, reward, termination, truncation, info = eval_env.step(action)
             episodic_return += reward
             obs = next_obs
@@ -188,18 +215,7 @@ def evaluate(evaluation_seeds):
     actor.train()
     return np.mean(all_test_rets)
 
-
-if __name__ == "__main__":
-    import stable_baselines3 as sb3
-    import argparse
-
-    if sb3.__version__ < "2.0":
-        raise ValueError(
-            """Ongoing migration: run the following command to install the new dependencies:
-poetry run pip install "stable_baselines3==2.0.0a1"
-"""
-        )
-
+def main():
     args = tyro.cli(Args)
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     import wandb
@@ -223,10 +239,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
     # env setup
-    env = make_env(args.env_id, seed=args.seed, run_name=run_name)
+    env = make_env(args.env_id, seed=args.seed, args=args, run_name=run_name, normalisation=args.normalise_state)
     assert isinstance(env.action_space, gym.spaces.Box), "only continuous action space is supported"
 
-    eval_env = make_env(args.env_id, seed=args.seed, run_name=run_name, evaluation=True)
+    eval_env = make_env(args.env_id, seed=args.seed, args=args, run_name=run_name, evaluation=True,
+                        normalisation=args.normalise_state)
 
     max_action = float(env.action_space.high[0])
 
@@ -269,8 +286,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         if global_step < args.learning_starts:
             action = env.action_space.sample()
         else:
-            action, _, _ = actor.get_action(torch.Tensor(obs).to(device))
-            action = action.detach().cpu().numpy()
+            action = actor.act(torch.Tensor(obs).to(device), device=device)
 
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, reward, termination, truncation, info = env.step(action)
@@ -374,13 +390,25 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
             # Evaluate the agent on 5 different seeds
             if global_step % 1000 == 0:
-                eval_return = evaluate(args.evaluation_seeds)
+                eval_return = evaluate(args.evaluation_seeds, actor, eval_env, device)
                 if eval_return > best_eval:
                     best_eval = eval_return
                     print("Saving new best model")
-                    torch.save(actor.state_dict(), f"best_model_sac_{run_name}.pth")
+                    torch.save(actor.state_dict(),
+                               f"best_model_sac_{args.cluster}_irl{args.use_irl_reward}_{run_name}.pth")
 
     env.close()
     eval_env.close()
 
 
+if __name__ == "__main__":
+
+
+    if sb3.__version__ < "2.0":
+        raise ValueError(
+            """Ongoing migration: run the following command to install the new dependencies:
+poetry run pip install "stable_baselines3==2.0.0a1"
+"""
+        )
+
+    main()

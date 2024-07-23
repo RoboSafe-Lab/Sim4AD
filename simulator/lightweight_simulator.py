@@ -390,11 +390,11 @@ class Sim4ADSimulation:
                 continue
 
             agent = self.__agents[agent_id]
-            obs_, info_ = self._get_observation(agent, self.__state[agent_id])
+            obs_, info = self._get_observation(agent, self.__state[agent_id])
 
             if soft_reset and (agent_id == self.__agent_evaluated):
                 obs = copy.deepcopy(obs_)
-                info = copy.deepcopy(info_)
+                info = copy.deepcopy(info)
 
         # Remove any agents that couldn't be added due to collisions at spawn.
         self.__remove_dead_agents()
@@ -1038,6 +1038,10 @@ class Sim4ADSimulation:
     @property
     def agents(self):
         return self.__agents
+
+    @property
+    def map_name(self):
+        return self.__scenario_name
 
     @property
     def simulation_history(self):

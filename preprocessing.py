@@ -19,7 +19,7 @@ def main():
     args = parse_args()
 
     # creat two dicts, one for training and one for testing
-    data_splits = ['train', 'test']
+    data_splits = ['train', 'test', 'valid']
     driving_styles = {0: 'Cautious', 1: 'Normal', 2: 'Aggressive', -1: 'General'}
     driving_style = driving_styles[args.driving_style_idx]
     if driving_style != 'General':

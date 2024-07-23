@@ -1,12 +1,14 @@
 import logging
 from collections import defaultdict
-from typing import Dict, Any
+from typing import Dict, Any, List
 import numpy as np
 from scipy.spatial import distance
 from stable_baselines3 import SAC
+from openautomatumdronedata.dataset import droneDataset
 
+from sim4ad.data import ScenarioConfig, DatasetScenario
 from sim4ad.opendrive import plot_map, Map
-from sim4ad.path_utils import get_agent_id_combined
+from sim4ad.path_utils import get_agent_id_combined, get_path_to_automatum_scenario, get_config_path
 from simulator.policy_agent import PolicyAgent
 from simulator.simulator_util import DeathCause
 from simulator.state_action import State
@@ -19,12 +21,57 @@ logger = logging.getLogger(__name__)
 
 class EvaluationFeaturesExtractor:
 
-    def __init__(self, sim_name: str):
+    def __init__(self, sim_name: str, episode_names: List[str] = None):
         self.__sim_name = sim_name
 
         # A dictionary (indexed by agent id) of dictionaries (indexed by feature type) of features over time.
         self.__agents = defaultdict(lambda: defaultdict(list))
         self.__computed_metrics = defaultdict(dict)  # Store them as [metric][agent_id] = value
+        if episode_names is not None:
+            gt_agents_data = self.get_ground_truth_data(episode_names)
+            self.__real_position, self.__real_speeds, self.__real_ttcs, self.__real_tths = self.get_ground_truth_info(
+                gt_agents_data)
+
+    @staticmethod
+    def get_ground_truth_data(episode_names):
+        """ Given a list of episodes, get the value for each agent by combining the episode_id and the agent_id """
+        gt_agents_data = {}
+
+        for episode_name in episode_names:
+            path_to_dataset_folder = get_path_to_automatum_scenario(episode_name)
+            dataset = droneDataset(path_to_dataset_folder)
+            dyn_world = dataset.dynWorld
+            # dt = dyn_world.delta_t
+
+            scenario_name = episode_name.split("-")[2]
+            config = ScenarioConfig.load(get_config_path(scenario_name))
+            data_loader = DatasetScenario(config)
+            episode = data_loader.load_episode(episode_id=episode_name)
+
+            for agent_id, agent in episode.agents.items():
+                gt_agents_data[get_agent_id_combined(episode_name=episode_name, agent_id=agent_id)] = agent
+
+        return gt_agents_data
+
+    @staticmethod
+    def get_ground_truth_info(gt_agents_data):
+        """Get the real position, speeds, ttcs and tths"""
+        # Fidelity Metrics
+        real_position = {}
+        real_speeds = {}
+        real_ttcs = {}
+        real_tths = {}
+
+        # get the corresponding_gt data for our agents only
+        # gt_agents_data = {agent_id: gt_agents_data[agent_id] for agent_id in self.__agents.keys()}
+
+        for agent_id, agent in gt_agents_data.items():
+            real_position[agent_id] = {"x_s": agent.x_vec, "y_s": agent.y_vec}
+            real_speeds[agent_id] = {"vx_s": agent.vx_vec, "vy_s": agent.vy_vec}
+            real_ttcs[agent_id] = agent.ttc_dict_vec
+            real_tths[agent_id] = agent.tth_dict_vec
+
+        return real_position, real_speeds, real_ttcs, real_tths
 
     def save_trajectory(self, agent: PolicyAgent, death_cause: DeathCause, episode_id: str):
         """
@@ -110,33 +157,21 @@ class EvaluationFeaturesExtractor:
 
     def plot_criticality_distribution(self):
         """plot criticality distribution for diversity analysis"""
-        ttc, thw = [], []
-        for agent_id, features in self.__agents.items():
-            ttc.extend([x for x in features["TTC"] if x is not None])
-            thw.extend([x for x in features["TTH"] if x is not None])
+        all_simulated_ttcs, all_real_ttcs, all_simulated_tths, all_real_tths = self.compute_all_ttc_tth()
 
-        def plot_distogram(label, data):
-            # Plot histogram and PDFs
-            plt.figure(figsize=(6, 4))
-            plt.hist(data, bins=30, density=True, alpha=0.6, color='blue', label=label)
-            plt.xlabel(label)
-            plt.ylabel('Normalized PDF')
-            plt.legend()
-            plt.grid(True, which='both', axis='both', color='black', linestyle='--', linewidth=0.5)
-
-        plot_distogram('TTC', ttc)
-        plot_distogram('THW', thw)
+        self.plot_distogram('TTC', real_data=all_real_ttcs, simulated_data=all_simulated_ttcs)
+        self.plot_distogram('THW', real_data=all_real_tths, simulated_data=all_simulated_tths)
 
         plt.show()
 
-    def get_simulated_real_speeds(self, real_speedsxy: Dict[str, Dict[str, np.ndarray]]):
+    def get_simulated_real_speeds(self):
 
         real_speeds = {}
         simulated_speeds = {}
 
         for agent_id, features in self.__agents.items():
-            real_vel_x = real_speedsxy[agent_id]["vx_s"]
-            real_vel_y = real_speedsxy[agent_id]["vy_s"]
+            real_vel_x = self.__real_speeds[agent_id]["vx_s"]
+            real_vel_y = self.__real_speeds[agent_id]["vy_s"]
             real_speed = np.sqrt(np.array(real_vel_x) ** 2 + np.array(real_vel_y) ** 2)
             simulated_speed = np.array([state.speed for state in features["states"]])
 
@@ -151,6 +186,13 @@ class EvaluationFeaturesExtractor:
             simulated_speeds[agent_id] = simulated_speed
 
         return real_speeds, simulated_speeds
+
+    def plot_speed_distribution(self):
+        """Plot speed distributions for human likeness analysis"""
+        real_speeds, simulated_speeds = self.get_simulated_real_speeds()
+        self.plot_distogram('Speed (m/s)', real_data=real_speeds, simulated_data=simulated_speeds)
+
+        plt.show()
 
     def get_real_simulated_xy(self, real_position: Dict[str, Dict[str, np.ndarray]]):
         """
@@ -183,10 +225,9 @@ class EvaluationFeaturesExtractor:
 
         return real_xs, real_ys, simulated_xs, simulated_ys
 
-    def compute_ttc_tth_jsd(self, real_ttcs: Dict[str, Dict[str, np.ndarray]],
-                            real_tths: Dict[str, Dict[str, np.ndarray]]):
+    def compute_all_ttc_tth(self):
         """
-        Compute the Jensen-Shannon Divergence between the TTC and TTH distributions of the agents.
+        Compute the TTC and TTH distributions of the agents.
         """
 
         def compute_average(values):
@@ -208,16 +249,13 @@ class EvaluationFeaturesExtractor:
         all_real_tths = []
 
         for agent_id, features in self.__agents.items():
-            T_ttc = min(len(features["TTC"]), len(real_ttcs[agent_id]))
-            T_tth = min(len(features["TTH"]), len(real_tths[agent_id]))
+            T_ttc = min(len(features["TTC"]), len(self.__real_ttcs[agent_id]))
+            T_tth = min(len(features["TTH"]), len(self.__real_tths[agent_id]))
 
-            process_data(features["TTC"], real_ttcs[agent_id], all_simulated_ttcs, all_real_ttcs, T_ttc)
-            process_data(features["TTH"], real_tths[agent_id], all_simulated_tths, all_real_tths, T_tth)
+            process_data(features["TTC"], self.__real_ttcs[agent_id], all_simulated_ttcs, all_real_ttcs, T_ttc)
+            process_data(features["TTH"], self.__real_tths[agent_id], all_simulated_tths, all_real_tths, T_tth)
 
-        jsd_ttc = self.compute_jsd(all_simulated_ttcs, all_real_ttcs)
-        jsd_tth = self.compute_jsd(all_simulated_tths, all_real_tths)
-
-        return jsd_ttc, jsd_tth
+        return all_simulated_ttcs, all_real_ttcs, all_simulated_tths, all_real_tths
 
     @staticmethod
     def compute_jsd(simulated_values, real_values):
@@ -274,9 +312,9 @@ class EvaluationFeaturesExtractor:
 
         return collision_rate
 
-    def compute_jsd_vel(self, real_speeds: Dict[str, Dict[str, np.ndarray]]):
+    def compute_jsd_vel(self):
         """Compute the two velocity distributions using the JSD"""
-        real_speeds, simulated_speeds = self.get_simulated_real_speeds(real_speeds)
+        real_speeds, simulated_speeds = self.get_simulated_real_speeds()
 
         all_simulated_speeds = []
         all_real_speeds = []
@@ -374,21 +412,6 @@ class EvaluationFeaturesExtractor:
         if len(self.__agents) == 0:
             return {}, {}
 
-        # Fidelity Metrics
-        real_position = {}
-        real_speeds = {}
-        real_ttcs = {}
-        real_tths = {}
-
-        # get the corresponding_gt data for our agents only
-        # gt_agents_data = {agent_id: gt_agents_data[agent_id] for agent_id in self.__agents.keys()}
-
-        for agent_id, agent in gt_agents_data.items():
-            real_position[agent_id] = {"x_s": agent.x_vec, "y_s": agent.y_vec}
-            real_speeds[agent_id] = {"vx_s": agent.vx_vec, "vy_s": agent.vy_vec}
-            real_ttcs[agent_id] = agent.ttc_dict_vec
-            real_tths[agent_id] = agent.tth_dict_vec
-
         # Safety
         collision_rate = self.compute_collision_rate()
         off_road_rate = self.compute_out_of_road_rate()
@@ -397,16 +420,13 @@ class EvaluationFeaturesExtractor:
         self.compute_coverage_maps(gt_agents_data, filename)
 
         # Realism
-        jsd_ttc, jsd_tth = self.compute_ttc_tth_jsd(real_ttcs=real_ttcs, real_tths=real_tths)
-        jsd_vel = self.compute_jsd_vel(real_speeds=real_speeds)
+        jsd_vel = self.compute_jsd_vel()
         interferences = self.compute_interference()
 
         # Final Scores
         metric_values = {
             "Collision_rate": collision_rate,
             "Off_road_rate": off_road_rate,
-            "JSD_TTC": jsd_ttc,
-            "JSD_TTH": jsd_tth,
             "JSD_Velocity": jsd_vel,
             "Interference": interferences
         }
@@ -414,9 +434,20 @@ class EvaluationFeaturesExtractor:
         return metric_values
 
     @staticmethod
-    def score_fidelity(x):
-        # ade, fde, td-ade
-        return 1 - np.tanh(x)
+    def plot_distogram(label, real_data, simulated_data):
+        # Plot histograms and PDFs for real and simulated data
+        plt.figure(figsize=(6, 4))
+
+        # Plot real data
+        plt.hist(real_data, bins=30, density=True, alpha=0.6, color='blue', label=f'Real {label}')
+
+        # Plot simulated data
+        plt.hist(simulated_data, bins=30, density=True, alpha=0.6, color='orange', label=f'Simulated {label}')
+
+        plt.xlabel(label)
+        plt.ylabel('Normalized PDF')
+        plt.legend()
+        plt.grid(True, which='both', axis='both', color='black', linestyle='--', linewidth=0.5)
 
     @property
     def agents(self):

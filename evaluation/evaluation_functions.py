@@ -160,9 +160,9 @@ class EvaluationFeaturesExtractor:
 
     def plot_criticality_distribution(self):
         """plot criticality distribution for diversity analysis"""
-        all_simulated_ttcs, all_real_ttcs, all_simulated_tths, all_real_tths = self.compute_all_ttc_tth()
+        all_simulated_ittcs, all_real_ittcs, all_simulated_tths, all_real_tths = self.compute_all_ittc_tth()
 
-        self.plot_distogram('TTC', real_data=all_real_ttcs, simulated_data=all_simulated_ttcs)
+        self.plot_distogram('iTTC', real_data=all_real_ittcs, simulated_data=all_simulated_ittcs)
         self.plot_distogram('THW', real_data=all_real_tths, simulated_data=all_simulated_tths)
 
         plt.show()
@@ -228,24 +228,38 @@ class EvaluationFeaturesExtractor:
 
         return real_xs, real_ys, simulated_xs, simulated_ys
 
-    def compute_all_ttc_tth(self):
+    def compute_all_ittc_tth(self):
         """
-        Compute the TTC and TTH distributions of the agents.
+        Compute the inverse TTC (iTTC) and TTH distributions of the agents.
         """
-        all_simulated_ttcs = []
+        all_simulated_ittcs = []
         all_simulated_tths = []
-        all_real_ttcs = []
+        all_real_ittcs = []
         all_real_tths = []
 
         for agent_id, features in self.__agents.items():
-            all_simulated_ttcs.extend(v for v in features["TTC"] if v is not None)
+            for v in features["TTC"]:
+                if v is not None:
+                    ittc = 1.0 / v
+                    if ittc > 1: # > 1 means critical
+                        ittc = 1.0
+                    elif ittc < 0: # < 0 means uncritical
+                        ittc = 0
+                    all_simulated_ittcs.append(ittc)
             all_simulated_tths.extend(v for v in features["TTH"] if v is not None)
         for features in self.__real_ttcs.values():
-            all_real_ttcs.extend(v['front_ego'] for v in features if v['front_ego'] is not None)
+            for v in features:
+                if v['front_ego'] is not None:
+                    ittc = 1.0 / v['front_ego']
+                    if ittc > 1:
+                        ittc = 1.0
+                    elif ittc < 0:
+                        ittc = 0
+                    all_real_ittcs.append(ittc)
         for features in self.__real_tths.values():
             all_real_tths.extend(v['front_ego'] for v in features if v['front_ego'] is not None)
 
-        return all_simulated_ttcs, all_real_ttcs, all_simulated_tths, all_real_tths
+        return all_simulated_ittcs, all_real_ittcs, all_simulated_tths, all_real_tths
 
     @staticmethod
     def compute_jsd(simulated_values, real_values):
@@ -424,15 +438,17 @@ class EvaluationFeaturesExtractor:
         return metric_values
 
     @staticmethod
-    def plot_distogram(label, real_data, simulated_data):
+    def plot_distogram(label, real_data=None, simulated_data=None):
         # Plot histograms and PDFs for real and simulated data
         plt.figure(figsize=(6, 4))
 
         # Plot real data
-        plt.hist(real_data, bins=30, density=True, alpha=0.6, color='blue', label=f'Real {label}')
+        if real_data is not None:
+            plt.hist(real_data, bins=30, density=True, alpha=0.6, color='blue', label=f'Real {label}')
 
         # Plot simulated data
-        plt.hist(simulated_data, bins=30, density=True, alpha=0.6, color='orange', label=f'Simulated {label}')
+        if simulated_data is not None:
+            plt.hist(simulated_data, bins=30, density=True, alpha=0.6, color='orange', label=f'Simulated {label}')
 
         plt.xlabel(label)
         plt.ylabel('Normalized PDF')

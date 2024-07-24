@@ -39,6 +39,7 @@ from sim4ad.common_constants import DEFAULT_DECELERATION_VALUE
 
 logger = logging.getLogger(__name__)
 
+
 class Sim4ADSimulation:
 
     def __init__(self,
@@ -60,6 +61,7 @@ class Sim4ADSimulation:
         """
 
         self.episode_idx = 0  # Index of the episode we are currently evaluating
+        self.__time = None
         self.__all_episode_names = episode_name
         self.will_be_done_next = False
         self.done_full_cycle = False  # If iterate once through all agents in all episodes
@@ -80,11 +82,12 @@ class Sim4ADSimulation:
 
         self.__spawn_method = spawn_method
 
-        assert policy_type in ["follow_dataset", "rl", "idm"] or "bc" in policy_type.lower() \
+        assert policy_type in ["follow_dataset", "rl", "idm", "offlinerl"] or "bc" in policy_type.lower() \
                or "sac" in policy_type.lower(), f"Policy type {policy_type} not found." or driving_style_policies is not None
 
         if driving_style_policies is not None:
-            assert spawn_method == "dataset_all", "Driving style policies are currently only compatible with 'dataset_all' spawn"
+            assert spawn_method == "dataset_all", \
+                "Driving style policies are currently only compatible with 'dataset_all' spawn"
 
         if policy_type == "follow_dataset":
             assert spawn_method != "random", "Policy type 'follow_dataset' is not compatible with 'random' spawn"
@@ -92,7 +95,6 @@ class Sim4ADSimulation:
         self.__policy_type = policy_type
 
         # Also in load_dataset
-        self.__time = 0
         self.__state = {}
         self.__agents = {}
         self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
@@ -124,7 +126,6 @@ class Sim4ADSimulation:
         episode_name = self.__all_episode_names[self.episode_idx - 1]
         clusters = self.get_clusters()
         return clusters[f"{episode_name}/{agent_id}"]
-
 
     @staticmethod
     def seed(seed: int):
@@ -181,7 +182,6 @@ class Sim4ADSimulation:
             pass
 
         logger.debug(f"Added Agent {new_agent.agent_id}")
-
 
     def _get_policy(self, policy):
 
@@ -255,7 +255,7 @@ class Sim4ADSimulation:
 
     def full_reset(self):
         """ Remove all agents and reset internal state of simulation. """
-        self.__time = 0
+        self.__time = self.__initial_time
         self.__state = {}
         self.__agents = {}
         self.__agents_to_add = deepcopy(self.__episode_agents)
@@ -331,7 +331,7 @@ class Sim4ADSimulation:
 
         if self.__spawn_method == "dataset_all":
             for agent_id, agent in self.__agents_to_add.items():
-                if (self.__time - agent.time[0]) > -1e-6 and (agent.time[-1] - self.time) > -1e-6:
+                if (self.__time - agent.time[0]) >= 0 and (agent.time[-1] - self.time) >= 0:
                     if agent_id not in self.__agents:
                         if self.__driving_style_policies:
                             policy_to_use = self.get_driving_style_vehicle(agent_id)
@@ -341,7 +341,7 @@ class Sim4ADSimulation:
 
                         add_agents[agent_id] = (agent, policy_to_use)
         elif self.__spawn_method == "random":
-            if self.__time == 0:
+            if self.__time == self.__initial_time:
                 self.__spawn_features, self.__possible_vehicle_dimensions = self._get_spawn_positions()
 
             spawn_probability = self.SPAWN_PROBABILITY
@@ -364,7 +364,7 @@ class Sim4ADSimulation:
 
             # Spawn all vehicles alive at the current time.
             for agent_id, agent in self.__episode_agents.items():
-                if (self.__time - agent.time[0]) > -1e-6 and (agent.time[-1] - self.time) > -1e-6:
+                if (self.__time - agent.time[0]) >= 0 and (agent.time[-1] - self.time) >= 0:
                     if agent_id not in self.__agents:
                         if agent_id == self.__agent_evaluated:
                             add_agents[agent_id] = (agent, self.__policy_type)
@@ -971,7 +971,8 @@ class Sim4ADSimulation:
         self.__scenario_map = Map.parse_from_opendrive(get_path_to_automatum_map(episode_name))
         self.__episode_agents = episode.agents
 
-        self.__time = 0
+        self.__initial_time = episode.frames[0].time
+        self.__time = self.__initial_time
         self.__state = {}
         self.__agents = {}
         self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.

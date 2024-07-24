@@ -12,6 +12,7 @@ from sim4ad.path_utils import get_agent_id_combined, get_path_to_automatum_scena
 from simulator.policy_agent import PolicyAgent
 from simulator.simulator_util import DeathCause
 from simulator.state_action import State
+from sim4ad.offlinerlenv.td3bc_automatum import Actor
 from simulator.simulator_util import PositionNearbyAgent as PNA
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -110,6 +111,8 @@ class EvaluationFeaturesExtractor:
             self.agents[aid]["policy_type"] = agent.policy
         elif isinstance(agent.policy, SAC):
             self.agents[aid]["policy_type"] = "sac"
+        elif isinstance(agent.policy, Actor):
+            self.agents[aid]["policy_type"] = "offlinerl"
         else:
             self.agents[aid]["policy_type"] = agent.policy.name
 

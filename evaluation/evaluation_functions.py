@@ -146,6 +146,9 @@ class EvaluationFeaturesExtractor:
                 v_other = abs(nearby_agent["speed"])
 
                 ttc = d / (v_ego - v_other)
+                # keep the same value as the dataset
+                if ttc < 0:
+                    ttc = -1
                 tth = d / v_ego
 
         if add:
@@ -229,31 +232,18 @@ class EvaluationFeaturesExtractor:
         """
         Compute the TTC and TTH distributions of the agents.
         """
-
-        def compute_average(values):
-            return np.mean([value for value in values if value is not None])
-
-        def process_data(simulated_data, real_data, all_simulated, all_real, T):
-            for t in range(T):
-                avg_simulated = compute_average(simulated_data[t].values())
-                avg_real = compute_average(real_data[t].values())
-
-                if not np.isnan(avg_simulated):
-                    all_simulated.append(avg_simulated)
-                if not np.isnan(avg_real):
-                    all_real.append(avg_real)
-
         all_simulated_ttcs = []
         all_simulated_tths = []
         all_real_ttcs = []
         all_real_tths = []
 
         for agent_id, features in self.__agents.items():
-            T_ttc = min(len(features["TTC"]), len(self.__real_ttcs[agent_id]))
-            T_tth = min(len(features["TTH"]), len(self.__real_tths[agent_id]))
-
-            process_data(features["TTC"], self.__real_ttcs[agent_id], all_simulated_ttcs, all_real_ttcs, T_ttc)
-            process_data(features["TTH"], self.__real_tths[agent_id], all_simulated_tths, all_real_tths, T_tth)
+            all_simulated_ttcs.extend(v for v in features["TTC"] if v is not None)
+            all_simulated_tths.extend(v for v in features["TTH"] if v is not None)
+        for features in self.__real_ttcs.values():
+            all_real_ttcs.extend(v['front_ego'] for v in features if v['front_ego'] is not None)
+        for features in self.__real_tths.values():
+            all_real_tths.extend(v['front_ego'] for v in features if v['front_ego'] is not None)
 
         return all_simulated_ttcs, all_real_ttcs, all_simulated_tths, all_real_tths
 

@@ -4,6 +4,7 @@ from tqdm import tqdm
 import torch
 import os
 import pickle
+from loguru import logger
 
 from sim4ad.path_utils import get_config_path, get_file_name_trajectories, get_path_offlinerl_model, get_path_sac_model
 from sim4ad.data import ScenarioConfig
@@ -47,8 +48,6 @@ class RLEvaluation:
 
         simulation_agents = self.sim.evaluator.get_picklable_agents()
 
-        print("Simulation done!")
-
         return simulation_agents
 
 
@@ -80,6 +79,7 @@ def main():
         with open(output_dir, "rb") as f:
             simulation_agents = pickle.load(f)
         # Begin the evaluation function
+        logger.info('Diversity evaluation started!')
         begin_evaluation(simulation_agents, evaluation_episodes)
     else:
         simulation_agents = None
@@ -109,6 +109,8 @@ def main():
         os.makedirs(os.path.dirname(output_dir), exist_ok=True)
         with open(output_dir, "wb") as f:
             pickle.dump(simulation_agents, f)
+
+        logger.info('Trajectories saved!')
 
 
 if __name__ == "__main__":

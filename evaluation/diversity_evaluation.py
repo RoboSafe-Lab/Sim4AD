@@ -82,6 +82,7 @@ def main():
         with open(output_dir, "rb") as f:
             simulation_agents = pickle.load(f)
         # Begin the evaluation function
+        logger.info('Diversity evaluation started!')
         begin_evaluation(simulation_agents, evaluation_episodes)
     else:
         simulation_agents = None
@@ -111,6 +112,8 @@ def main():
         os.makedirs(os.path.dirname(output_dir), exist_ok=True)
         with open(output_dir, "wb") as f:
             pickle.dump(simulation_agents, f)
+
+        logger.info('Trajectories saved!')
 
 
 if __name__ == "__main__":

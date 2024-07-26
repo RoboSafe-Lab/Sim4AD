@@ -4,11 +4,10 @@ from typing import Dict, Any, List
 import numpy as np
 from scipy.spatial import distance
 from stable_baselines3 import SAC
-from openautomatumdronedata.dataset import droneDataset
 
 from sim4ad.data import ScenarioConfig, DatasetScenario
 from sim4ad.opendrive import plot_map, Map
-from sim4ad.path_utils import get_agent_id_combined, get_path_to_automatum_scenario, get_config_path
+from sim4ad.path_utils import get_agent_id_combined, get_config_path
 from simulator.policy_agent import PolicyAgent
 from simulator.simulator_util import DeathCause
 from simulator.state_action import State
@@ -29,21 +28,16 @@ class EvaluationFeaturesExtractor:
         self.__agents = defaultdict(lambda: defaultdict(list))
         self.__computed_metrics = defaultdict(dict)  # Store them as [metric][agent_id] = value
         if episode_names is not None:
-            gt_agents_data = self.get_ground_truth_data(episode_names)
-            self.__real_position, self.__real_speeds, self.__real_ttcs, self.__real_tths = self.get_ground_truth_info(
+            gt_agents_data = self.load_ground_truth_data(episode_names)
+            self.__real_closest_distances, self.__real_speeds, self.__real_ttcs, self.__real_tths = self.get_ground_truth_info(
                 gt_agents_data)
 
     @staticmethod
-    def get_ground_truth_data(episode_names):
+    def load_ground_truth_data(episode_names):
         """ Given a list of episodes, get the value for each agent by combining the episode_id and the agent_id """
         gt_agents_data = {}
 
         for episode_name in episode_names:
-            path_to_dataset_folder = get_path_to_automatum_scenario(episode_name)
-            dataset = droneDataset(path_to_dataset_folder)
-            dyn_world = dataset.dynWorld
-            # dt = dyn_world.delta_t
-
             scenario_name = episode_name.split("-")[2]
             config = ScenarioConfig.load(get_config_path(scenario_name))
             data_loader = DatasetScenario(config)
@@ -56,23 +50,37 @@ class EvaluationFeaturesExtractor:
 
     @staticmethod
     def get_ground_truth_info(gt_agents_data):
-        """Get the real position, speeds, ttcs and tths"""
-        # Fidelity Metrics
-        real_position = {}
+        """Get the real closest, closest distances, speeds, ttcs and tths"""
+        # fidelity metrics
+        real_closest_distances = {}
         real_speeds = {}
         real_ttcs = {}
         real_tths = {}
 
-        # get the corresponding_gt data for our agents only
-        # gt_agents_data = {agent_id: gt_agents_data[agent_id] for agent_id in self.__agents.keys()}
-
         for agent_id, agent in gt_agents_data.items():
-            real_position[agent_id] = {"x_s": agent.x_vec, "y_s": agent.y_vec}
             real_speeds[agent_id] = {"vx_s": agent.vx_vec, "vy_s": agent.vy_vec}
             real_ttcs[agent_id] = agent.ttc_dict_vec
             real_tths[agent_id] = agent.tth_dict_vec
+            closest_dis = []
+            episode_id = agent_id.split("/")[0]
+            for inx, t in enumerate(agent.time):
+                try:
+                    surrounding_agents = agent.object_relation_dict_list[inx]
+                except IndexError:
+                    break
+                dis = np.inf
+                for surrounding_agent_relation, surrounding_agent_id in surrounding_agents.items():
+                    if surrounding_agent_id is not None:
+                        surrounding_agent = gt_agents_data[get_agent_id_combined(episode_id, surrounding_agent_id)]
+                        long_distance, lat_distance = agent.get_lat_and_long(t, surrounding_agent)
+                        if dis > np.sqrt(long_distance**2 + lat_distance**2):
+                            dis = np.sqrt(long_distance**2 + lat_distance**2)
 
-        return real_position, real_speeds, real_ttcs, real_tths
+                if not np.isinf(dis):
+                    closest_dis.append(dis)
+            real_closest_distances[agent_id] = closest_dis
+
+        return real_closest_distances, real_speeds, real_ttcs, real_tths
 
     def save_trajectory(self, agent: PolicyAgent, death_cause: DeathCause, episode_id: str):
         """
@@ -138,6 +146,7 @@ class EvaluationFeaturesExtractor:
 
         # Dictionary of TTCs and TTHs indexed by the position of the nearby agent (e.g., "center_front", "right_front").
         ttc, tth = None, None
+        closest_d = np.inf
 
         for position, nearby_agent in nearby_vehicles.items():
 
@@ -154,26 +163,23 @@ class EvaluationFeaturesExtractor:
                     ttc = -1
                 tth = d / v_ego
 
+            # save the closest distance to nearby vehicles
+            d = (state.position.distance(nearby_agent["position"])) if nearby_agent is not None else None
+            if d is not None and closest_d > d:
+                closest_d = d
+
         if add:
             aid = get_agent_id_combined(episode_id, agent.agent_id)
             self.__agents[aid]["TTC"].append(ttc)
             self.__agents[aid]["TTH"].append(tth)
+            self.__agents[aid]["closest_dis"].append(closest_d)
         else:
             return ttc, tth
 
-    def plot_criticality_distribution(self):
-        """plot criticality distribution for diversity analysis"""
-        all_simulated_ittcs, all_real_ittcs, all_simulated_tths, all_real_tths = self.compute_all_ittc_tth()
-
-        self.plot_distogram('iTTC', real_data=all_real_ittcs, simulated_data=all_simulated_ittcs)
-        self.plot_distogram('THW', real_data=all_real_tths, simulated_data=all_simulated_tths)
-
-        plt.show()
-
     def get_simulated_real_speeds(self):
-
-        real_speeds = {}
-        simulated_speeds = {}
+        """Get the real and simulated speed for distribution analysis"""
+        real_speeds = []
+        simulated_speeds = []
 
         for agent_id, features in self.__agents.items():
             real_vel_x = self.__real_speeds[agent_id]["vx_s"]
@@ -181,55 +187,10 @@ class EvaluationFeaturesExtractor:
             real_speed = np.sqrt(np.array(real_vel_x) ** 2 + np.array(real_vel_y) ** 2)
             simulated_speed = np.array([state.speed for state in features["states"]])
 
-            if len(real_speed) != len(simulated_speed):
-                if len(real_speed) > len(simulated_speed):
-                    real_speed = real_speed[:len(simulated_speed)]
-                else:
-                    # cut the simulated speed to match the real speed
-                    simulated_speed = simulated_speed[:len(real_speed)]
-
-            real_speeds[agent_id] = real_speed
-            simulated_speeds[agent_id] = simulated_speed
+            real_speeds.extend(real_speed)
+            simulated_speeds.extend(simulated_speed)
 
         return real_speeds, simulated_speeds
-
-    def plot_speed_distribution(self):
-        """Plot speed distributions for human likeness analysis"""
-        real_speeds, simulated_speeds = self.get_simulated_real_speeds()
-        self.plot_distogram('Speed (m/s)', real_data=real_speeds, simulated_data=simulated_speeds)
-
-        plt.show()
-
-    def get_real_simulated_xy(self, real_position: Dict[str, Dict[str, np.ndarray]]):
-        """
-        Get the real and simulated x, y positions and speeds for a given agent.
-        """
-        real_xs = {}
-        real_ys = {}
-        simulated_xs = {}
-        simulated_ys = {}
-
-        for agent_id, features in self.__agents.items():
-            real_x = real_position[agent_id]["x_s"]
-            real_y = real_position[agent_id]["y_s"]
-            simulated_x = np.array([state.position.x for state in features["states"]])
-            simulated_y = np.array([state.position.y for state in features["states"]])
-
-            if len(real_x) != len(simulated_x):
-                if len(real_x) > len(simulated_x):
-                    real_x = real_x[:len(simulated_x)]
-                    real_y = real_y[:len(simulated_y)]
-                else:
-                    # cut the simulated speed to match the real speed
-                    simulated_x = simulated_x[:len(real_x)]
-                    simulated_y = simulated_y[:len(real_y)]
-
-            real_xs[agent_id] = real_x
-            real_ys[agent_id] = real_y
-            simulated_xs[agent_id] = simulated_x
-            simulated_ys[agent_id] = simulated_y
-
-        return real_xs, real_ys, simulated_xs, simulated_ys
 
     def compute_all_ittc_tth(self):
         """
@@ -244,14 +205,17 @@ class EvaluationFeaturesExtractor:
             for v in features["TTC"]:
                 if v is not None:
                     ittc = 1.0 / v
-                    if ittc > 1: # > 1 means critical
+                    # > 1 means critical
+                    if ittc > 1:
                         ittc = 1.0
-                    elif ittc < 0: # < 0 means uncritical
+                    # < 0 means uncritical
+                    elif ittc < 0:
                         ittc = 0
                     all_simulated_ittcs.append(ittc)
             all_simulated_tths.extend(v for v in features["TTH"] if v is not None)
-        for features in self.__real_ttcs.values():
-            for v in features:
+
+            # keep the same as real speed, obtain data from self.__agents.
+            for v in self.__real_ttcs[agent_id]:
                 if v['front_ego'] is not None:
                     ittc = 1.0 / v['front_ego']
                     if ittc > 1:
@@ -259,10 +223,22 @@ class EvaluationFeaturesExtractor:
                     elif ittc < 0:
                         ittc = 0
                     all_real_ittcs.append(ittc)
-        for features in self.__real_tths.values():
-            all_real_tths.extend(v['front_ego'] for v in features if v['front_ego'] is not None)
+
+            all_real_tths.extend(v['front_ego'] for v in self.__real_tths[agent_id] if v['front_ego'] is not None)
 
         return all_simulated_ittcs, all_real_ittcs, all_simulated_tths, all_real_tths
+
+    def get_simulated_real_closest_dis(self):
+        """Get the real and simulated closest distance for distribution analysis"""
+        real_closest_dis = []
+        simulated_closest_dis = []
+
+        for agent_id, features in self.__agents.items():
+            real_dis = self.__real_closest_distances[agent_id]
+            simulated_closest_dis.extend([d for d in features["closest_dis"] if not np.isinf(d)])
+            real_closest_dis.extend(real_dis)
+
+        return real_closest_dis, simulated_closest_dis
 
     @staticmethod
     def compute_jsd(simulated_values, real_values):
@@ -321,14 +297,7 @@ class EvaluationFeaturesExtractor:
 
     def compute_jsd_vel(self):
         """Compute the two velocity distributions using the JSD"""
-        real_speeds, simulated_speeds = self.get_simulated_real_speeds()
-
-        all_simulated_speeds = []
-        all_real_speeds = []
-
-        for agent_id, features in self.__agents.items():
-            all_simulated_speeds.extend(simulated_speeds[agent_id])
-            all_real_speeds.extend(real_speeds[agent_id])
+        all_real_speeds, all_simulated_speeds = self.get_simulated_real_speeds()
 
         jsd_vel = self.compute_jsd(all_simulated_speeds, all_real_speeds)
 
@@ -440,8 +409,30 @@ class EvaluationFeaturesExtractor:
 
         return metric_values
 
-    @staticmethod
-    def plot_distogram(label, real_data=None, simulated_data=None):
+    def plot_speed_distribution(self):
+        """Plot speed distributions for human likeness analysis"""
+        real_speeds, simulated_speeds = self.get_simulated_real_speeds()
+        self.plot_distogram(label='Speed (m/s)', real_data=real_speeds, simulated_data=simulated_speeds)
+
+        plt.show()
+
+    def plot_criticality_distribution(self):
+        """plot criticality distribution for diversity analysis"""
+        all_simulated_ittcs, all_real_ittcs, all_simulated_tths, all_real_tths = self.compute_all_ittc_tth()
+
+        self.plot_distogram(label='iTTC (1/s)', real_data=all_real_ittcs, simulated_data=all_simulated_ittcs)
+        self.plot_distogram(label='THW (s)', real_data=all_real_tths, simulated_data=all_simulated_tths)
+
+        plt.show()
+
+    def plot_closest_dis_distribution(self):
+        """Plot the closest distance distribution for human likeness analysis"""
+        real_closest_dis, simulated_closest_dis = self.get_simulated_real_closest_dis()
+        self.plot_distogram(label='Distance (m)', real_data=real_closest_dis, simulated_data=simulated_closest_dis)
+
+        plt.show()
+
+    def plot_distogram(self, label, real_data=None, simulated_data=None):
         # Plot histograms and PDFs for real and simulated data
         plt.figure(figsize=(6, 4))
 
@@ -452,6 +443,11 @@ class EvaluationFeaturesExtractor:
         # Plot simulated data
         if simulated_data is not None:
             plt.hist(simulated_data, bins=30, density=True, alpha=0.6, color='orange', label=f'Simulated {label}')
+
+        if simulated_data is not None and real_data is not None:
+            jsd = self.compute_jsd(simulated_data, real_data)
+            plt.text(0.02, 0.95, f'JSD: {jsd:.4f}', transform=plt.gca().transAxes,
+                     verticalalignment='top', bbox=dict(facecolor='white', alpha=0.5))
 
         plt.xlabel(label)
         plt.ylabel('Normalized PDF')

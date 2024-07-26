@@ -894,7 +894,7 @@ class Sim4ADSimulation:
 
         return 0.
 
-    def replay_simulation(self):
+    def replay_simulation(self, save: bool = False):
         """
         Replay the simulation as a video using self.__simulation_history which is a list of frames, where each
         frame is a dictionary (agent_id, State). Also plot the map as background.
@@ -941,6 +941,10 @@ class Sim4ADSimulation:
 
         ani = FuncAnimation(fig, update, frames=self.__simulation_history, repeat=True,
                             interval=self.__fps)
+        if save:
+            # Save the animation
+            ani.save(f'{self.__policy_type}_simulation.gif', writer='pillow', fps=self.__fps)
+
         plt.show()
 
     def __load_datasets(self):

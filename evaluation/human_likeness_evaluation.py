@@ -29,7 +29,7 @@ class RLEvaluation:
         self.sim = Sim4ADSimulation(episode_name=episode_names, spawn_method=spawn_method, policy_type=policy_type,
                                     clustering=clustering, driving_style_policies=driving_styles)
 
-    def simulation(self, visualization: bool = False):
+    def simulation(self, visualization: bool = True):
         """Using the simulator to simulate trajectories of all agents"""
         self.sim.full_reset()
         # done = False # TODO: uncomment this to run until we use all vehicles
@@ -57,7 +57,7 @@ def begin_evaluation(simulation_agents, evaluation_episodes):
     evaluator.load(simulation_agents)
     evaluator.plot_criticality_distribution()
     evaluator.plot_speed_distribution()
-    # evaluator.plot_distance_distribution()
+    evaluator.plot_closest_dis_distribution()
 
 
 def main():

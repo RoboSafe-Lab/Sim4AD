@@ -49,7 +49,7 @@ class RLEvaluation:
             looped_dataset = self.env.unwrapped.simulation.done_full_cycle
             # show the rollout of the policy
             if visualization:
-                self.env.unwrapped.simulation.replay_simulation()
+                self.env.unwrapped.simulation.replay_simulation(save=False)
 
         self.env.unwrapped.simulation.kill_all_agents()
 
@@ -71,6 +71,9 @@ def main():
     normal_map = "appershofen"
     spawn_method = "dataset_one"
 
+    # whether re-simulate although existing results
+    simulation = False
+
     configs = ScenarioConfig.load(get_config_path(normal_map))
     idx = configs.dataset_split["test"]
     evaluation_episodes = [x.recording_id for i, x in enumerate(configs.episodes) if i in idx]
@@ -78,7 +81,7 @@ def main():
     output_dir = get_file_name_trajectories(policy_type, spawn_method, None, episode_name=evaluation_episodes,
                                             param_config=EvalConfig)
     # Check if the results are already saved
-    if os.path.exists(output_dir):
+    if os.path.exists(output_dir) and not simulation:
         with open(output_dir, "rb") as f:
             simulation_agents = pickle.load(f)
         # Begin the evaluation function

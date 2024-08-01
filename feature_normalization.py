@@ -58,27 +58,12 @@ def extract_features(inx, t, agent, episode) -> Optional[List]:
     thw_front = np.exp(-1 / thw_front) if thw_front is not None else 1
     thw_rear = np.exp(-1 / thw_rear) if thw_rear is not None else 1
 
-    # no collision in the dataset
-    collision = 0
-
-    # induced deceleration
-    induced_deceleration = 0
-
-    surrounding_agents = agent.object_relation_dict_list[inx]
-
-    if surrounding_agents['behind_ego'] is not None:
-        surrounding_agent = episode.agents[surrounding_agents['behind_ego']]
-        surrounding_agent_inx = surrounding_agent.next_index_of_specific_time(t)
-        des_gap = desired_gap(agent.vx_vec[inx], agent.length, surrounding_agent.vx_vec[surrounding_agent_inx],
-                              surrounding_agent.length)
-        long_distance, lat_distance = agent.get_lat_and_long(t, surrounding_agent)
-
-        if long_distance < des_gap and surrounding_agent.ax_vec[surrounding_agent_inx] < 0:
-            induced_deceleration = abs(surrounding_agent.ax_vec[surrounding_agent_inx])
+    # centerline deviation
+    d = (agent.distance_left_lane_marking[inx] - agent.distance_right_lane_marking[inx]) / 2
+    d_centerline = abs(d)
 
     # feature array
-    features = [ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk, thw_front, thw_rear, collision,
-                induced_deceleration]
+    features = [ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk, thw_front, thw_rear, d_centerline]
 
     return features
 

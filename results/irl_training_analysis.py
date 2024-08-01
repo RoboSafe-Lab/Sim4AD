@@ -62,12 +62,14 @@ def plot_training_process(category):
 def plot_weight_comparison(categories):
     # plot the weights comparison for different driving styles
     weights = {}
-    features = ['speed', 'long_acc', 'lat_acc', 'long_jerk', 'thw_front', 'thw_rear', 'induced_deceleration']
+    # features = ['speed', 'long_acc', 'lat_acc', 'long_jerk', 'thw_front', 'thw_rear', 'induced_deceleration']
+    features = ['speed', 'long_acc', 'lat_acc', 'long_jerk', 'thw_front', 'thw_rear', 'd_centerline']
     for category in categories:
         training_log = load_training_log(category)
         for key, value in training_log.items():
             if key == 'theta':
-                weights[category] = np.concatenate((value[-1][:6], [value[-1][7]]))
+                # weights[category] = np.concatenate((value[-1][:6], [value[-1][7]]))
+                weights[category] = value[-1][:]
 
     # plot bar chart
     x = np.arange(len(features))  # the label locations

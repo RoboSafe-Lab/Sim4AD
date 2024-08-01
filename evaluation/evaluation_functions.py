@@ -145,23 +145,27 @@ class EvaluationFeaturesExtractor:
         """
 
         # Dictionary of TTCs and TTHs indexed by the position of the nearby agent (e.g., "center_front", "right_front").
-        ttc, tth = None, None
+        ttc = {PNA.CENTER_IN_FRONT: None, PNA.CENTER_BEHIND: None}
+        tth = {PNA.CENTER_IN_FRONT: None, PNA.CENTER_BEHIND: None}
         closest_d = np.inf
 
         for position, nearby_agent in nearby_vehicles.items():
-
-            # TTC and TTH are only computed for the agents in front
-            if position == PNA.CENTER_IN_FRONT and nearby_agent is not None:
+            # TTC and TTH are computed for the agents in front and rear
+            if position in [PNA.CENTER_IN_FRONT, PNA.CENTER_BEHIND] and nearby_agent is not None:
                 d = (state.position.distance(nearby_agent["position"]) - agent.meta.length / 2 -
                      nearby_agent["metadata"].length / 2)
                 v_ego = abs(state.speed)
                 v_other = abs(nearby_agent["speed"])
 
-                ttc = d / (v_ego - v_other)
+                if position == PNA.CENTER_IN_FRONT:
+                    ttc[position] = d / (v_ego - v_other)
+                    tth[position] = d / v_ego
+                else:
+                    ttc[position] = d / (v_other - v_ego)
+                    tth[position] = d / v_other
                 # keep the same value as the dataset
-                if ttc < 0:
-                    ttc = -1
-                tth = d / v_ego
+                if ttc[position] < 0:
+                    ttc[position] = -1
 
             # save the closest distance to nearby vehicles
             d = (state.position.distance(nearby_agent["position"])) if nearby_agent is not None else None
@@ -203,8 +207,8 @@ class EvaluationFeaturesExtractor:
 
         for agent_id, features in self.__agents.items():
             for v in features["TTC"]:
-                if v is not None:
-                    ittc = 1.0 / v
+                if v[PNA.CENTER_IN_FRONT] is not None:
+                    ittc = 1.0 / v[PNA.CENTER_IN_FRONT]
                     # > 1 means critical
                     if ittc > 1:
                         ittc = 1.0
@@ -212,7 +216,7 @@ class EvaluationFeaturesExtractor:
                     elif ittc < 0:
                         ittc = 0
                     all_simulated_ittcs.append(ittc)
-            all_simulated_tths.extend(v for v in features["TTH"] if v is not None)
+            all_simulated_tths.extend(v[PNA.CENTER_IN_FRONT] for v in features["TTH"] if v[PNA.CENTER_IN_FRONT] is not None)
 
             # keep the same as real speed, obtain data from self.__agents.
             for v in self.__real_ttcs[agent_id]:

@@ -831,13 +831,15 @@ class Sim4ADSimulation:
         long_jerk = agent.compute_current_long_jerk()
         _, thw = self.evaluator.compute_ttc_tth(agent, state=state, nearby_vehicles=nearby_vehicles,
                                                 episode_id=None, add=False)
+        thw_front, thw_rear = thw[PNA.CENTER_IN_FRONT], thw[PNA.CENTER_BEHIND]
 
         info.update({
             "ego_speed": state.speed,
             "ego_long_acc": ax,
             "ego_lat_acc": ay,
             "ego_long_jerk": long_jerk,
-            "thw_front": thw,
+            "thw_front": thw_front,
+            "thw_rear": thw_rear,
         })
 
         if self.__policy_type == "rl":

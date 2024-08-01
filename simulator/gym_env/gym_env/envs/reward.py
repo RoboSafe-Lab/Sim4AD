@@ -23,7 +23,7 @@ def get_reward(terminated, truncated, info, irl_weights=None):
 
     if irl_weights is not None:
 
-        # TODO Check that the alternative values are crrect: e.g., that if None the value should be 0 or 1
+        # TODO Check that the alternative values are correct: e.g., that if None the value should be 0 or 1
         speed = np.exp(-1 / abs(info["ego_speed"])) if info["ego_speed"] else 0
         long_acc = np.exp(-1 / abs(info["ego_long_acc"])) if info["ego_long_acc"] else 0
         lat_acc = np.exp(-1 / abs(info["ego_lat_acc"])) if info["ego_lat_acc"] else 0

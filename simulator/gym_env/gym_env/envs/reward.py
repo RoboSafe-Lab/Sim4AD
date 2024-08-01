@@ -30,18 +30,19 @@ def get_reward(terminated, truncated, info, irl_weights=None):
         long_jerk = np.exp(-1 / abs(info["ego_long_jerk"])) if info["ego_long_jerk"] else 0
         thw_front = np.exp(-1 / abs(info["thw_front"])) if info["thw_front"] else 1
         thw_rear = np.exp(-1 / abs(info["thw_rear"])) if info["thw_rear"] else 1
+        d_centerline = np.exp(-1 / abs(info["thw_rear"])) if info["thw_rear"] else 0
         collision = info["collision"]
-        induced_deceleration = np.exp(-1 / abs(info["induced_deceleration"])) \
-            if info["induced_deceleration"] != DEFAULT_DECELERATION_VALUE else DEFAULT_DECELERATION_VALUE
 
         features = np.array([speed, long_acc, lat_acc, long_jerk,
-                             thw_front, thw_rear, collision, induced_deceleration])
+                             thw_front, thw_rear, d_centerline])
 
         assert all([0 <= f <= 1 for f in features]), "Features should be between 0 and 1."
 
         assert irl_weights is not None, "IRL weights are not provided."
         assert len(irl_weights) == len(features), "IRL weights and features have different lengths."
         # Compute the reward
+        if collision:
+            return -1
         return np.dot(irl_weights, features)
 
     else:

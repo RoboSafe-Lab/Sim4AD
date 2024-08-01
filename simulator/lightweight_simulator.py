@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 from baselines.bc_baseline import BCBaseline as BC
 from extract_observation_action import ExtractObservationAction
-from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
+from sim4ad.irlenv import utils
 from sim4ad.data import ScenarioConfig, DatasetScenario
 from sim4ad.irlenv.vehicle.behavior import IDMVehicle
 from sim4ad.offlinerlenv.td3bc_automatum import get_normalisation_parameters
@@ -126,7 +126,7 @@ class Sim4ADSimulation:
         state_mean, state_std, reward_mean, reward_std = get_normalisation_parameters(
             driving_style=driving_style,
             map_name=self.map_name,
-            dataset_split="test", # TODO: change dataset split
+            dataset_split="test",  # TODO: change dataset split
             state_dim=34)  # TODO: change ti if changing features
 
         params["state_mean"] = state_mean
@@ -617,16 +617,6 @@ class Sim4ADSimulation:
             action = Action(acceleration=acceleration, yaw_rate=deltas[dataset_time_step])
 
             if dataset_time_step + 1 < len(dataset_agent.x_vec):
-                # position = Point(dataset_agent.x_vec[dataset_time_step + 1], dataset_agent.y_vec[dataset_time_step + 1])
-                # speed = np.sqrt(float(dataset_agent.vx_vec[dataset_time_step + 1]) ** 2 +
-                #                 float(dataset_agent.vy_vec[dataset_time_step + 1]) ** 2)
-                # heading = dataset_agent.psi_vec[dataset_time_step + 1]
-                # acceleration = np.sqrt(float(dataset_agent.ax_vec[dataset_time_step + 1]) ** 2 +
-                #                        float(dataset_agent.ay_vec[dataset_time_step + 1]) ** 2)
-                # new_state = State(time=self.__time + self.__dt, position=position, speed=speed,
-                #                   acceleration=acceleration,
-                #                   heading=heading, lane=agent.state.lane, agent_width=agent.meta.width,
-                #                   agent_length=agent.meta.length)
                 new_state = self.__get_original_current_state(dataset_agent)
             else:
                 new_state = agent.state
@@ -837,7 +827,7 @@ class Sim4ADSimulation:
         done = collision or off_road or truncated or reached_goal
         info = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated,
                 "ego_speed": None, "ego_long_acc": None, "ego_lat_acc": None, "ego_long_jerk": None,
-                "thw_front": None, "thw_rear": None, "induced_deceleration": DEFAULT_DECELERATION_VALUE
+                "thw_front": None, "thw_rear": None, "d_centerline": None
                 }
         if not done:
             observation = self._build_observation(state, nearby_agents_features, distance_left_lane_marking,
@@ -877,13 +867,15 @@ class Sim4ADSimulation:
 
         return obs
 
-
     def _update_info(self, agent, nearby_vehicles, state, observation, done, info):
         ax, ay = agent.compute_current_lat_lon_acceleration()
         long_jerk = agent.compute_current_long_jerk()
         _, thw = self.evaluator.compute_ttc_tth(agent, state=state, nearby_vehicles=nearby_vehicles,
                                                 episode_id=None, add=False)
         thw_front, thw_rear = thw[PNA.CENTER_IN_FRONT], thw[PNA.CENTER_BEHIND]
+
+        _, d = utils.local2frenet(state.position, state.lane.midline)
+        d_centerline = abs(d)
 
         info.update({
             "ego_speed": state.speed,
@@ -892,28 +884,8 @@ class Sim4ADSimulation:
             "ego_long_jerk": long_jerk,
             "thw_front": thw_front,
             "thw_rear": thw_rear,
+            "d_centerline": d_centerline,
         })
-
-        if self.__policy_type == "rl":
-            induced_deceleration = 0
-            behind_ego = {
-                "": MISSING_NEARBY_AGENT_VALUE
-            }  # There is no vehicle behind the ego, as per the check later in the code
-            behind_ego_missing = sum([x == MISSING_NEARBY_AGENT_VALUE for x in behind_ego.values()]) == len(behind_ego)
-
-            if not done and not behind_ego_missing:
-                ego_rear_d = np.sqrt((observation["behind_ego_rel_dx"]) ** 2 + (observation["behind_ego_rel_dy"]) ** 2)
-                rear_position = np.array([state.position.x + observation["behind_ego_rel_dx"],
-                                          state.position.y + observation["behind_ego_rel_dy"]])
-                induced_deceleration = self.compute_induced_deceleration(
-                    ego_v=state.speed,
-                    ego_length=agent.meta.length,
-                    rear_agent=behind_ego,
-                    ego_rear_d=ego_rear_d,
-                    rear_a=observation["behind_ego_rel_a"],
-                    rear_position=rear_position
-                )
-                info["induced_deceleration"] = induced_deceleration
 
         return info
 

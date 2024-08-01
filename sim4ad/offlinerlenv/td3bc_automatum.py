@@ -55,7 +55,7 @@ class TrainConfig:
 
     # need to be changed according to the policy to be trained
     map_name: str = "appershofen"
-    driving_style: str = "General"
+    driving_style: str = "Aggressive"
 
     def __post_init__(self):
         self.name = f"{self.name}-{self.env}-{str(uuid.uuid4())[:8]}"
@@ -253,7 +253,7 @@ class Actor(nn.Module):
 
     @torch.no_grad()
     def act(self, state: np.ndarray, device: str = TrainConfig.device, deterministic: bool = True) -> np.ndarray:
-        state = torch.tensor(state.reshape(1, -1), device=device, dtype=torch.float32)
+        state = torch.tensor(state, device=device, dtype=torch.float32)
         return self(state).cpu().data.numpy().flatten()
 
 

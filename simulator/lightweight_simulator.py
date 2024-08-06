@@ -26,6 +26,7 @@ from extract_observation_action import ExtractObservationAction
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 from sim4ad.data import ScenarioConfig, DatasetScenario
 from sim4ad.irlenv.vehicle.behavior import IDMVehicle
+from sim4ad.offlinerlenv.td3bc_automatum import get_normalisation_parameters
 from sim4ad.opendrive import plot_map, Map
 from sim4ad.path_utils import get_path_to_automatum_scenario, get_path_to_automatum_map, get_config_path
 from sim4ad.util import Box
@@ -49,7 +50,8 @@ class Sim4ADSimulation:
                  spawn_method: str = "dataset",
                  evaluation: bool = True,
                  clustering: str = "all",
-                 driving_style_policies: Dict[str, Any] = None,):
+                 driving_style_policies: Dict[str, Any] = None,
+                 normalise_observation: bool = False):
 
         """ Initialise new simulation.
 
@@ -109,6 +111,29 @@ class Sim4ADSimulation:
         self.__driving_style_policies = driving_style_policies if driving_style_policies is not None else {}
 
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+        self.normalise_obs = normalise_observation
+        self.normalisation_parameters = {}
+        if self.normalise_obs:
+            assert self.__driving_style_policies, "Normalisation of observations is only supported with driving style policies"
+            for driving_style in self.__driving_style_policies:
+                self.normalisation_parameters[driving_style] = self._normalisation_parameters(driving_style)
+
+    def _normalisation_parameters(self, driving_style):
+        params = {}
+
+        state_mean, state_std, reward_mean, reward_std = get_normalisation_parameters(
+            driving_style=driving_style,
+            map_name=self.map_name,
+            dataset_split="test", # TODO: change dataset split
+            state_dim=34)  # TODO: change ti if changing features
+
+        params["state_mean"] = state_mean
+        params["state_std"] = state_std
+        params["reward_mean"] = reward_mean
+        params["reward_std"] = reward_std
+
+        return params
 
     def cluster_agents(self, agents: Dict[str, droneDataset]):
         """Return agents of a specific cluster"""
@@ -319,6 +344,11 @@ class Sim4ADSimulation:
         :param soft_reset: If True, get the new observation for the agent being evaluated.
         """
 
+        if soft_reset and self.__agent_evaluated is not None and self.__agent_evaluated not in self.__dead_agents:
+            # We called env.reset() even though the agent is still alive. Do nothing
+            assert self.last_stored_obs is not None, "Last stored observation is None"
+            return self.last_stored_obs, self.last_stored_info
+
         self.__remove_dead_agents()
 
         # SELECT AGENTS TO ADD
@@ -390,11 +420,13 @@ class Sim4ADSimulation:
                 continue
 
             agent = self.__agents[agent_id]
-            obs_, info = self._get_observation(agent, self.__state[agent_id])
+            obs_, info_ = self._get_observation(agent, self.__state[agent_id])
 
             if soft_reset and (agent_id == self.__agent_evaluated):
                 obs = copy.deepcopy(obs_)
-                info = copy.deepcopy(info)
+                self.last_stored_obs = copy.deepcopy(obs_)
+                info = copy.deepcopy(info_)
+                self.last_stored_info = copy.deepcopy(info_)
 
         # Remove any agents that couldn't be added due to collisions at spawn.
         self.__remove_dead_agents()
@@ -820,11 +852,25 @@ class Sim4ADSimulation:
 
             # Put the observation in a tuple, as the policy expects it
             obs = Observation(state=observation).get_tuple()
+
+            if self.normalise_obs:
+                obs = self.normalise_observation(obs, agent)
             agent.add_observation(obs)
         else:
             obs = None
 
         return obs, info
+
+    def normalise_observation(self, obs, agent):
+
+        driving_style = self.get_driving_style_vehicle(agent.agent_id)
+        params = self.normalisation_parameters[driving_style]
+
+        obs = np.array(obs)
+        obs = (obs - params["state_mean"]) / params["state_std"]
+
+        return obs
+
 
     def _update_info(self, agent, nearby_vehicles, state, observation, done, info):
         ax, ay = agent.compute_current_lat_lon_acceleration()
@@ -984,7 +1030,7 @@ class Sim4ADSimulation:
         self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
 
         if self.clustering != "all":
-            self.__episode_agents = self.cluster_agents(self.__episode_agents)
+            self.__agents_to_add = self.cluster_agents(self.__episode_agents)
         self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
         self.__last_agent_id = 0  # ID when creating a new random agent
         # Dictionary (agent_id, DeathCause) of agents that have been removed from the simulation.

@@ -24,11 +24,18 @@ TensorBatch = List[torch.Tensor]
 
 @dataclass
 class TrainConfig:
-    # Experiment
-    device: str = "cuda" # TODO: modified from "cuda" to "mlp"
+    # REQUIRED
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    use_irl_reward: bool = True  # Use IRL reward; if False, use basic reward (1 for reach goal, -1 for collisions)
     env: str = "SimulatorEnv-v0"  # OpenAI gym environment name
     dataset_split: str = "train"  # Dataset split to use
-    use_irl_reward: bool = True  # Use IRL reward; if False, use basic reward (1 for reach goal, -1 for collisions)
+    normalize: bool = True  # get mean and std of state AND reward
+    normalize_reward: bool = True  # Normalize reward
+    # need to be changed according to the policy to be trained
+    map_name: str = "appershofen"
+    driving_style: str = "Aggressive"
+
+    # TD3 + BC training-specific parameters
     seed: int = 0  # Sets Gym, PyTorch and Numpy seeds
     eval_freq: int = 10  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
@@ -46,27 +53,16 @@ class TrainConfig:
     policy_freq: int = 2  # Frequency of delayed actor updates
     # TD3 + BC
     alpha: float = 2.5  # Coefficient for Q function in actor loss
-    normalize: bool = True  # get mean and std of state and reward
-    normalize_reward: bool = True  # Normalize reward
+
     # Wandb logging
     project: str = "CORL"
     group: str = "TD3_BC-Automatum"
     name: str = "TD3_BC"
 
-    # need to be changed according to the policy to be trained
-    map_name: str = "appershofen"
-    driving_style: str = "Aggressive"
-
     def __post_init__(self):
         self.name = f"{self.name}-{self.env}-{str(uuid.uuid4())[:8]}"
         if self.checkpoints_path is not None:
             self.checkpoints_path = os.path.join(self.checkpoints_path, self.name)
-
-
-# Create an evalConfig which is the same as the TrainCofnig but with a different dataset_split
-@dataclass
-class EvalConfig(TrainConfig):
-    dataset_split: str = "test"
 
 
 def soft_update(target: nn.Module, source: nn.Module, tau: float):
@@ -580,9 +576,15 @@ def initialize_model(state_dim, action_dim, max_action, config):
 
 
 class TD3_BC_Loader:
-    def __init__(self, config):
+    def __init__(self, config, env=None):
         self.config = config
-        self.env = gym.make(config.env, dataset_split=config.dataset_split, use_irl_reward=config.use_irl_reward)
+
+        if env is not None:
+            self.env = env
+        else:
+            self.env = gym.make(config.env, dataset_split=config.dataset_split, use_irl_reward=config.use_irl_reward,
+                                clustering=config.driving_style)
+
         self.state_dim = self.env.observation_space.shape[0]
         self.action_dim = self.env.action_space.shape[0]
         self.max_action = self.env.action_space.high

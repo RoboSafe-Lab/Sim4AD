@@ -77,7 +77,7 @@ class Args:
     cluster: str = "all"
     """the clustering method to use. Options include 'all', 'Aggressive', 'Normal', 'Cautious'"""
 
-    normalise_state: bool = True
+    normalize_state: bool = True
     """whether to normalise the state and the reward"""
 
     use_irl_reward: bool = False
@@ -182,7 +182,7 @@ class Actor(nn.Module):
     @torch.no_grad()
     def act(self, obs, device=None, deterministic=False):
         """TODO: Device is not used, but added for common interface!"""
-        assert device == self.device, "The device is not matching!"
+        assert device == self.device, f"The device is not matching! {device} != {self.device}"
 
         if not isinstance(obs, torch.Tensor):
             obs = torch.Tensor(obs).to(self.device)
@@ -239,11 +239,11 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
     # env setup
-    env = make_env(args.env_id, seed=args.seed, args=args, run_name=run_name, normalisation=args.normalise_state)
+    env = make_env(args.env_id, seed=args.seed, args=args, run_name=run_name, normalisation=args.normalize_state)
     assert isinstance(env.action_space, gym.spaces.Box), "only continuous action space is supported"
 
     eval_env = make_env(args.env_id, seed=args.seed, args=args, run_name=run_name, evaluation=True,
-                        normalisation=args.normalise_state)
+                        normalisation=args.normalize_state)
 
     max_action = float(env.action_space.high[0])
 

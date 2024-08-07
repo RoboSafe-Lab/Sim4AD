@@ -4,6 +4,7 @@ Based on the official tutorial: https://gymnasium.farama.org/tutorials/gymnasium
 """
 import os
 import pickle
+from typing import List
 
 import gymnasium as gym
 from gymnasium.spaces import Box
@@ -26,28 +27,15 @@ class SimulatorEnv(gym.Env):
     Gym environment for the lightweight simulator.
     """
 
-    metadata = {"render_modes": ["human"], "render_fps": 4, "cluster": DEFAULT_CLUSTER} # todo: change cluster name
-    SPAWN_METHOD = "dataset_one"  # We assume there is a todo: change spawn method
+    metadata = {"render_modes": ["human"], "render_fps": 4}
 
-    def __init__(self, render_mode: str = None, config: dict = None, seed: int = None, clustering: str = "all",
-                 dataset_split: str = "train", use_irl_reward: bool = False):
+    def __init__(self, render_mode: str = None, episode_names: List = None, seed: int = None, clustering: str = "all",
+                 dataset_split: str = "train", use_irl_reward: bool = False, spawn_method: str = None, dummy:bool = False):
         """
         Args:
             config: Configuration for the environment.
+            dummy: If True, the environment will not load the dataset and will only be used for getting the dimensions
         """
-
-        self.weights = None
-        if config is None:
-            # Load all episodes in the training dataset
-            configs = ScenarioConfig.load(get_config_path("appershofen"))  # todo: change scenario name
-            idx = configs.dataset_split[dataset_split]
-            self.episode_names = [x.recording_id for i, x in enumerate(configs.episodes) if i in idx]
-        else:
-            raise NotImplementedError
-
-        self.simulation = Sim4ADSimulation(episode_name=self.episode_names, policy_type="rl",
-                                           simulation_name=f"gym_sim_{self.episode_names}",
-                                           spawn_method=self.SPAWN_METHOD, clustering=clustering)
 
         # At each step, the agent must choose the acceleration and yaw rate.
         self.MIN_YAW_RATE = -0.08
@@ -62,6 +50,28 @@ class SimulatorEnv(gym.Env):
             low=np.array([-200, -np.pi] + [-500] * 32),  # velocity can max be 200, heading can min be -pi
             high=np.array([200, np.pi] + [500] * 32)
         )
+
+        if dummy:
+            return
+
+        assert spawn_method is not None, "Please provide the spawn method"
+        self.spawn_method = spawn_method
+
+        assert clustering in ["all", "Aggressive", "Normal", "Cautious"], "Invalid clustering"
+
+        self.weights = None
+        if episode_names is None:
+            raise NotImplementedError("Please provide the episode names; this is to reduce code duplication")
+            # # Load all episodes in the training dataset
+            # configs = ScenarioConfig.load(get_config_path("appershofen"))  # todo: change scenario name
+            # idx = configs.dataset_split[dataset_split]
+            # self.episode_names = [x.recording_id for i, x in enumerate(configs.episodes) if i in idx]
+        else:
+            self.episode_names = episode_names
+
+        self.simulation = Sim4ADSimulation(episode_name=self.episode_names, policy_type="rl",
+                                           simulation_name=f"gym_sim_{self.episode_names}",
+                                           spawn_method=self.spawn_method, clustering=clustering)
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -91,7 +101,7 @@ class SimulatorEnv(gym.Env):
 
     def load_weights(self):
         # Load the weights from IRL
-        with open(get_path_irl_weights(self.metadata["cluster"]), "rb") as f:
+        with open(get_path_irl_weights(self.simulation.clustering), "rb") as f:
             self.weights = pickle.load(f)['theta'][-1]
 
     def reset(self, seed=None, options=None):

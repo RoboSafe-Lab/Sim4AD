@@ -31,3 +31,5 @@ or "idm" for IDM
 t
 - install Pytorch from the official website
 - `pip install -r requirements.txt` in the root folder of sim4ad
+
+- maps: change line `<OpenDRIVE xmlns="http://www.opendrive.org">` to `<OpenDRIVE>` in each of the map if there is an error about a None header not having attribute `name`

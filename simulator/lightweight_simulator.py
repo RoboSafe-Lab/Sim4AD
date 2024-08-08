@@ -311,6 +311,11 @@ class Sim4ADSimulation:
 
         if initial_obs is None:
             self.__change_episode()
+
+            while len(self.__agents_to_add.keys()) == 0:
+                # Some episodes may not have any actor we want, e.g., when using the Aggressive cluster
+                self.__change_episode()
+
             initial_obs, info = self.__update_vehicles(soft_reset=True)
 
         return initial_obs, info

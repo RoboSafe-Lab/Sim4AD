@@ -14,6 +14,7 @@ from openautomatumdronedata.dataset import droneDataset
 from sim4ad.common_constants import DEFAULT_CLUSTER
 from sim4ad.util import load_dataset
 from sim4ad.data import DatasetScenario, ScenarioConfig
+from loguru import logger
 from sim4ad.opendrive import Map
 from sim4ad.path_utils import get_path_to_automatum_scenario, get_config_path, get_path_to_automatum_map, \
     get_path_irl_weights
@@ -61,11 +62,11 @@ class SimulatorEnv(gym.Env):
 
         self.weights = None
         if episode_names is None:
-            raise NotImplementedError("Please provide the episode names; this is to reduce code duplication")
-            # # Load all episodes in the training dataset
-            # configs = ScenarioConfig.load(get_config_path("appershofen"))  # todo: change scenario name
-            # idx = configs.dataset_split[dataset_split]
-            # self.episode_names = [x.recording_id for i, x in enumerate(configs.episodes) if i in idx]
+            logger.warning("No episode names provided. Loading the DEFAULT dataset. MAP is: appershofen")
+            # Load all episodes in the training dataset
+            configs = ScenarioConfig.load(get_config_path("appershofen"))  # todo: change scenario name
+            idx = configs.dataset_split[dataset_split]
+            self.episode_names = [x.recording_id for i, x in enumerate(configs.episodes) if i in idx]
         else:
             self.episode_names = episode_names
 

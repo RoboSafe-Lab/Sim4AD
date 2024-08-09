@@ -68,6 +68,7 @@ class Sim4ADSimulation:
         self.will_be_done_next = False
         self.done_full_cycle = False  # If iterate once through all agents in all episodes
         self.clustering = clustering
+
         self.__load_datasets()
         self.__fps = np.round(1 / self.__dt)
 

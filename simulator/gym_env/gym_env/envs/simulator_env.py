@@ -58,7 +58,7 @@ class SimulatorEnv(gym.Env):
         assert spawn_method is not None, "Please provide the spawn method"
         self.spawn_method = spawn_method
 
-        assert clustering in ["all", "Aggressive", "Normal", "Cautious"], "Invalid clustering"
+        assert clustering in ["all", "Aggressive", "Normal", "Cautious"], "Invalid clustering. If you used 'General', please use 'all' instead."
 
         self.weights = None
         if episode_names is None:
@@ -102,7 +102,10 @@ class SimulatorEnv(gym.Env):
 
     def load_weights(self):
         # Load the weights from IRL
-        with open(get_path_irl_weights(self.simulation.clustering), "rb") as f:
+        cluster = self.simulation.clustering
+        if cluster == "all":
+            cluster = "General"
+        with open(get_path_irl_weights(cluster), "rb") as f:
             self.weights = pickle.load(f)['theta'][-1]
 
     def reset(self, seed=None, options=None):

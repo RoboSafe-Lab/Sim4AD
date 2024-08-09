@@ -57,7 +57,7 @@ class EvalConfig:
     dataset_split: str = "test"  # Set depending on the type of evaluation done
     spawn_method: str = None  # Set depending on the type of evaluation done
     use_irl_reward: bool = None  # Set depending on the type of evaluation done
-    device: str = field(default_factory=lambda: torch.device("cuda") if torch.cuda.is_available() else "cpu")
+    device: str = field(default_factory=lambda: torch.device("cuda" if torch.cuda.is_available() else "cpu"))
     clusters: list = None  # Set in EvaluationType
 
     def __str__(self):

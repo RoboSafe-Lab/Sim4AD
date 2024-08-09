@@ -1084,6 +1084,10 @@ class Sim4ADSimulation:
         self.__load_datasets()
 
     @property
+    def spawn_method(self):
+        return self.__spawn_method
+
+    @property
     def dt(self):
         return self.__dt
 

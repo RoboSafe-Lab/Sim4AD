@@ -799,8 +799,7 @@ class Sim4ADSimulation:
                 plt.plot(agent.state.position.x, agent.state.position.y, "o", color=color)
                 bbox = agent.state.bbox.boundary + [agent.state.bbox.boundary[0]]
                 plt.plot([point[0] for point in bbox], [point[1] for point in bbox], color=color)
-            plt.show()
-            print()
+            plt.savefig("off_road_example.png")
 
         assert off_road, f"Agent {agent.agent_id} went off the road but off_road is False. Death cause: " \
                          f"{self.__dead_agents.get(agent.agent_id)}"

@@ -18,6 +18,8 @@ import torch.nn.functional as F
 import wandb
 import pickle
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
+from sim4ad.data import ScenarioConfig
+from sim4ad.path_utils import get_config_path
 
 TensorBatch = List[torch.Tensor]
 
@@ -577,13 +579,13 @@ def initialize_model(state_dim, action_dim, max_action, config):
 
 
 class TD3_BC_Loader:
-    def __init__(self, config, evaluation_episodes, env=None):
+    def __init__(self, config, episode_names, env=None):
         self.config = config
 
         if env is not None:
             self.env = env
         else:
-            self.env = gym.make(config.env, episode_names=evaluation_episodes, dataset_split=config.dataset_split,
+            self.env = gym.make(config.env, episode_names=episode_names, dataset_split=config.dataset_split,
                                 use_irl_reward=config.use_irl_reward,
                                 clustering=config.driving_style, spawn_method=config.spawn_method)
 
@@ -630,7 +632,12 @@ class TD3_BC_Loader:
 @pyrallis.wrap()
 def train(config: TrainConfig):
     logger.info(f"Training TD3 + BC, Env: {config.env}")
-    trainer_loader = TD3_BC_Loader(config)
+
+    map_configs = ScenarioConfig.load(get_config_path(TrainConfig.map_name))
+    idx = map_configs.dataset_split[TrainConfig.dataset_split]
+    training_episodes = [x.recording_id for i, x in enumerate(map_configs.episodes) if i in idx]
+
+    trainer_loader = TD3_BC_Loader(config, training_episodes)
     trainer = trainer_loader.get_trainer()
     actor = trainer_loader.get_actor()
 

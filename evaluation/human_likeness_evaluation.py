@@ -36,14 +36,14 @@ class HumanLikenessEvaluation:
     def simulation(self, visualization: bool = True):
         """Using the simulator to simulate trajectories of all agents"""
         self.sim.full_reset()
-        # done = False # TODO: uncomment this to run until we use all vehicles
-        # while not done:
-        #     assert spawn_method != "random", "we will never finish!"
-        #     done = sim.step(return_done=True)
+        done = False # TODO: uncomment this to run until we use all vehicles
+        while not done:
+            assert self.sim.spawn_method != "random", "we will never finish!"
+            done = self.sim.step(return_done=True)
 
-        simulation_length = 50  # seconds
-        for _ in tqdm(range(int(np.floor(simulation_length / self.sim.dt)))):
-            self.sim.step()
+        # simulation_length = 50  # seconds
+        # for _ in tqdm(range(int(np.floor(simulation_length / self.sim.dt)))):
+        #     self.sim.step()
 
         # remove all agents left in the simulation.
         self.sim.kill_all_agents()

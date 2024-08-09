@@ -21,14 +21,14 @@ from baselines.sac.model import Actor as SACActor
 class PolicyType(Enum):
     # !!! Make sure that the values of the enums below are all different across policy types!!!
     # Otherwise, the enum will not initialize all the values correctly
-    SAC_BASIC_REWARD = {"Aggressive": "best_model_sac_all_irlFalse_SimulatorEnv-v0__model__1__1721755446.pth", # TODO: add aggressive path here
-                        "Normal": "best_model_sac_Normal_irlFalse_SimulatorEnv-v0__model__1__1721755446.pth",
-                        "Cautious": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1721755446.pth",
-                        "all": "best_model_sac_all_irlFalse_SimulatorEnv-v0__model__1__1721755446.pth"}
-    SAC_IRL_REWARD = {"Aggressive": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1721755446.pth", # TODO: add aggressive path here
-                      "Normal": "best_model_sac_Normal_irlTrue_SimulatorEnv-v0__model__1__1721755446.pth",
-                      "Cautious": "best_model_sac_Cautious_irlTrue_SimulatorEnv-v0__model__1__1721755446.pth",
-                      "all": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1721755446.pth"}
+    SAC_BASIC_REWARD = {"Aggressive": "best_model_sac_Aggressive_irlFalse_SimulatorEnv-v0__model__1__1723173376.pth",
+                        "Normal": "",
+                        "Cautious": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1723191164.pth",
+                        "all": ""}
+    SAC_IRL_REWARD = {"Aggressive": "best_model_sac_Aggressive_irlTrue_SimulatorEnv-v0__model__1__1723133135.pth",
+                      "Normal": "best_model_sac_Normal_irlTrue_SimulatorEnv-v0__model__1__1723133135.pth",
+                      "Cautious": "best_model_sac_Cautious_irlTrue_SimulatorEnv-v0__model__1__1723133135.pth",
+                      "all": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1723192188.pth"}
     OFFLINERL = {"Aggressive": "checkpoint.pt"}
     BC = "bc"
 
@@ -57,7 +57,7 @@ class EvalConfig:
     dataset_split: str = "test"  # Set depending on the type of evaluation done
     spawn_method: str = None  # Set depending on the type of evaluation done
     use_irl_reward: bool = None  # Set depending on the type of evaluation done
-    device: str = field(default_factory=lambda: torch.device("cuda") if torch.cuda.is_available() else "cpu")
+    device: str = field(default_factory=lambda: torch.device("cuda" if torch.cuda.is_available() else "cpu"))
     clusters: list = None  # Set in EvaluationType
 
     def __str__(self):

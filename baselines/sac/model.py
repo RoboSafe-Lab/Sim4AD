@@ -92,9 +92,10 @@ def make_env(env_id, seed, run_name, args, evaluation=False, normalisation: bool
     logging.info(f"[SAC] Using cluster: {args.cluster}")
 
     if evaluation:
-        env = gym.make(env_id, dataset_split="valid", use_irl_reward=args.use_irl_reward, clustering=args.cluster)
+        env = gym.make(env_id, dataset_split="valid", use_irl_reward=args.use_irl_reward, clustering=args.cluster,
+                       spawn_method="dataset_one")
     else:
-        env = gym.make(env_id, use_irl_reward=args.use_irl_reward, clustering=args.cluster)
+        env = gym.make(env_id, use_irl_reward=args.use_irl_reward, clustering=args.cluster, spawn_method="dataset_one")
 
     if normalisation:
         state_mean, state_std, reward_mean, reward_std = get_normalisation_parameters(driving_style=env.unwrapped.driving_style,

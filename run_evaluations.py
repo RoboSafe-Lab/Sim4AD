@@ -42,7 +42,7 @@ class EvaluationType(Enum):
 
 @dataclass
 class EvalConfig:
-    policies_to_evaluate: list = (PolicyType.SAC_IRL_REWARD) # (PolicyType.SAC_BASIC_REWARD, PolicyType.SAC_IRL_REWARD)
+    policies_to_evaluate: list = (PolicyType.SAC_IRL_REWARD, PolicyType.SAC_BASIC_REWARD)
     evaluation_to_run = EvaluationType.HUMAN_LIKENESS
 
     env_name: str = "SimulatorEnv-v0"

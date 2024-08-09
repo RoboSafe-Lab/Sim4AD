@@ -33,7 +33,7 @@ class TrainConfig:
     dataset_split: str = "train"  # Dataset split to use
     normalize: bool = True  # get mean and std of state AND reward
     normalize_reward: bool = True  # Normalize reward
-    spawn_method: str = None # whether to use the gym env
+    spawn_method: str = "dataset_one" # whether to use the gym env
     # need to be changed according to the policy to be trained
     map_name: str = "appershofen"
     driving_style: str = "Aggressive"

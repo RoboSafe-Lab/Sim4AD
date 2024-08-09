@@ -31,6 +31,7 @@ class TrainConfig:
     dataset_split: str = "train"  # Dataset split to use
     normalize: bool = True  # get mean and std of state AND reward
     normalize_reward: bool = True  # Normalize reward
+    spawn_method: str = None # whether to use the gym env
     # need to be changed according to the policy to be trained
     map_name: str = "appershofen"
     driving_style: str = "Aggressive"
@@ -471,7 +472,7 @@ def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_sc
     if config.checkpoints_path is not None:
         torch.save(
             trainer.state_dict(),
-            os.path.join(config.checkpoints_path, f"checkpoint.pt"),
+            os.path.join(config.checkpoints_path, f"{TrainConfig.driving_style}_checkpoint.pt"),
         )
 
     wandb.log(
@@ -576,14 +577,15 @@ def initialize_model(state_dim, action_dim, max_action, config):
 
 
 class TD3_BC_Loader:
-    def __init__(self, config, env=None):
+    def __init__(self, config, evaluation_episodes, env=None):
         self.config = config
 
         if env is not None:
             self.env = env
         else:
-            self.env = gym.make(config.env, dataset_split=config.dataset_split, use_irl_reward=config.use_irl_reward,
-                                clustering=config.driving_style)
+            self.env = gym.make(config.env, episode_names=evaluation_episodes, dataset_split=config.dataset_split,
+                                use_irl_reward=config.use_irl_reward,
+                                clustering=config.driving_style, spawn_method=config.spawn_method)
 
         self.state_dim = self.env.observation_space.shape[0]
         self.action_dim = self.env.action_space.shape[0]

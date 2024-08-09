@@ -25,7 +25,8 @@ class HumanLikenessEvaluation:
         for style in driving_style_model_paths:
             model_path = driving_style_model_paths[style]
             if model_path is not None:
-                driving_styles[style] = load_policy(policy_type, style, dummy_env, device=eval_configs.device)
+                driving_styles[style] = load_policy(policy_type, style, dummy_env, device=eval_configs.device,
+                                                    eval_configs=eval_configs, evaluation_episodes=evaluation_episodes)
                 driving_styles[style].eval()
 
         self.sim = Sim4ADSimulation(episode_name=evaluation_episodes, spawn_method=eval_configs.spawn_method,

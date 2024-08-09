@@ -1,6 +1,6 @@
 import pickle
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import List
 from loguru import logger
 
 import gymnasium as gym
@@ -12,7 +12,7 @@ from evaluation.diversity_evaluation import DiversityEvaluation
 from evaluation.human_likeness_evaluation import HumanLikenessEvaluation
 from sim4ad.data import ScenarioConfig
 from sim4ad.path_utils import get_config_path, get_path_offlinerl_model, get_file_name_trajectories, get_path_sac_model
-from sim4ad.offlinerlenv.td3bc_automatum import TD3_BC_Loader, wrap_env, get_normalisation_parameters
+from sim4ad.offlinerlenv.td3bc_automatum import TD3_BC_Loader, wrap_env, get_normalisation_parameters, TrainConfig
 from evaluation.evaluation_functions import EvaluationFeaturesExtractor
 from baselines.sac.model import Actor as SACActor
 
@@ -29,7 +29,7 @@ class PolicyType(Enum):
                       "Normal": "best_model_sac_Normal_irlTrue_SimulatorEnv-v0__model__1__1721755446.pth",
                       "Cautious": "best_model_sac_Cautious_irlTrue_SimulatorEnv-v0__model__1__1721755446.pth",
                       "all": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1721755446.pth"}
-    OFFLINERL = "offlinerl"
+    OFFLINERL = {"Aggressive": "checkpoint.pt"}
     BC = "bc"
 
 
@@ -42,7 +42,7 @@ class EvaluationType(Enum):
 
 @dataclass
 class EvalConfig:
-    policies_to_evaluate: list = (PolicyType.SAC_BASIC_REWARD, PolicyType.SAC_IRL_REWARD)
+    policies_to_evaluate: list = None
     evaluation_to_run = EvaluationType.HUMAN_LIKENESS
 
     env_name: str = "SimulatorEnv-v0"
@@ -70,14 +70,18 @@ class EvalConfig:
 POLICY_CONFIGS = {
     PolicyType.SAC_BASIC_REWARD: {"reward_normalization": False, "use_irl_reward": False},
     PolicyType.SAC_IRL_REWARD: {"reward_normalization": True, "use_irl_reward": True},
+    PolicyType.OFFLINERL: {"reward_normalization": True, "use_irl_reward": True},
 }
 
 
-def load_policy(policy_type: PolicyType, cluster: str, env: gym.Env, device):
+def load_policy(policy_type: PolicyType, cluster: str, env: gym.Env, device,
+                eval_configs: EvalConfig, evaluation_episodes: List):
     if policy_type == PolicyType.OFFLINERL:
-        raise NotImplementedError("adaptation needed!")  # TODO: @ Cheng
         model_path = get_path_offlinerl_model()
-        parameter_loader = TD3_BC_Loader(eval_config)
+        eval_config = TrainConfig
+        eval_config.dataset_split = eval_configs.dataset_split
+        eval_config.spawn_method = eval_configs.spawn_method
+        parameter_loader = TD3_BC_Loader(eval_config, evaluation_episodes)
         parameter_loader.load_model(model_path)
         return parameter_loader.actor
 
@@ -104,9 +108,12 @@ def begin_evaluation(simulation_agents, evaluation_episodes):
 def main():
 
     VISUALIZATION = False  # Set to True if you want to visualize the simulation while saving the trajectories
+    EvalConfig.policies_to_evaluate = [PolicyType.OFFLINERL] # make it feasible to run one policy
     for policy in EvalConfig.policies_to_evaluate:
         # Concatenate the configs for the evaluation type and the policy
-        eval_configs = EvalConfig(**POLICY_CONFIGS[policy], **EvalConfig.evaluation_to_run.value)
+        eval_configs = EvalConfig(policies_to_evaluate=[policy],
+                                  **POLICY_CONFIGS[policy],
+                                  **EvalConfig.evaluation_to_run.value)
         logger.info(f"Evaluation with params: {eval_configs}")
 
         for map_to_use in [eval_configs.test_map, eval_configs.generalization_map]:

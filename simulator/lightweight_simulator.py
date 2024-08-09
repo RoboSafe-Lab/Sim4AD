@@ -84,7 +84,7 @@ class Sim4ADSimulation:
 
         self.__spawn_method = spawn_method
 
-        assert policy_type in ["follow_dataset", "rl", "idm", "offlinerl"] or "bc" in policy_type.lower() \
+        assert policy_type in ["follow_dataset", "rl", "idm", "OFFLINERL"] or "bc" in policy_type.lower() \
                or "sac" in policy_type.lower(), f"Policy type {policy_type} not found." or driving_style_policies is not None
 
         if driving_style_policies is not None:

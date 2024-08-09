@@ -21,14 +21,14 @@ from baselines.sac.model import Actor as SACActor
 class PolicyType(Enum):
     # !!! Make sure that the values of the enums below are all different across policy types!!!
     # Otherwise, the enum will not initialize all the values correctly
-    SAC_BASIC_REWARD = {"Aggressive": "best_model_sac_all_irlFalse_SimulatorEnv-v0__model__1__1721755446.pth", # TODO: add aggressive path here
-                        "Normal": "best_model_sac_Normal_irlFalse_SimulatorEnv-v0__model__1__1721755446.pth",
-                        "Cautious": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1721755446.pth",
-                        "all": "best_model_sac_all_irlFalse_SimulatorEnv-v0__model__1__1721755446.pth"}
-    SAC_IRL_REWARD = {"Aggressive": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1721755446.pth", # TODO: add aggressive path here
-                      "Normal": "best_model_sac_Normal_irlTrue_SimulatorEnv-v0__model__1__1721755446.pth",
-                      "Cautious": "best_model_sac_Cautious_irlTrue_SimulatorEnv-v0__model__1__1721755446.pth",
-                      "all": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1721755446.pth"}
+    SAC_BASIC_REWARD = {"Aggressive": "best_model_sac_Aggressive_irlFalse_SimulatorEnv-v0__model__1__1723173376.pth",
+                        "Normal": "",
+                        "Cautious": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1723191164.pth",
+                        "all": ""}
+    SAC_IRL_REWARD = {"Aggressive": "best_model_sac_Aggressive_irlTrue_SimulatorEnv-v0__model__1__1723133135.pth",
+                      "Normal": "best_model_sac_Normal_irlTrue_SimulatorEnv-v0__model__1__1723133135.pth",
+                      "Cautious": "best_model_sac_Cautious_irlTrue_SimulatorEnv-v0__model__1__1723133135.pth",
+                      "all": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1723192188.pth"}
     OFFLINERL = "offlinerl"
     BC = "bc"
 
@@ -42,7 +42,7 @@ class EvaluationType(Enum):
 
 @dataclass
 class EvalConfig:
-    policies_to_evaluate: list = (PolicyType.SAC_BASIC_REWARD, PolicyType.SAC_IRL_REWARD)
+    policies_to_evaluate: list = (PolicyType.SAC_IRL_REWARD) # (PolicyType.SAC_BASIC_REWARD, PolicyType.SAC_IRL_REWARD)
     evaluation_to_run = EvaluationType.HUMAN_LIKENESS
 
     env_name: str = "SimulatorEnv-v0"

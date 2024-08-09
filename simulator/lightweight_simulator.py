@@ -797,8 +797,6 @@ class Sim4ADSimulation:
             for agent_id, agent in self.__agents.items():
                 color = "red" if agent_id == self.__agent_evaluated else "blue"
                 plt.plot(agent.state.position.x, agent.state.position.y, "o", color=color)
-                bbox = agent.state.bbox.boundary + [agent.state.bbox.boundary[0]]
-                plt.plot([point[0] for point in bbox], [point[1] for point in bbox], color=color)
             plt.savefig("off_road_example.png")
 
         assert off_road, f"Agent {agent.agent_id} went off the road but off_road is False. Death cause: " \
@@ -816,7 +814,7 @@ class Sim4ADSimulation:
         distance_left_lane_marking, distance_right_lane_marking = None, None
 
         if state.lane is not None:
-            # If it is, the agent went off the road.
+            # If it is, the agent went off the road and we cannot check the distance to the markings.
             distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=state)
 
             # nearby_agents_features contains dx, dy, v, a, heading for each nearby agent

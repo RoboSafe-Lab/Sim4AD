@@ -28,7 +28,8 @@ class DiversityEvaluation:
             state_mean, state_std, reward_mean, reward_std = means
             env = wrap_env(env=env, state_mean=state_mean, state_std=state_std, reward_mean=reward_mean,
                            reward_std=reward_std, reward_normalization=eval_configs.reward_normalization)
-        self.actor = load_policy(policy, cluster, env, device=eval_configs.device)
+        self.actor = load_policy(policy, cluster, env, device=eval_configs.device,
+                                 eval_configs=eval_configs, evaluation_episodes=evaluation_episodes)
 
         self.eval_configs = eval_configs
         self.env = env

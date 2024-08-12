@@ -801,7 +801,7 @@ class Sim4ADSimulation:
             random_nr = random.randint(0, 1000)
             plt.savefig(f"off_road_example_{random_nr}.png")
 
-        assert off_road, (f"Agent {original_agent.agent_id} went off the road but off_road is False. Debug_info {debug_info}"
+        assert off_road, (f"O. Agent {original_agent.agent_id} went off the road but off_road is False. Debug_info {debug_info}"
                           f"Death cause: {self.__dead_agents.get(original_agent.agent_id)}. Random nr: {random_nr}"
                           f"agent initial state: {self.__agent_evaluated.initial_state.position}. Traj len: {len(original_agent.state_trajectory)}")
 

@@ -631,7 +631,7 @@ class TD3_BC_Loader:
 
 @pyrallis.wrap()
 def train(config: TrainConfig):
-    logger.info(f"Training TD3 + BC, Env: {config.env}")
+    logger.info(f"Training {TrainConfig.driving_style} using TD3 + BC, Env: {config.env}")
 
     map_configs = ScenarioConfig.load(get_config_path(TrainConfig.map_name))
     idx = map_configs.dataset_split[TrainConfig.dataset_split]

@@ -791,19 +791,19 @@ class Sim4ADSimulation:
 
         return collision, off_road, truncated, reached_goal
 
-    def _handle_none_lane(self, agent, off_road, debug_info):
+    def _handle_none_lane(self, original_agent, off_road, debug_info):
         random_nr = 0
         if not off_road:
             plot_map(self.__scenario_map, markings=True, hide_road_bounds_in_junction=True)
             for agent_id, agent in self.__agents.items():
-                color = "red" if agent_id == self.__agent_evaluated else "blue"
+                color = "red" if agent_id == original_agent.agent_id else "blue"
                 plt.plot(agent.state.position.x, agent.state.position.y, "o", color=color)
             random_nr = random.randint(0, 1000)
             plt.savefig(f"off_road_example_{random_nr}.png")
 
-        assert off_road, (f"Agent {agent.agent_id} went off the road but off_road is False. Debug_info {debug_info}"
-                          f"Death cause: {self.__dead_agents.get(agent.agent_id)}. Random nr: {random_nr}"
-                          f"agent initial state: {agent.initial_state.position}. Traj len: {len(agent.state_trajectory)}")
+        assert off_road, (f"O. Agent {original_agent.agent_id} went off the road but off_road is False. Debug_info {debug_info}"
+                          f"Death cause: {self.__dead_agents.get(original_agent.agent_id)}. Random nr: {random_nr}"
+                          f"agent initial state: {self.__agent_evaluated.initial_state.position}. Traj len: {len(original_agent.state_trajectory)}")
 
     def _get_observation(self, agent: PolicyAgent, state: State, debug_info: str = None) -> Tuple[Observation, dict]:
         """

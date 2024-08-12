@@ -159,10 +159,12 @@ class EvaluationFeaturesExtractor:
 
                 if position == PNA.CENTER_IN_FRONT:
                     ttc[position] = d / (v_ego - v_other)
-                    tth[position] = d / v_ego
+                    if v_ego:
+                        tth[position] = d / v_ego
                 else:
                     ttc[position] = d / (v_other - v_ego)
-                    tth[position] = d / v_other
+                    if v_other:
+                        tth[position] = d / v_other
                 # keep the same value as the dataset
                 if ttc[position] < 0:
                     ttc[position] = -1

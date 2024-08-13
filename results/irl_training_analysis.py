@@ -78,7 +78,7 @@ def plot_weight_comparison(categories):
     rects1 = ax.bar(x - 1.5 * width, weights['Normal'], width, label='Normal', color='red')
     rects2 = ax.bar(x - 0.5 * width, weights['Aggressive'], width, label='Aggressive', color='green')
     rects3 = ax.bar(x + 0.5 * width, weights['Cautious'], width, label='Cautious', color='blue')
-    rects4 = ax.bar(x + 1.5 * width, weights['General'], width, label='General', color='purple')
+    rects4 = ax.bar(x + 1.5 * width, weights['All'], width, label='All', color='purple')
 
     # Add some text for labels, title and custom x-axis tick labels, etc.
     ax.set_xlabel('Features')
@@ -93,7 +93,7 @@ def plot_weight_comparison(categories):
 
 
 def main():
-    categories = ['Normal', 'Aggressive', 'Cautious', 'General']
+    categories = ['Normal', 'Aggressive', 'Cautious', 'All']
     plot_weight_comparison(categories)
     plot_training_process(categories[0])
 

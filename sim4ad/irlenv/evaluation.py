@@ -124,7 +124,7 @@ class CreateAnimation:
 
 def main():
     args = parse_args()
-    driving_styles = {0: 'Cautious', 1: 'Normal', 2: 'Aggressive', -1: 'General'}
+    driving_styles = {0: 'Cautious', 1: 'Normal', 2: 'Aggressive', -1: 'All'}
     driving_style = driving_styles[args.driving_style_idx]
     logger.info(f'Loading {driving_style} for visualization.')
 

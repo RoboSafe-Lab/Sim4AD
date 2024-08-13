@@ -502,7 +502,7 @@ def compute_normalization_parameters(state_dim, dataset, normalize):
     m2 = np.zeros(state_dim)
     all_rewards = []
 
-    dataset_to_use = dataset['General'] if dataset['General'] else dataset['clustered']
+    dataset_to_use = dataset['All'] if dataset['All'] else dataset['clustered']
     for agent_mdp in dataset_to_use:
         if normalize:
             all_rewards.extend(agent_mdp.rewards)

@@ -25,7 +25,7 @@ def main():
     irl_instance = IRL(multiprocessing=False, num_processes=12,
                        save_buffer=False, save_training_log=True)
 
-    driving_styles = {0: 'Cautious', 1: 'Normal', 2: 'Aggressive', -1: 'General'}
+    driving_styles = {0: 'Cautious', 1: 'Normal', 2: 'Aggressive', -1: 'All'}
 
     new_buffer = []
     for episode in config.episodes:

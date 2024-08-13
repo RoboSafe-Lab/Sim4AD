@@ -106,8 +106,8 @@ class BCBaseline:
         def load_one_dataset(split_type):
             with open(get_processed_demonstrations(split_type=split_type, scenario=scenario, cluster=cluster), 'rb') as f:
                 expert_data = pickle.load(f)
-                if cluster == "General":
-                    expert_data = expert_data["General"]
+                if cluster == "All":
+                    expert_data = expert_data["All"]
                 else:
                     expert_data = expert_data["clustered"]
             expert_states = pad_sequence(

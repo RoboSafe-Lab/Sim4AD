@@ -165,6 +165,8 @@ class ExtractObservationAction:
 
         for episode in self._episodes:
             for aid, agent in episode.agents.items():
+                if aid == "29c74d22-9aa7-442d-b3ca-8a710ef26185":
+                    continue  # known issue with this agent
                 agent_mdp_values = self.extract_mdp(episode, aid, agent)
                 if agent_mdp_values is None:
                     continue

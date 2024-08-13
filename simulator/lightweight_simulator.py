@@ -1035,7 +1035,7 @@ class Sim4ADSimulation:
         self.__agents = {}
         self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
 
-        if self.clustering != "all":
+        if self.clustering != "All":
             self.__agents_to_add = self.cluster_agents(self.__episode_agents)
         self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
         self.__last_agent_id = 0  # ID when creating a new random agent

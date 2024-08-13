@@ -24,19 +24,19 @@ class PolicyType(Enum):
     SAC_BASIC_REWARD = {"Aggressive": "best_model_sac_Aggressive_irlFalse_SimulatorEnv-v0__model__1__1723173376.pth",
                         "Normal": "",
                         "Cautious": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1723191164.pth",
-                        "all": ""}
+                        "All": ""}
     SAC_IRL_REWARD = {"Aggressive": "best_model_sac_Aggressive_irlTrue_SimulatorEnv-v0__model__1__1723133135.pth",
                       "Normal": "best_model_sac_Normal_irlTrue_SimulatorEnv-v0__model__1__1723133135.pth",
                       "Cautious": "best_model_sac_Cautious_irlTrue_SimulatorEnv-v0__model__1__1723133135.pth",
-                      "all": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1723192188.pth"}
+                      "All": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1723192188.pth"}
     OFFLINERL = {"Aggressive": "checkpoint.pt"}
     BC = "bc"
 
 
 class EvaluationType(Enum):
     # !!! Make sure that the values of the enums below are all different across evaluation types!!!
-    DIVERSITY = {"spawn_method": "dataset_one", "clusters": ["Normal", "Cautious", "all"]} # TODO: add Aggressive
-    HUMAN_LIKENESS = {"spawn_method": "dataset_all", "clusters": ["all"]}
+    DIVERSITY = {"spawn_method": "dataset_one", "clusters": ["Normal", "Cautious", "All"]} # TODO: add Aggressive
+    HUMAN_LIKENESS = {"spawn_method": "dataset_all", "clusters": ["All"]}
     GENERALIZATION = "generalization"  # TODO
 
 

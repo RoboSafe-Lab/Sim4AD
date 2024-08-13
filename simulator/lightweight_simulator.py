@@ -803,7 +803,7 @@ class Sim4ADSimulation:
 
         assert off_road, (f"O. Agent {original_agent.agent_id} went off the road but off_road is False. Debug_info {debug_info}"
                           f"Death cause: {self.__dead_agents.get(original_agent.agent_id)}. Random nr: {random_nr}"
-                          f"agent initial state: {self.__agent_evaluated.initial_state.position}. Traj len: {len(original_agent.state_trajectory)}")
+                          f"agent initial state: {original_agent.initial_state.position}. Traj len: {len(original_agent.state_trajectory)}")
 
     def _get_observation(self, agent: PolicyAgent, state: State, debug_info: str = None) -> Tuple[Observation, dict]:
         """

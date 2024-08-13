@@ -52,7 +52,7 @@ class ExtractObservationAction:
         self._theta = self.load_reward_weights()
         # no longer using z-score
         # self._feature_mean_std = self.load_feature_normalization()
-        self._clustered_demonstrations = {"General": [], "clustered": []}
+        self._clustered_demonstrations = {"All": [], "clustered": []}
 
     @staticmethod
     def combine(x, y):
@@ -159,8 +159,8 @@ class ExtractObservationAction:
 
     def extract_demonstrations(self):
         """Extract observations"""
-        key = 'General'
-        if self._driving_style != 'General':
+        key = 'All'
+        if self._driving_style != 'All':
             key = 'clustered'
 
         for episode in self._episodes:

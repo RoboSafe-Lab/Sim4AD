@@ -651,7 +651,8 @@ def train(config: TrainConfig):
     ref_min_score = float('inf')
     # create a replay buffer for each vehicle
     replay_buffers = []
-    for agent_mdp in trainer_loader.dataset['clustered']:
+    agent_mdps = trainer_loader.dataset['All'] if trainer_loader.dataset['All'] else trainer_loader.dataset['clustered']
+    for agent_mdp in agent_mdps:
         agent_data = qlearning_dataset(dataset=agent_mdp)
 
         # observation normalization

@@ -34,7 +34,7 @@ class BCBaseline:
             self.name = f"{name}_cluster_{cluster}"
         self.BATCH_SIZE = 128
         self.SHUFFLE = True
-        self.EPOCHS = 10000
+        self.EPOCHS = 1000
         self.LR = 1e-3
         LSTM_HIDDEN_SIZE = 128
         FC_HIDDEN_SIZE = 512
@@ -140,8 +140,12 @@ class BCBaseline:
         best_loss = float('inf')
 
         self.writer = SummaryWriter(f'baselines/runs/bc')
+        early_stopping = False
 
         for epoch in tqdm(range(num_epochs)):
+            if early_stopping:
+                break
+
             # Training
             for i, (trajectory, actions) in enumerate(self.train_loader):
                 # Divide the trajectory for each time step and feed the LSTM the history up until that point
@@ -184,10 +188,10 @@ class BCBaseline:
                         logger.debug(f"Model saved with loss {loss}, at epoch {epoch}")
 
                     # Interrupt training if the loss is not decreasing in the last 10 epochs
-                    if len(self.eval_losses) > 10 and all(
+                    if len(self.eval_losses) > 1000 and all(
                             self.eval_losses[-1] >= self.eval_losses[-i] for i in range(1, 11)):
                         logger.debug(f"Interrupting training at epoch {epoch} due to no decrease in loss")
-                        break
+                        early_stopping = True
         
         self.writer.close()
 

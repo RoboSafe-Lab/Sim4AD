@@ -188,10 +188,10 @@ class BCBaseline:
                 self.writer.add_scalar('Eval Loss', epoch_eval_loss, epoch)
                 self.eval_losses.append(epoch_eval_loss)
                 # Save the model if the validation loss is the best we've seen so far
-                    if epoch_eval_loss < best_loss:
-                        best_loss = epoch_eval_loss
-                        self.save()
-                        logger.debug(f"Model saved with loss {epoch_eval_loss}, at epoch {epoch}")
+                if epoch_eval_loss < best_loss:
+                    best_loss = epoch_eval_loss
+                    self.save()
+                    logger.debug(f"Model saved with loss {epoch_eval_loss}, at epoch {epoch}")
                         
                 # Interrupt training if the loss is not decreasing in the last 'stop_after' epochs
                 stop_after = 20  # epochs

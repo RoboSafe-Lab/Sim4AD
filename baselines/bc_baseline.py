@@ -19,9 +19,7 @@ from baselines.bc_model import LSTMModel
 from sim4ad.common_constants import DEFAULT_SCENARIO, DEFAULT_CLUSTER, LSTM_PADDING_VALUE
 from sim4ad.path_utils import baseline_path, get_config_path, get_processed_demonstrations
 import argparse
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+from loguru import logger
 
 
 class BCBaseline:

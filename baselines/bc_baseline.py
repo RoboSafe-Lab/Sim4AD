@@ -181,20 +181,23 @@ class BCBaseline:
                     actions = actions.to(self.device)
                     output = self.model(trajectory)
                     loss = self.compute_loss(trajectory, output, actions)
-                    self.writer.add_scalar('Eval Loss', loss.item(), epoch * len(self.eval_loader) + i)
                     eval_losses_epoch.append(loss.item())
-                    logger.debug(f"Epoch {epoch}, batch {i}, eval loss {loss.item()}")
-                    # Save the model if the validation loss is the best we've seen so far
-                    if loss < best_loss:
-                        best_loss = loss
-                        self.save()
-                        logger.debug(f"Model saved with loss {loss}, at epoch {epoch}")
 
-                self.eval_losses.append(np.mean(eval_losses_epoch))
-                # Interrupt training if the loss is not decreasing in the last 10 epochs
+                epoch_eval_loss = np.mean(eval_losses_epoch)
+                logger.debug(f"Epoch {epoch} eval loss {epoch_eval_loss}")
+                self.writer.add_scalar('Eval Loss', epoch_eval_loss, epoch)
+                self.eval_losses.append(epoch_eval_loss)
+                # Save the model if the validation loss is the best we've seen so far
+                    if epoch_eval_loss < best_loss:
+                        best_loss = epoch_eval_loss
+                        self.save()
+                        logger.debug(f"Model saved with loss {epoch_eval_loss}, at epoch {epoch}")
+                        
+                # Interrupt training if the loss is not decreasing in the last 'stop_after' epochs
+                stop_after = 20  # epochs
                 if epoch > 80 and all(
-                        self.eval_losses[-1] >= self.eval_losses[-i] for i in range(1, 20)):
-                    logger.debug(f"Interrupting training at epoch {epoch} due to no decrease in loss")
+                        self.eval_losses[-1] >= self.eval_losses[-i] for i in range(1, stop_after)):
+                    logger.debug(f"Interrupting training at epoch {epoch} due to no decrease in loss in past {stop_after} epochs")
                     early_stopping = True
         
         self.writer.close()

@@ -189,7 +189,7 @@ class BCBaseline:
 
                     # Interrupt training if the loss is not decreasing in the last 10 epochs
                     if len(self.eval_losses) > 1000 and all(
-                            self.eval_losses[-1] >= self.eval_losses[-i] for i in range(1, 11)):
+                            self.eval_losses[-1] >= self.eval_losses[-i] for i in range(1, 100)):
                         logger.debug(f"Interrupting training at epoch {epoch} due to no decrease in loss")
                         early_stopping = True
         

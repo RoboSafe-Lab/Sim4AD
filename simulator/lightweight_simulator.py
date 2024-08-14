@@ -1004,6 +1004,9 @@ class Sim4ADSimulation:
         self.__scenario_map = Map.parse_from_opendrive(get_path_to_automatum_map(episode_name))
         self.__episode_agents = episode.agents
 
+        if "29c74d22-9aa7-442d-b3ca-8a710ef26185" in self.__episode_agents:
+            self.__episode_agents.pop("29c74d22-9aa7-442d-b3ca-8a710ef26185")  # the vehicle spawns outside the road
+
         self.__initial_time = episode.frames[0].time
         self.__time = self.__initial_time
         self.__state = {}

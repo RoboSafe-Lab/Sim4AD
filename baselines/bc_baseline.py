@@ -41,8 +41,9 @@ class BCBaseline:
         LSTM_HIDDEN_SIZE = 128
         FC_HIDDEN_SIZE = 512
         DROPOUT = 0.2 if not evaluation else 0.0
-        self.INPUT_SPACE = 34
-        self.ACTION_SPACE = 2
+
+        self.INPUT_SPACE, self.ACTION_SPACE = self.load_datasets(evaluation=evaluation, cluster=cluster,
+                                                                 scenario=scenario, get_dimensions_only=True)
 
         self.model = LSTMModel(self.INPUT_SPACE, self.ACTION_SPACE, LSTM_HIDDEN_SIZE, FC_HIDDEN_SIZE, DROPOUT)
         self.PADDING_VALUE = LSTM_PADDING_VALUE  # used to pad the LSTM input to the same length
@@ -102,7 +103,7 @@ class BCBaseline:
         loss = self.loss_function((predicted_actions[mask]*10).to(self.device), (actions[mask]*10).to(self.device))
         return loss
 
-    def load_datasets(self, evaluation: bool, cluster: str, scenario: str):
+    def load_datasets(self, evaluation: bool, cluster: str, scenario: str, get_dimensions_only=False):
         def load_one_dataset(split_type):
             with open(get_processed_demonstrations(split_type=split_type, scenario=scenario, cluster=cluster), 'rb') as f:
                 expert_data = pickle.load(f)
@@ -110,14 +111,22 @@ class BCBaseline:
                     expert_data = expert_data["All"]
                 else:
                     expert_data = expert_data["clustered"]
+
+            if get_dimensions_only:
+                # return observation_dimension, action_dimension
+                return expert_data[0].observations[0].shape[-1], expert_data[0].actions[0].shape[-1]
+
             expert_states = pad_sequence(
-                [torch.as_tensor(seq, dtype=torch.float32) for seq in expert_data.observations],
+                [torch.as_tensor(seq, dtype=torch.float32) for traj in expert_data for seq in traj.observations],
                 batch_first=True,
                 padding_value=self.PADDING_VALUE)
-            expert_actions = pad_sequence([torch.as_tensor(seq, dtype=torch.float32) for seq in expert_data.actions],
+            expert_actions = pad_sequence([torch.as_tensor(seq, dtype=torch.float32) for traj in expert_data for seq in traj.actions],
                                               batch_first=True,
                                               padding_value=self.PADDING_VALUE)
             return expert_states, expert_actions
+
+        if get_dimensions_only:
+            return load_one_dataset(split_type="train")
 
         assert not evaluation, ("`evaluation` should be true only if the network is used to get prediction with already"
                                 "trained weights.")

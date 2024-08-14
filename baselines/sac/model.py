@@ -74,8 +74,8 @@ class Args:
     hidden_layer_dim = 256
     """the hidden layer dimension of (all) the networks"""
 
-    cluster: str = "all"
-    """the clustering method to use. Options include 'all', 'Aggressive', 'Normal', 'Cautious'"""
+    cluster: str = "All"
+    """the clustering method to use. Options include 'All', 'Aggressive', 'Normal', 'Cautious'"""
 
     normalize_state: bool = True
     """whether to normalise the state and the reward"""

@@ -7,6 +7,7 @@ import pandas as pd
 import pickle
 import joblib
 from feature_normalization import extract_features
+from sim4ad.opendrive import Map, plot_map
 from sim4ad.path_utils import write_common_property
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 from sim4ad.irlenv.irlenvsim import IRLEnv
@@ -165,6 +166,17 @@ class ExtractObservationAction:
 
         for episode in self._episodes:
             for aid, agent in episode.agents.items():
+                if aid == "29c74d22-9aa7-442d-b3ca-8a710ef26185":
+                    # # print the position and the map
+                    # print(aid)
+                    # map = Map.parse_from_opendrive(episode.map_file)
+                    # import matplotlib.pyplot as plt
+                    # fig, ax = plt.subplots()
+                    # plot_map(map, markings=True,
+                    #          hide_road_bounds_in_junction=True, ax=ax)
+                    # plt.scatter(agent.x_vec, agent.y_vec)
+                    # plt.show()
+                    continue  # known issue with this agent, where it spawns out of the road
                 agent_mdp_values = self.extract_mdp(episode, aid, agent)
                 if agent_mdp_values is None:
                     continue

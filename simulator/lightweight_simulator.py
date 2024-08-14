@@ -78,6 +78,9 @@ class Sim4ADSimulation:
         self.__simulation_name = simulation_name
         self.__eval = EvaluationFeaturesExtractor(sim_name=simulation_name)
 
+        if clustering == "All":
+            self.clustering = "all"
+
         # dataset_all: agents are spawned at the time they appear in the dataset, but are controlled by the policy.
         # random: agents are spawned at random times and positions.
         # dataset-one: all but one agent follow the dataset, the other one, is controlled by the policy.

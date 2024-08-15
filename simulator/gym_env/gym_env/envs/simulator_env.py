@@ -17,7 +17,7 @@ from sim4ad.data import DatasetScenario, ScenarioConfig
 from loguru import logger
 from sim4ad.opendrive import Map
 from sim4ad.path_utils import get_path_to_automatum_scenario, get_config_path, get_path_to_automatum_map, \
-    get_path_irl_weights
+    get_path_irl_weights, get_common_property
 from simulator.lightweight_simulator import Sim4ADSimulation
 
 from simulator.gym_env.gym_env.envs.reward import get_reward
@@ -38,21 +38,32 @@ class SimulatorEnv(gym.Env):
             dummy: If True, the environment will not load the dataset and will only be used for getting the dimensions
         """
 
+        # Load "common elements" to get the action and observation space
+        obs_features = list(get_common_property("FEATURES_IN_OBSERVATIONS"))
+        action_features = list(get_common_property("FEATURES_IN_ACTIONS"))
+
         # At each step, the agent must choose the acceleration and yaw rate.
         self.MIN_YAW_RATE = -0.08
         self.MAX_YAW_RATE = 0.07
+
+        assert action_features == ["acceleration", "yaw_rate"], (f"Action features are not as expected: "
+                                                                 f"{action_features}. Change below.")
         self.action_space = Box(
             low=np.array([-5, self.MIN_YAW_RATE]),
             high=np.array([5, self.MAX_YAW_RATE])
         )
 
-        # The observation will be a set of 34 features.
+        # The observation will be a set of features.
+        assert obs_features[:2] == ["speed", "heading"], (f"Observation features are not as expected: "
+                                                                f"{obs_features}. Change below.")
+        obs_space = len(obs_features) - 2
         self.observation_space = Box(
-            low=np.array([-200, -np.pi] + [-500] * 32),  # velocity can max be 200, heading can min be -pi
-            high=np.array([200, np.pi] + [500] * 32)
+            low=np.array([-np.inf, -np.pi] + [-np.inf] * obs_space),  # velocity can max be 200, heading can min be -pi
+            high=np.array([np.inf, np.pi] + [np.inf] * obs_space)
         )
 
         if dummy:
+            # We only need the action and observation space
             return
 
         assert spawn_method is not None, "Please provide the spawn method"

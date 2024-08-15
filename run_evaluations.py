@@ -8,42 +8,87 @@ from enum import Enum
 import os
 import torch
 
-from evaluation.diversity_evaluation import DiversityEvaluation
-from evaluation.human_likeness_evaluation import HumanLikenessEvaluation
+from evaluation.trajectory_extractor import TrajectoryExtractor
 from sim4ad.data import ScenarioConfig
 from sim4ad.path_utils import get_config_path, get_path_offlinerl_model, get_file_name_trajectories, get_path_sac_model
 from sim4ad.offlinerlenv.td3bc_automatum import TD3_BC_Loader, wrap_env, get_normalisation_parameters, TrainConfig
 from evaluation.evaluation_functions import EvaluationFeaturesExtractor
 from baselines.sac.model import Actor as SACActor
+from baselines.bc_baseline import BCBaseline as BC
 
 
-### TODO: CHANGE THIS ACCORDING TO THE EVALUATION YOU WANT TO RUN ###
 class PolicyType(Enum):
-    # !!! Make sure that the values of the enums below are all different across policy types!!!
-    # Otherwise, the enum will not initialize all the values correctly
-    SAC_BASIC_REWARD = {"Aggressive": "best_model_sac_Aggressive_irlFalse_SimulatorEnv-v0__model__1__1723173376.pth",
-                        "Normal": "",
-                        "Cautious": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1723191164.pth",
-                        "All": ""}
-    SAC_IRL_REWARD = {"Aggressive": "best_model_sac_Aggressive_irlTrue_SimulatorEnv-v0__model__1__1723133135.pth",
-                      "Normal": "best_model_sac_Normal_irlTrue_SimulatorEnv-v0__model__1__1723133135.pth",
-                      "Cautious": "best_model_sac_Cautious_irlTrue_SimulatorEnv-v0__model__1__1723133135.pth",
-                      "All": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1723192188.pth"}
-    OFFLINERL = {"Aggressive": "checkpoint.pt"}
+    """ Used to define the different types of policies that can be evaluated. Each evaluation
+     type should have a different value for each of the enums below. """
+    SAC_BASIC_REWARD = "sac_basic_reward"
+    SAC_IRL_REWARD = "sac_irl_reward"
+    OFFLINERL = "offlinerl"
     BC = "bc"
+
+
+"""
+### CHANGE THIS ACCORDING TO THE EVALUATION YOU WANT TO RUN ###
+Add for each cluster the path to the model that vehicles in that cluster should follow
+"""
+HUMAN_LIKENESS_POLICIES = {
+    PolicyType.SAC_BASIC_REWARD: {
+        "Aggressive": "",
+        "Normal": "",
+        "Cautious": "",
+        "All": ""},
+    PolicyType.SAC_IRL_REWARD: {
+        "Aggressive": "",
+        "Normal": "",
+        "Cautious": "",
+        "All": ""},
+    PolicyType.OFFLINERL: {
+        "Aggressive": "",
+        "Normal": "",
+        "Cautious": "",
+        "All": ""},
+    PolicyType.BC: {
+        "Aggressive": "",
+        "Normal": "",
+        "Cautious": "",
+        "All": ""}
+}
+
+DIVERSITY_EVAL_POLICIES = {
+    PolicyType.SAC_BASIC_REWARD: {
+        "Aggressive": "",
+        "Normal": "",
+        "Cautious": "",
+        "All": ""},
+    PolicyType.SAC_IRL_REWARD: {
+        "Aggressive": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1723187282.pth",
+        "Normal": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1723187282.pth",
+        "Cautious": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1723187282.pth",
+        "All": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1723187282.pth"},
+    PolicyType.OFFLINERL: {
+        "Aggressive": "",
+        "Normal": "",
+        "Cautious": "",
+        "All": ""},
+    PolicyType.BC: {
+        "Aggressive": "bc-all-obs-5_pi_cluster_Aggressive",
+        "Normal": "bc-all-obs-5_pi_cluster_Aggressive",
+        "Cautious": "bc-all-obs-5_pi_cluster_Aggressive",
+        "All": "bc-all-obs-5_pi_cluster_Aggressive"}
+}
 
 
 class EvaluationType(Enum):
     # !!! Make sure that the values of the enums below are all different across evaluation types!!!
-    DIVERSITY = {"spawn_method": "dataset_one", "clusters": ["Normal", "Cautious", "All"]} # TODO: add Aggressive
+    DIVERSITY = {"spawn_method": "dataset_one", "clusters": ["Normal", "Cautious", "All"]}  # TODO: add Aggressive
     HUMAN_LIKENESS = {"spawn_method": "dataset_all", "clusters": ["All"]}
     GENERALIZATION = "generalization"  # TODO
 
 
 @dataclass
 class EvalConfig:
-    policies_to_evaluate: list = None
-    evaluation_to_run = EvaluationType.HUMAN_LIKENESS
+    """ PARAMETERS FOR THE EVALUATION """
+    policies_to_evaluate: list = None  # e.g., [PolicyType.SAC_BASIC_REWARD, PolicyType.SAC_IRL_REWARD]
+    evaluation_to_run = EvaluationType.DIVERSITY.name
 
     env_name: str = "SimulatorEnv-v0"
     test_map: str = "appershofen"
@@ -71,27 +116,34 @@ POLICY_CONFIGS = {
     PolicyType.SAC_BASIC_REWARD: {"reward_normalization": False, "use_irl_reward": False},
     PolicyType.SAC_IRL_REWARD: {"reward_normalization": True, "use_irl_reward": True},
     PolicyType.OFFLINERL: {"reward_normalization": True, "use_irl_reward": True},
+    PolicyType.BC: {"reward_normalization": False, "use_irl_reward": False}
 }
 
 
-def load_policy(policy_type: PolicyType, cluster: str, env: gym.Env, device,
-                eval_configs: EvalConfig, evaluation_episodes: List):
+def load_policy(policy_type: PolicyType, env: gym.Env, device, eval_configs: EvalConfig,
+                evaluation_episodes: List, model_path: str = None):
+    """IF YOU ADD A POLICY TYPE, MAKE SURE TO ADD IT TO THE ENUMS ABOVE TOO"""
     if policy_type == PolicyType.OFFLINERL:
+        logger.warning("The OfflineRL policy is loaded from a SINGLE model and not based on the cluster!")
         model_path = get_path_offlinerl_model()
         eval_config = TrainConfig
         eval_config.dataset_split = eval_configs.dataset_split
         eval_config.spawn_method = eval_configs.spawn_method
         parameter_loader = TD3_BC_Loader(eval_config, evaluation_episodes)
         parameter_loader.load_model(model_path)
-        return parameter_loader.actor
+        actor = parameter_loader.actor
+        actor.eval()
+        # TODO: load to device??? @ Cheng
+        return actor
 
     elif policy_type == PolicyType.SAC_BASIC_REWARD or policy_type == PolicyType.SAC_IRL_REWARD:
         actor = SACActor(env, device=device).to(device)
-        actor.load_state_dict(torch.load(policy_type.value[cluster]))
+        actor.load_state_dict(torch.load(model_path))
+        actor.eval()
         return actor
 
     elif policy_type == PolicyType.BC:
-        raise NotImplementedError
+        return BC(name=model_path, evaluation=True)
     else:
         raise NotImplementedError(f"Policy type {policy_type} not implemented")
 
@@ -106,14 +158,14 @@ def begin_evaluation(simulation_agents, evaluation_episodes):
 
 
 def main():
-
-    VISUALIZATION = False  # Set to True if you want to visualize the simulation while saving the trajectories
-    EvalConfig.policies_to_evaluate = [PolicyType.OFFLINERL] # make it feasible to run one policy
+    # TODO: if visualisation is true, `simulation_length` should be low (in trajectory_extractor.py) to avoid long waiting time
+    VISUALIZATION = True  # Set to True if you want to visualize the simulation while saving the trajectories
+    EvalConfig.policies_to_evaluate = [PolicyType.BC]  # make it feasible to run one policy
     for policy in EvalConfig.policies_to_evaluate:
         # Concatenate the configs for the evaluation type and the policy
         eval_configs = EvalConfig(policies_to_evaluate=[policy],
                                   **POLICY_CONFIGS[policy],
-                                  **EvalConfig.evaluation_to_run.value)
+                                  **EvaluationType[EvalConfig.evaluation_to_run].value)
         logger.info(f"Evaluation with params: {eval_configs}")
 
         for map_to_use in [eval_configs.test_map, eval_configs.generalization_map]:
@@ -122,8 +174,7 @@ def main():
             evaluation_episodes = [x.recording_id for i, x in enumerate(map_configs.episodes) if i in idx]
 
             for cluster in eval_configs.clusters:
-
-                output_dir = get_file_name_trajectories(experiment_name=eval_configs.evaluation_to_run.name,
+                output_dir = get_file_name_trajectories(experiment_name=eval_configs.evaluation_to_run,
                                                         map_name=map_to_use, policy_type=policy.name, cluster=cluster,
                                                         irl_weights=eval_configs.use_irl_reward,
                                                         spawn_method=eval_configs.spawn_method,
@@ -137,19 +188,21 @@ def main():
                     with open(output_dir, "rb") as f:
                         simulation_agents = pickle.load(f)
                     # Begin the evaluation function
-                    logger.info(f'{eval_configs.evaluation_to_run.name} evaluation started!')
+                    logger.info(f'{eval_configs.evaluation_to_run} evaluation started!')
                     begin_evaluation(simulation_agents, evaluation_episodes)
                 else:
-                    if eval_configs.evaluation_to_run == EvaluationType.DIVERSITY:
-                        evaluator = DiversityEvaluation(eval_configs, evaluation_episodes, policy, cluster, load_policy)
-                    elif eval_configs.evaluation_to_run == EvaluationType.HUMAN_LIKENESS:
-                        assert cluster == "all", "Human likeness evaluation only supports 'all' cluster"
-                        evaluator = HumanLikenessEvaluation(eval_configs, evaluation_episodes, policy, cluster,
-                                                            driving_style_model_paths=policy.value,
-                                                            load_policy=load_policy)
+                    if eval_configs.evaluation_to_run == EvaluationType.DIVERSITY.name:
+                        # What group of policies to use for the evaluation
+                        driving_style_model_paths = DIVERSITY_EVAL_POLICIES[policy]
+                    elif eval_configs.evaluation_to_run == EvaluationType.HUMAN_LIKENESS.name:
+                        assert cluster == "All", "Human likeness evaluation only supports 'All' cluster. Got {cluster}"
+                        driving_style_model_paths = HUMAN_LIKENESS_POLICIES[policy]
                     else:
-                        raise NotImplementedError
+                        raise NotImplementedError(f"Evaluation type {eval_configs.evaluation_to_run} not implemented")
 
+                    evaluator = TrajectoryExtractor(eval_configs, evaluation_episodes, policy_type=policy,
+                                                    cluster=cluster, load_policy=load_policy,
+                                                    driving_style_model_paths=driving_style_model_paths)
                     simulation_agents = evaluator.simulation(visualization=VISUALIZATION)
 
                     # Create the directory if it does not exist

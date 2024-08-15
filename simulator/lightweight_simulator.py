@@ -92,8 +92,8 @@ class Sim4ADSimulation:
                or "sac" in policy_type.lower(), f"Policy type {policy_type} not found." or driving_style_policies is not None
 
         if driving_style_policies is not None:
-            assert spawn_method == "dataset_all", \
-                "Driving style policies are currently only compatible with 'dataset_all' spawn"
+            assert spawn_method in ["dataset_all", "dataset_one"], \
+                "Driving style policies are currently only compatible with 'dataset_all' or 'dataset_one' spawn"
 
         if policy_type == "follow_dataset":
             assert spawn_method != "random", "Policy type 'follow_dataset' is not compatible with 'random' spawn"
@@ -214,6 +214,8 @@ class Sim4ADSimulation:
 
     def _get_policy(self, policy):
 
+        if policy in self.__driving_style_policies:
+            return self.__driving_style_policies[policy]
         if "bc" in policy.lower():
             return BC(name=policy, evaluation=True)
         elif "sac" in policy.lower():
@@ -222,8 +224,6 @@ class Sim4ADSimulation:
             return "follow_dataset"
         elif policy == "rl":
             return "rl"
-        elif policy in self.__driving_style_policies:
-            return self.__driving_style_policies[policy].to(self.device)
         else:
             raise ValueError(f"Policy {policy} not found.")
 
@@ -406,7 +406,11 @@ class Sim4ADSimulation:
                 if (self.__time - agent.time[0]) >= 0 and (agent.time[-1] - self.time) >= 0:
                     if agent_id not in self.__agents:
                         if agent_id == self.__agent_evaluated:
-                            add_agents[agent_id] = (agent, self.__policy_type)
+                            if self.__driving_style_policies:
+                                policy_to_use = self.get_driving_style_vehicle(agent_id)
+                            else:
+                                policy_to_use = self.__policy_type
+                            add_agents[agent_id] = (agent, policy_to_use)
                         else:
                             add_agents[agent_id] = (agent, "follow_dataset")
         else:

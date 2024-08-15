@@ -1006,6 +1006,8 @@ class Sim4ADSimulation:
 
         if "29c74d22-9aa7-442d-b3ca-8a710ef26185" in self.__episode_agents:
             self.__episode_agents.pop("29c74d22-9aa7-442d-b3ca-8a710ef26185")  # the vehicle spawns outside the road
+        if "88849c8f-5765-4898-8833-88589b72b0bd" in self.__episode_agents:
+            self.__episode_agents.pop("88849c8f-5765-4898-8833-88589b72b0bd")
 
         self.__initial_time = episode.frames[0].time
         self.__time = self.__initial_time

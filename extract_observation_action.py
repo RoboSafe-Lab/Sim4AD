@@ -11,6 +11,7 @@ from sim4ad.opendrive import Map, plot_map
 from sim4ad.path_utils import write_common_property
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 from sim4ad.irlenv.irlenvsim import IRLEnv
+from loguru import logger
 
 
 @dataclass
@@ -166,7 +167,7 @@ class ExtractObservationAction:
 
         for episode in self._episodes:
             for aid, agent in episode.agents.items():
-                if aid == "29c74d22-9aa7-442d-b3ca-8a710ef26185":
+                if aid == "29c74d22-9aa7-442d-b3ca-8a710ef26185" or aid=="88849c8f-5765-4898-8833-88589b72b0bd":
                     # # print the position and the map
                     # print(aid)
                     # map = Map.parse_from_opendrive(episode.map_file)
@@ -178,6 +179,18 @@ class ExtractObservationAction:
                     # plt.show()
                     continue  # known issue with this agent, where it spawns out of the road
                 agent_mdp_values = self.extract_mdp(episode, aid, agent)
+
+                if round(agent.x_vec[0]) in range(-80, -65) and round(agent.y_vec[0]) in range(-100,150):
+                    # print the position and the map
+                    logger.error(f"SPAWNED OUTSIDE: {aid}")
+                    # map = Map.parse_from_opendrive(episode.map_file)
+                    # import matplotlib.pyplot as plt
+                    # fig, ax = plt.subplots()
+                    # plot_map(map, markings=True,
+                    #          hide_road_bounds_in_junction=True, ax=ax)
+                    # plt.scatter(agent.x_vec, agent.y_vec)
+                    # plt.show()
+                    continue
                 if agent_mdp_values is None:
                     continue
 

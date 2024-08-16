@@ -49,7 +49,7 @@ class Sim4ADSimulation:
                  simulation_name: str = "sim4ad_simulation",
                  spawn_method: str = "dataset",
                  evaluation: bool = True,
-                 clustering: str = "all",
+                 clustering: str = "All",
                  driving_style_policies: Dict[str, Any] = None,
                  normalise_observation: bool = False):
 
@@ -79,7 +79,7 @@ class Sim4ADSimulation:
         self.__eval = EvaluationFeaturesExtractor(sim_name=simulation_name)
 
         if clustering == "All":
-            self.clustering = "all"
+            self.clustering = "All"
 
         # dataset_all: agents are spawned at the time they appear in the dataset, but are controlled by the policy.
         # random: agents are spawned at random times and positions.
@@ -104,7 +104,7 @@ class Sim4ADSimulation:
         self.__state = {}
         self.__agents = {}
         self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
-        if self.clustering != "all":
+        if self.clustering != "All":
             self.__agents_to_add = self.cluster_agents(self.__episode_agents)
 
         self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
@@ -1112,7 +1112,7 @@ if __name__ == "__main__":
     spawn_method = "dataset_all"
     # "bc-all-obs-5_pi_cluster_Aggressive"  # "bc-all-obs-1.5_pi" "idm"
     policy_type = "sac"  # "follow_dataset"
-    clustering = "all"
+    clustering = "All"
     sim = Sim4ADSimulation(episode_name=ep_name, spawn_method=spawn_method, policy_type=policy_type,
                            clustering=clustering)
     sim.full_reset()

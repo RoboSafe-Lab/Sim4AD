@@ -51,7 +51,8 @@ class Sim4ADSimulation:
                  evaluation: bool = True,
                  clustering: str = "All",
                  driving_style_policies: Dict[str, Any] = None,
-                 normalise_observation: bool = False):
+                 normalise_observation: bool = False,
+                 pbar: bool = False):
 
         """ Initialise new simulation.
 
@@ -60,6 +61,7 @@ class Sim4ADSimulation:
             simulation_name: The name of the simulation.
             spawn_method: The method to spawn the vehicles in the simulation. Either "dataset_all", "dataset_one" or "random".
             driving_style_policies: A dictionary with the driving styles of the agents in the simulation.
+            pbar: If True, show a progress bar when adding agents.
         """
 
         self.episode_idx = 0  # Index of the episode we are currently evaluating
@@ -68,7 +70,7 @@ class Sim4ADSimulation:
         self.will_be_done_next = False
         self.done_full_cycle = False  # If iterate once through all agents in all episodes
         self.clustering = clustering
-
+        self.__pbar = pbar
         self.__load_datasets()
         self.__fps = np.round(1 / self.__dt)
 
@@ -198,10 +200,12 @@ class Sim4ADSimulation:
 
         if self.__spawn_method == "dataset_all":
             self.__agents_to_add.pop(new_agent.agent_id)
-            self.__pbar.update(1)
+            if self.__pbar:
+                self.__pbar.update(1)
         elif self.__spawn_method == "dataset_one" and new_agent.agent_id == self.__agent_evaluated:
             self.__agents_to_add.pop(new_agent.agent_id)
-            self.__pbar.update(1)
+            if self.__pbar:
+                self.__pbar.update(1)
         elif self.__spawn_method == "random":
             # There is no list of agents to add.
             pass
@@ -277,7 +281,8 @@ class Sim4ADSimulation:
             self.remove_agent(agent_id, DeathCause.TIMEOUT)
 
         self.__agents = {}
-        self.__pbar.close()
+        if self.__pbar:
+            self.__pbar.close()
 
     def full_reset(self):
         """ Remove all agents and reset internal state of simulation. """
@@ -1018,7 +1023,8 @@ class Sim4ADSimulation:
         if self.clustering != "All":
             self.__agents_to_add = self.cluster_agents(self.__episode_agents)
 
-        self.__pbar = tqdm(total=len(self.__episode_agents), desc="Spawning agents")
+        if self.__pbar:
+            self.__pbar = tqdm(total=len(self.__episode_agents), desc="Spawning agents")
         self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
         self.__last_agent_id = 0  # ID when creating a new random agent
         # Dictionary (agent_id, DeathCause) of agents that have been removed from the simulation.

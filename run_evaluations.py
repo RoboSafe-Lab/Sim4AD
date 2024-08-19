@@ -30,30 +30,7 @@ class PolicyType(Enum):
 ### CHANGE THIS ACCORDING TO THE EVALUATION YOU WANT TO RUN ###
 Add for each cluster the path to the model that vehicles in that cluster should follow
 """
-HUMAN_LIKENESS_POLICIES = {
-    PolicyType.SAC_BASIC_REWARD: {
-        "Aggressive": "",
-        "Normal": "",
-        "Cautious": "",
-        "All": ""},
-    PolicyType.SAC_IRL_REWARD: {
-        "Aggressive": "",
-        "Normal": "",
-        "Cautious": "",
-        "All": ""},
-    PolicyType.OFFLINERL: {
-        "Aggressive": "",
-        "Normal": "",
-        "Cautious": "",
-        "All": ""},
-    PolicyType.BC: {
-        "Aggressive": "",
-        "Normal": "",
-        "Cautious": "",
-        "All": ""}
-}
-
-DIVERSITY_EVAL_POLICIES = {
+EVAL_POLICIES = {
     PolicyType.SAC_BASIC_REWARD: {
         "Aggressive": "",
         "Normal": "",
@@ -158,7 +135,7 @@ def begin_evaluation(simulation_agents, evaluation_episodes):
 def main():
     # TODO: if visualisation is true, `simulation_length` should be low (in trajectory_extractor.py) to avoid long waiting time
     VISUALIZATION = False  # Set to True if you want to visualize the simulation while saving the trajectories
-    EvalConfig.policies_to_evaluate = [PolicyType.OFFLINERL]  # make it feasible to run one policy
+    EvalConfig.policies_to_evaluate = [PolicyType.BC]  # make it feasible to run one policy
     for policy in EvalConfig.policies_to_evaluate:
         # Concatenate the configs for the evaluation type and the policy
         eval_configs = EvalConfig(policies_to_evaluate=[policy],
@@ -181,7 +158,7 @@ def main():
                                                         state_normalization=eval_configs.state_normalization,
                                                         reward_normalization=eval_configs.reward_normalization)
 
-                # Check if the results are already saved
+                # Check if the trajectories are already saved
                 if os.path.exists(output_dir):
                     with open(output_dir, "rb") as f:
                         simulation_agents = pickle.load(f)
@@ -190,16 +167,21 @@ def main():
                     begin_evaluation(simulation_agents, evaluation_episodes)
                 else:
                     if eval_configs.evaluation_to_run == EvaluationType.DIVERSITY.name:
-                        # What group of policies to use for the evaluation
-                        driving_style_model_paths = DIVERSITY_EVAL_POLICIES[policy]
+                        # All the vehicles in the simulation, regardless sof the ground truth cluster, will have the
+                        # same policy
+                        driving_style_model_paths = EVAL_POLICIES[policy]
+                        driving_style_model_paths = {c: driving_style_model_paths[cluster]
+                                                     for c in driving_style_model_paths}
                     elif eval_configs.evaluation_to_run == EvaluationType.HUMAN_LIKENESS.name:
                         assert cluster == "All", "Human likeness evaluation only supports 'All' cluster. Got {cluster}"
-                        driving_style_model_paths = HUMAN_LIKENESS_POLICIES[policy]
+                        driving_style_model_paths = EVAL_POLICIES[policy]
                     else:
                         raise NotImplementedError(f"Evaluation type {eval_configs.evaluation_to_run} not implemented")
 
+                    # The cluster below is "All" rather than `cluster` because we use `cluster` to load the correct policy,
+                    # but then `All` the vehicles will have that policy
                     evaluator = TrajectoryExtractor(eval_configs, evaluation_episodes, policy_type=policy,
-                                                    cluster=cluster, load_policy=load_policy,
+                                                    cluster="All", load_policy=load_policy,
                                                     driving_style_model_paths=driving_style_model_paths)
                     simulation_agents = evaluator.simulation(visualization=VISUALIZATION)
 

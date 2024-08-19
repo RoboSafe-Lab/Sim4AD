@@ -30,7 +30,7 @@ class TrajectoryExtractor:
 
         self.sim = Sim4ADSimulation(episode_name=evaluation_episodes, spawn_method=eval_configs.spawn_method,
                                     policy_type=policy_type.name, clustering=cluster,
-                                    driving_style_policies=driving_styles, normalise_observation=True)
+                                    driving_style_policies=driving_styles, normalise_observation=True, pbar=True)
 
     def simulation(self, visualization: bool = True):
         """Using the simulator to simulate trajectories of all agents"""

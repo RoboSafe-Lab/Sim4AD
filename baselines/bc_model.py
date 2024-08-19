@@ -25,6 +25,7 @@ class LSTMModel(nn.Module):
     def forward(self, history: torch.Tensor):
         # out contains the hidden state for each time step of the trajectory, after all the layers
         if isinstance(history, list):
+            history = np.array(history)
             history = torch.tensor(history, dtype=torch.float32)
         out, _ = self.rnn(history)
         out = self.fc(out)

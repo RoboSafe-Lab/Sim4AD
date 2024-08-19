@@ -35,17 +35,18 @@ class TrajectoryExtractor:
     def simulation(self, visualization: bool = True):
         """Using the simulator to simulate trajectories of all agents"""
         self.sim.full_reset()
-        # done = False  # TODO: uncomment this to run until we use all vehicles
-        # while not done:
-        #     assert self.sim.spawn_method != "random", "we will never finish!"
-        #     done = self.sim.step(return_done=True)
-
-        simulation_length = 5000000  # seconds
-        for _ in tqdm(range(int(np.floor(simulation_length / self.sim.dt)))):
+        done = False  # TODO: uncomment this to run until we use all vehicles
+        while not done:
+            assert self.sim.spawn_method != "random", "we will never finish!"
             done = self.sim.step(return_done=True)
-            if done:
-                logger.info("All agents have been used. Terminating simulation.")
-                break
+        logger.info("All agents have been used. Terminating simulation.")
+
+        # simulation_length = 5000000  # seconds
+        # for _ in tqdm(range(int(np.floor(simulation_length / self.sim.dt)))):
+        #     done = self.sim.step(return_done=True)
+        #     if done:
+        #         logger.info("All agents have been used. Terminating simulation.")
+        #         break
 
         # remove all agents left in the simulation.
         self.sim.kill_all_agents()

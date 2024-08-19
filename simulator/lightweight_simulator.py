@@ -78,9 +78,6 @@ class Sim4ADSimulation:
         self.__simulation_name = simulation_name
         self.__eval = EvaluationFeaturesExtractor(sim_name=simulation_name)
 
-        if clustering == "All":
-            self.clustering = "All"
-
         # dataset_all: agents are spawned at the time they appear in the dataset, but are controlled by the policy.
         # random: agents are spawned at random times and positions.
         # dataset-one: all but one agent follow the dataset, the other one, is controlled by the policy.
@@ -103,9 +100,6 @@ class Sim4ADSimulation:
         # Also in load_dataset
         self.__state = {}
         self.__agents = {}
-        self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
-        if self.clustering != "All":
-            self.__agents_to_add = self.cluster_agents(self.__episode_agents)
 
         self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
         self.__last_agent_id = 0  # ID when creating a new random agent
@@ -204,8 +198,10 @@ class Sim4ADSimulation:
 
         if self.__spawn_method == "dataset_all":
             self.__agents_to_add.pop(new_agent.agent_id)
+            self.__pbar.update(1)
         elif self.__spawn_method == "dataset_one" and new_agent.agent_id == self.__agent_evaluated:
             self.__agents_to_add.pop(new_agent.agent_id)
+            self.__pbar.update(1)
         elif self.__spawn_method == "random":
             # There is no list of agents to add.
             pass
@@ -281,6 +277,7 @@ class Sim4ADSimulation:
             self.remove_agent(agent_id, DeathCause.TIMEOUT)
 
         self.__agents = {}
+        self.__pbar.close()
 
     def full_reset(self):
         """ Remove all agents and reset internal state of simulation. """
@@ -1018,9 +1015,10 @@ class Sim4ADSimulation:
         self.__state = {}
         self.__agents = {}
         self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
-
         if self.clustering != "All":
             self.__agents_to_add = self.cluster_agents(self.__episode_agents)
+
+        self.__pbar = tqdm(total=len(self.__episode_agents), desc="Spawning agents")
         self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.
         self.__last_agent_id = 0  # ID when creating a new random agent
         # Dictionary (agent_id, DeathCause) of agents that have been removed from the simulation.

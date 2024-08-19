@@ -30,7 +30,7 @@ class SimulatorEnv(gym.Env):
 
     metadata = {"render_modes": ["human"], "render_fps": 4}
 
-    def __init__(self, render_mode: str = None, episode_names: List = None, seed: int = None, clustering: str = "all",
+    def __init__(self, render_mode: str = None, episode_names: List = None, seed: int = None, clustering: str = "All",
                  dataset_split: str = "train", use_irl_reward: bool = False, spawn_method: str = None, dummy:bool = False):
         """
         Args:

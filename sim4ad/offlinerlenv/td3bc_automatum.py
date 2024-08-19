@@ -587,15 +587,11 @@ class TD3_BC_Loader:
         else:
             self.env = gym.make(config.env, episode_names=episode_names, dataset_split=config.dataset_split,
                                 use_irl_reward=config.use_irl_reward,
-                                clustering=config.driving_style, spawn_method=config.spawn_method)
+                                spawn_method=config.spawn_method)
 
         self.state_dim = self.env.observation_space.shape[0]
         self.action_dim = self.env.action_space.shape[0]
         self.max_action = self.env.action_space.high
-
-        self.dataset = load_demonstration_data(config.driving_style, config.map_name, dataset_split=config.dataset_split)
-        self.state_mean, self.state_std, self.reward_mean, self.reward_std = compute_normalization_parameters(
-            self.state_dim, self.dataset, config.normalize)
 
         # Set seeds
         self.set_seed(config.seed)
@@ -637,35 +633,41 @@ def train(config: TrainConfig):
     idx = map_configs.dataset_split[TrainConfig.dataset_split]
     training_episodes = [x.recording_id for i, x in enumerate(map_configs.episodes) if i in idx]
 
+    # initialize trainer
     trainer_loader = TD3_BC_Loader(config, training_episodes)
     trainer = trainer_loader.get_trainer()
     actor = trainer_loader.get_actor()
 
     wandb_init(asdict(config))
 
-    env = wrap_env(trainer_loader.env, state_mean=trainer_loader.state_mean, state_std=trainer_loader.state_std,
-                   reward_mean=trainer_loader.reward_mean, reward_std=trainer_loader.reward_std,
+    # preprocess data
+    demonstrations = load_demonstration_data(config.driving_style, config.map_name, dataset_split=config.dataset_split)
+    state_mean, state_std, reward_mean, reward_std = compute_normalization_parameters(
+        trainer_loader.state_dim, demonstrations, config.normalize)
+
+    env = wrap_env(trainer_loader.env, state_mean=state_mean, state_std=state_std,
+                   reward_mean=reward_mean, reward_std=reward_std,
                    reward_normalization=config.normalize_reward)
 
     ref_max_score = -float('inf')
     ref_min_score = float('inf')
     # create a replay buffer for each vehicle
     replay_buffers = []
-    agent_mdps = trainer_loader.dataset['All'] if trainer_loader.dataset['All'] else trainer_loader.dataset['clustered']
+    agent_mdps = demonstrations['All'] if demonstrations['All'] else demonstrations['clustered']
     for agent_mdp in agent_mdps:
         agent_data = qlearning_dataset(dataset=agent_mdp)
 
         # observation normalization
         agent_data["observations"] = normalize_states(
-            agent_data["observations"], trainer_loader.state_mean, trainer_loader.state_std
+            agent_data["observations"], state_mean, state_std
         )
         agent_data["next_observations"] = normalize_states(
-            agent_data["next_observations"], trainer_loader.state_mean, trainer_loader.state_std
+            agent_data["next_observations"], state_mean, state_std
         )
 
         # reward normalization
         agent_data["rewards"] = normalized_rewards(
-            agent_data["rewards"], trainer_loader.reward_mean, trainer_loader.reward_std
+            agent_data["rewards"], reward_mean, reward_std
         )
 
         score = sum(agent_data["rewards"])

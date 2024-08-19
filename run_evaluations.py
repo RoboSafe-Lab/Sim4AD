@@ -159,7 +159,7 @@ def begin_evaluation(simulation_agents, evaluation_episodes):
 
 def main():
     # TODO: if visualisation is true, `simulation_length` should be low (in trajectory_extractor.py) to avoid long waiting time
-    VISUALIZATION = True  # Set to True if you want to visualize the simulation while saving the trajectories
+    VISUALIZATION = False  # Set to True if you want to visualize the simulation while saving the trajectories
     EvalConfig.policies_to_evaluate = [PolicyType.BC]  # make it feasible to run one policy
     for policy in EvalConfig.policies_to_evaluate:
         # Concatenate the configs for the evaluation type and the policy

@@ -40,7 +40,7 @@ class TrajectoryExtractor:
         #     assert self.sim.spawn_method != "random", "we will never finish!"
         #     done = self.sim.step(return_done=True)
 
-        simulation_length = 50000  # seconds
+        simulation_length = 5000000  # seconds
         for _ in tqdm(range(int(np.floor(simulation_length / self.sim.dt)))):
             done = self.sim.step(return_done=True)
             if done:

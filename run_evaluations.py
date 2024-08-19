@@ -65,10 +65,10 @@ DIVERSITY_EVAL_POLICIES = {
         "Cautious": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1723187282.pth",
         "All": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1723187282.pth"},
     PolicyType.OFFLINERL: {
-        "Aggressive": "",
-        "Normal": "",
-        "Cautious": "",
-        "All": ""},
+        "Aggressive": "results/offlineRL/Aggressive_checkpoint.pt",
+        "Normal": "results/offlineRL/Normal_checkpoint.pt",
+        "Cautious": "results/offlineRL/Cautious_checkpoint.pt",
+        "All": "results/offlineRL/All_checkpoint.pt"},
     PolicyType.BC: {
         "Aggressive": "bc-all-obs-5_pi_cluster_Aggressive",
         "Normal": "bc-all-obs-5_pi_cluster_Aggressive",
@@ -79,7 +79,7 @@ DIVERSITY_EVAL_POLICIES = {
 
 class EvaluationType(Enum):
     # !!! Make sure that the values of the enums below are all different across evaluation types!!!
-    DIVERSITY = {"spawn_method": "dataset_one", "clusters": ["Normal", "Cautious", "All"]}  # TODO: add Aggressive
+    DIVERSITY = {"spawn_method": "dataset_all", "clusters": ["Normal", "Cautious", "Aggressive", "All"]}
     HUMAN_LIKENESS = {"spawn_method": "dataset_all", "clusters": ["All"]}
     GENERALIZATION = "generalization"  # TODO
 
@@ -124,16 +124,14 @@ def load_policy(policy_type: PolicyType, env: gym.Env, device, eval_configs: Eva
                 evaluation_episodes: List, model_path: str = None):
     """IF YOU ADD A POLICY TYPE, MAKE SURE TO ADD IT TO THE ENUMS ABOVE TOO"""
     if policy_type == PolicyType.OFFLINERL:
-        logger.warning("The OfflineRL policy is loaded from a SINGLE model and not based on the cluster!")
-        model_path = get_path_offlinerl_model()
         eval_config = TrainConfig
         eval_config.dataset_split = eval_configs.dataset_split
         eval_config.spawn_method = eval_configs.spawn_method
+        eval_config.checkpoints_path = ''
+        eval_config.load_model = model_path
         parameter_loader = TD3_BC_Loader(eval_config, evaluation_episodes)
-        parameter_loader.load_model(model_path)
         actor = parameter_loader.actor
         actor.eval()
-        # TODO: load to device??? @ Cheng
         return actor
 
     elif policy_type == PolicyType.SAC_BASIC_REWARD or policy_type == PolicyType.SAC_IRL_REWARD:
@@ -160,7 +158,7 @@ def begin_evaluation(simulation_agents, evaluation_episodes):
 def main():
     # TODO: if visualisation is true, `simulation_length` should be low (in trajectory_extractor.py) to avoid long waiting time
     VISUALIZATION = False  # Set to True if you want to visualize the simulation while saving the trajectories
-    EvalConfig.policies_to_evaluate = [PolicyType.BC]  # make it feasible to run one policy
+    EvalConfig.policies_to_evaluate = [PolicyType.OFFLINERL]  # make it feasible to run one policy
     for policy in EvalConfig.policies_to_evaluate:
         # Concatenate the configs for the evaluation type and the policy
         eval_configs = EvalConfig(policies_to_evaluate=[policy],

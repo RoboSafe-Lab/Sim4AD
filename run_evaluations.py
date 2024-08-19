@@ -64,7 +64,7 @@ class EvaluationType(Enum):
 @dataclass
 class EvalConfig:
     """ PARAMETERS FOR THE EVALUATION """
-    policies_to_evaluate: list = None  # e.g., [PolicyType.SAC_BASIC_REWARD, PolicyType.SAC_IRL_REWARD]
+    policies_to_evaluate: str = "bc"  # e.g., "sac_basic_reward-sac_irl_reward-offlinerl-bc"
     evaluation_to_run = EvaluationType.DIVERSITY.name
 
     env_name: str = "SimulatorEnv-v0"
@@ -135,11 +135,12 @@ def begin_evaluation(simulation_agents, evaluation_episodes):
 def main():
     # TODO: if visualisation is true, `simulation_length` should be low (in trajectory_extractor.py) to avoid long waiting time
     VISUALIZATION = False  # Set to True if you want to visualize the simulation while saving the trajectories
-    EvalConfig.policies_to_evaluate = [PolicyType.BC]  # make it feasible to run one policy
-    for policy in EvalConfig.policies_to_evaluate:
+    policies_to_evaluate = EvalConfig.policies_to_evaluate.split("-")
+
+    for policy in policies_to_evaluate:
+        policy = PolicyType[policy.upper()]
         # Concatenate the configs for the evaluation type and the policy
-        eval_configs = EvalConfig(policies_to_evaluate=[policy],
-                                  **POLICY_CONFIGS[policy],
+        eval_configs = EvalConfig(**POLICY_CONFIGS[policy],
                                   **EvaluationType[EvalConfig.evaluation_to_run].value)
         logger.info(f"Evaluation with params: {eval_configs}")
 

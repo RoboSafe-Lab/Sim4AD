@@ -64,6 +64,7 @@ class Sim4ADSimulation:
             pbar: If True, show a progress bar when adding agents.
         """
 
+        self.__agents_to_add = None
         self.episode_idx = 0  # Index of the episode we are currently evaluating
         self.__time = None
         self.__all_episode_names = episode_name

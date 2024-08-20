@@ -30,7 +30,7 @@ def get_reward(terminated, truncated, info, irl_weights=None):
         long_jerk = np.exp(-1 / abs(info["ego_long_jerk"])) if info["ego_long_jerk"] else 0
         thw_front = np.exp(-1 / abs(info["thw_front"])) if info["thw_front"] else 1
         thw_rear = np.exp(-1 / abs(info["thw_rear"])) if info["thw_rear"] else 1
-        d_centerline = np.exp(-1 / abs(info["thw_rear"])) if info["thw_rear"] else 0
+        d_centerline = np.exp(-1 / abs(info["d_centerline"])) if info["d_centerline"] else 0
         collision = info["collision"]
 
         features = np.array([speed, long_acc, lat_acc, long_jerk,

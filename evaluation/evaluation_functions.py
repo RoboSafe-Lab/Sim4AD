@@ -168,7 +168,9 @@ class EvaluationFeaturesExtractor:
                 # keep the same value as the dataset
                 if ttc[position] < 0:
                     ttc[position] = -1
-
+                # agents overlapped, collision occurs
+                if tth[position] < 0:
+                    tth[position] = 0
             # save the closest distance to nearby vehicles
             d = (state.position.distance(nearby_agent["position"])) if nearby_agent is not None else None
             if d is not None and closest_d > d:

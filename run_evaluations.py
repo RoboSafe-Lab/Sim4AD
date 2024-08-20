@@ -64,7 +64,7 @@ class EvaluationType(Enum):
 @dataclass
 class EvalConfig:
     """ PARAMETERS FOR THE EVALUATION """
-    policies_to_evaluate: str = "bc"  # e.g., "sac_basic_reward-sac_irl_reward-offlinerl-bc"
+    policies_to_evaluate: str = "offlinerl"  # e.g., "sac_basic_reward-sac_irl_reward-offlinerl-bc"
     evaluation_to_run = EvaluationType.DIVERSITY.name
 
     env_name: str = "SimulatorEnv-v0"
@@ -101,12 +101,8 @@ def load_policy(policy_type: PolicyType, env: gym.Env, device, eval_configs: Eva
                 evaluation_episodes: List, model_path: str = None):
     """IF YOU ADD A POLICY TYPE, MAKE SURE TO ADD IT TO THE ENUMS ABOVE TOO"""
     if policy_type == PolicyType.OFFLINERL:
-        eval_config = TrainConfig
-        eval_config.dataset_split = eval_configs.dataset_split
-        eval_config.spawn_method = eval_configs.spawn_method
-        eval_config.checkpoints_path = ''
-        eval_config.load_model = model_path
-        parameter_loader = TD3_BC_Loader(eval_config, evaluation_episodes)
+        parameter_loader = TD3_BC_Loader(config=TrainConfig, env=env, dummy=True)
+        parameter_loader.load_model(model_path)
         actor = parameter_loader.actor
         actor.eval()
         return actor
@@ -133,7 +129,8 @@ def begin_evaluation(simulation_agents, evaluation_episodes):
 
 
 def main():
-    # TODO: if visualisation is true, `simulation_length` should be low (in trajectory_extractor.py) to avoid long waiting time
+    # TODO: if visualisation is true, `simulation_length` should be low (in trajectory_extractor.py) to avoid long
+    #  waiting time
     VISUALIZATION = False  # Set to True if you want to visualize the simulation while saving the trajectories
     policies_to_evaluate = EvalConfig.policies_to_evaluate.split("-")
 
@@ -168,7 +165,7 @@ def main():
                     begin_evaluation(simulation_agents, evaluation_episodes)
                 else:
                     if eval_configs.evaluation_to_run == EvaluationType.DIVERSITY.name:
-                        # All the vehicles in the simulation, regardless sof the ground truth cluster, will have the
+                        # All the vehicles in the simulation, regardless of the ground truth cluster, will have the
                         # same policy
                         driving_style_model_paths = EVAL_POLICIES[policy]
                         driving_style_model_paths = {c: driving_style_model_paths[cluster]
@@ -179,8 +176,8 @@ def main():
                     else:
                         raise NotImplementedError(f"Evaluation type {eval_configs.evaluation_to_run} not implemented")
 
-                    # The cluster below is "All" rather than `cluster` because we use `cluster` to load the correct policy,
-                    # but then `All` the vehicles will have that policy
+                    # The cluster below is "All" rather than `cluster` because we use `cluster` to load the correct
+                    # policy, but then `All` the vehicles will have that policy
                     evaluator = TrajectoryExtractor(eval_configs, evaluation_episodes, policy_type=policy,
                                                     cluster="All", load_policy=load_policy,
                                                     driving_style_model_paths=driving_style_model_paths)

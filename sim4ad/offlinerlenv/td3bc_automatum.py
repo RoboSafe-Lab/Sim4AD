@@ -495,7 +495,7 @@ def load_demonstration_data(driving_style: str, map_name: str, dataset_split: st
         return pickle.load(file)
 
 
-def compute_normalization_parameters(state_dim, dataset, normalize):
+def compute_normalization_parameters(state_dim, dataset, normalize: bool):
     """Get state mean, std and reward mean and std for normalization"""
     total_count = np.zeros(state_dim)
     mean_obs = np.zeros(state_dim)
@@ -579,23 +579,26 @@ def initialize_model(state_dim, action_dim, max_action, config):
 
 
 class TD3_BC_Loader:
-    def __init__(self, config, episode_names, env=None):
+    def __init__(self, config=None, episode_names=None, env=None, dummy=False):
         self.config = config
 
         if env is not None:
             self.env = env
         else:
             self.env = gym.make(config.env, episode_names=episode_names, dataset_split=config.dataset_split,
-                                use_irl_reward=config.use_irl_reward,
+                                use_irl_reward=config.use_irl_reward, clustering=config.driving_style,
                                 spawn_method=config.spawn_method)
 
         self.state_dim = self.env.observation_space.shape[0]
         self.action_dim = self.env.action_space.shape[0]
         self.max_action = self.env.action_space.high
 
+        self.trainer, self.actor = initialize_model(self.state_dim, self.action_dim, self.max_action, config)
+        if dummy:
+            return
+
         # Set seeds
         self.set_seed(config.seed)
-        self.trainer, self.actor = initialize_model(self.state_dim, self.action_dim, self.max_action, config)
 
         if config.load_model:
             self.load_model(config.load_model)

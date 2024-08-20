@@ -115,7 +115,8 @@ class Sim4ADSimulation:
         self.normalise_obs = normalise_observation
         self.normalisation_parameters = {}
         if self.normalise_obs:
-            assert self.__driving_style_policies, "Normalisation of observations is only supported with driving style policies"
+            assert self.__driving_style_policies, "Normalisation of observations is only supported with driving style " \
+                                                  "policies"
             for driving_style in self.__driving_style_policies:
                 self.normalisation_parameters[driving_style] = self._normalisation_parameters(driving_style)
 

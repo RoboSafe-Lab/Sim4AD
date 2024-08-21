@@ -44,22 +44,19 @@ class SimulatorEnv(gym.Env):
 
         # At each step, the agent must choose the acceleration and yaw rate.
         self.MIN_YAW_RATE = -0.08
-        self.MAX_YAW_RATE = 0.07
+        self.MAX_YAW_RATE = 0.08
 
-        assert action_features == ["acceleration", "yaw_rate"], (f"Action features are not as expected: "
-                                                                 f"{action_features}. Change below.")
+        assert action_features == ["ax", "ay", "yaw_rate"], (f"Action features are not as expected: "
+                                                              f"{action_features}. Change below.")
         self.action_space = Box(
-            low=np.array([-5, self.MIN_YAW_RATE]),
-            high=np.array([5, self.MAX_YAW_RATE])
+            low=np.array([-5, -5, self.MIN_YAW_RATE]),  # ax, ay, yaw_rate
+            high=np.array([5, 5, self.MAX_YAW_RATE])
         )
 
-        # The observation will be a set of features.
-        assert obs_features[:2] == ["speed", "heading"], (f"Observation features are not as expected: "
-                                                                f"{obs_features}. Change below.")
-        obs_space = len(obs_features) - 2
+        obs_space = len(obs_features)
         self.observation_space = Box(
-            low=np.array([-np.inf, -np.pi] + [-np.inf] * obs_space),  # velocity can max be 200, heading can min be -pi
-            high=np.array([np.inf, np.pi] + [np.inf] * obs_space)
+            low=np.array([-np.inf] * obs_space),  # velocity can max be 200, heading can min be -pi
+            high=np.array([np.inf] * obs_space)
         )
 
         if dummy:
@@ -134,7 +131,7 @@ class SimulatorEnv(gym.Env):
     def step(self, action):
         """
 
-        :param action: (acceleration, yaw_rate)
+        :param action: (ax, ay, yaw_rate)
         :return:
         """
 

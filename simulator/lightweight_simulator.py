@@ -611,6 +611,7 @@ class Sim4ADSimulation:
         vehicle_in_front = agent.last_vehicle_in_front_ego()
         dataset_time_step = round((self.__time - agent.original_initial_time) / self.__dt)
 
+        # TODO: uncomment this to use IDM
         # if vehicle_in_front is not None and not agent.idm.activated():
         #     self.__check_and_activate_idm(agent, dataset_agent, vehicle_in_front, dataset_time_step)
 
@@ -628,7 +629,8 @@ class Sim4ADSimulation:
                             yaw_rate=deltas[dataset_time_step])
 
             if dataset_time_step + 1 < len(dataset_agent.x_vec):
-                # TODO: new_state = self.__get_original_current_state(dataset_agent)
+                # If want to move the vehicle using the next state rather than using the unicycle/bicycle model
+                # new_state = self.__get_original_current_state(dataset_agent)
                 new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
             else:
                 new_state = agent.state

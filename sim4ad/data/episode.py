@@ -133,6 +133,13 @@ class DatasetEpisodeLoader(EpisodeLoader):
         dynObjectList = dynWorld.get_list_of_dynamic_objects()
         agents = {}
 
+        # recompute the accelerations as the difference of velocities -- the accelerations are not correct in the dataset
+        for dynObj in dynObjectList:
+            dynObj.ay_vec = np.diff(dynObj.vy_vec) / dynWorld.delta_t
+            dynObj.ax_vec = np.diff(dynObj.vx_vec) / dynWorld.delta_t
+            dynObj.ay_vec = np.append(dynObj.ay_vec, dynObj.ay_vec[-1])
+            dynObj.ax_vec = np.append(dynObj.ax_vec, dynObj.ax_vec[-1])
+
         # search for the minimum time
         min_time = np.inf
         for dynObj in dynObjectList:

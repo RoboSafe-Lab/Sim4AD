@@ -28,7 +28,7 @@ class BCBaseline:
     def __init__(self, name: str, evaluation=False, cluster=DEFAULT_CLUSTER, scenario=DEFAULT_SCENARIO):
 
         logger.debug(f"Creating BC baseline with name {name}, evaluation = {evaluation}, cluster = {cluster}, "
-                     f"scenario = {scenario}")
+                     f"scenario = {scenario}. If eval is true, the cluster is only used for the input and action space.")
 
         if evaluation:
             self.name = name

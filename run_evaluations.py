@@ -32,15 +32,15 @@ Add for each cluster the path to the model that vehicles in that cluster should 
 """
 EVAL_POLICIES = {
     PolicyType.SAC_BASIC_REWARD: {
-        "Aggressive": "",
-        "Normal": "",
-        "Cautious": "",
-        "All": ""},
+        "Aggressive": "best_model_sac_Aggressive_irlFalse_SimulatorEnv-v0__model__1__1724203527.pth",
+        "Normal": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1724207833.pth",
+        "Cautious": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1724207833.pth",
+        "All": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1724207833.pth"},
     PolicyType.SAC_IRL_REWARD: {
-        "Aggressive": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1723187282.pth",
-        "Normal": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1723187282.pth",
-        "Cautious": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1723187282.pth",
-        "All": "best_model_sac_all_irlTrue_SimulatorEnv-v0__model__1__1723187282.pth"},
+        "Aggressive": "best_model_sac_Aggressive_irlTrue_SimulatorEnv-v0__model__1__1724161974.pth",
+        "Normal": "best_model_sac_Normal_irlTrue_SimulatorEnv-v0__model__1__1724161974.pth",
+        "Cautious": "best_model_sac_Cautious_irlTrue_SimulatorEnv-v0__model__1__1724161974.pth",
+        "All": "best_model_sac_All_irlTrue_SimulatorEnv-v0__model__1__1724161974.pth"},
     PolicyType.OFFLINERL: {
         "Aggressive": "results/offlineRL/Aggressive_checkpoint.pt",
         "Normal": "results/offlineRL/Normal_checkpoint.pt",
@@ -64,8 +64,8 @@ class EvaluationType(Enum):
 @dataclass
 class EvalConfig:
     """ PARAMETERS FOR THE EVALUATION """
-    policies_to_evaluate: str = "bc-sac_basic_reward-sac_irl_reward"  # e.g., "sac_basic_reward-sac_irl_reward-offlinerl-bc"
-    evaluation_to_run = EvaluationType.DIVERSITY.name
+    policies_to_evaluate: str = "sac_irl_reward-sac_basic_reward-bc"  # e.g., "sac_basic_reward-sac_irl_reward-offlinerl-bc"
+    evaluation_to_run = f"{EvaluationType.DIVERSITY.name}-{EvaluationType.HUMAN_LIKENESS.name}"
 
     env_name: str = "SimulatorEnv-v0"
     test_map: str = "appershofen"
@@ -133,62 +133,65 @@ def main():
     #  waiting time
     VISUALIZATION = False  # Set to True if you want to visualize the simulation while saving the trajectories
     policies_to_evaluate = EvalConfig.policies_to_evaluate.split("-")
+    evaluation_methods = EvalConfig.evaluation_to_run.split("-")
 
-    for policy in policies_to_evaluate:
-        policy = PolicyType[policy.upper()]
-        # Concatenate the configs for the evaluation type and the policy
-        eval_configs = EvalConfig(**POLICY_CONFIGS[policy],
-                                  **EvaluationType[EvalConfig.evaluation_to_run].value)
-        logger.info(f"Evaluation with params: {eval_configs}")
+    for evaluation in evaluation_methods:
+        evaluation = EvaluationType[evaluation.upper()]
+        for policy in policies_to_evaluate:
+            policy = PolicyType[policy.upper()]
+            # Concatenate the configs for the evaluation type and the policy
+            eval_configs = EvalConfig(**POLICY_CONFIGS[policy],
+                                      **evaluation.value)
+            logger.info(f"Evaluation with params: {eval_configs}")
 
-        for map_to_use in [eval_configs.test_map, eval_configs.generalization_map]:
-            map_configs = ScenarioConfig.load(get_config_path(map_to_use))
-            idx = map_configs.dataset_split[eval_configs.dataset_split]
-            evaluation_episodes = [x.recording_id for i, x in enumerate(map_configs.episodes) if i in idx]
+            for map_to_use in [eval_configs.test_map, eval_configs.generalization_map]:
+                map_configs = ScenarioConfig.load(get_config_path(map_to_use))
+                idx = map_configs.dataset_split[eval_configs.dataset_split]
+                evaluation_episodes = [x.recording_id for i, x in enumerate(map_configs.episodes) if i in idx]
 
-            for cluster in eval_configs.clusters:
-                output_dir = get_file_name_trajectories(experiment_name=eval_configs.evaluation_to_run,
-                                                        map_name=map_to_use, policy_type=policy.name, cluster=cluster,
-                                                        irl_weights=eval_configs.use_irl_reward,
-                                                        spawn_method=eval_configs.spawn_method,
-                                                        episode_names=evaluation_episodes,
-                                                        dataset_split=eval_configs.dataset_split,
-                                                        state_normalization=eval_configs.state_normalization,
-                                                        reward_normalization=eval_configs.reward_normalization)
+                for cluster in eval_configs.clusters:
+                    output_dir = get_file_name_trajectories(experiment_name=evaluation.name,
+                                                            map_name=map_to_use, policy_type=policy.name, cluster=cluster,
+                                                            irl_weights=eval_configs.use_irl_reward,
+                                                            spawn_method=eval_configs.spawn_method,
+                                                            episode_names=evaluation_episodes,
+                                                            dataset_split=eval_configs.dataset_split,
+                                                            state_normalization=eval_configs.state_normalization,
+                                                            reward_normalization=eval_configs.reward_normalization)
 
-                # Check if the trajectories are already saved
-                if os.path.exists(output_dir):
-                    with open(output_dir, "rb") as f:
-                        simulation_agents = pickle.load(f)
-                    # Begin the evaluation function
-                    logger.info(f'{eval_configs.evaluation_to_run} evaluation started!')
-                    begin_evaluation(simulation_agents, evaluation_episodes)
-                else:
-                    if eval_configs.evaluation_to_run == EvaluationType.DIVERSITY.name:
-                        # All the vehicles in the simulation, regardless of the ground truth cluster, will have the
-                        # same policy
-                        driving_style_model_paths = EVAL_POLICIES[policy]
-                        driving_style_model_paths = {c: driving_style_model_paths[cluster]
-                                                     for c in driving_style_model_paths}
-                    elif eval_configs.evaluation_to_run == EvaluationType.HUMAN_LIKENESS.name:
-                        assert cluster == "All", "Human likeness evaluation only supports 'All' cluster. Got {cluster}"
-                        driving_style_model_paths = EVAL_POLICIES[policy]
+                    # Check if the trajectories are already saved
+                    if os.path.exists(output_dir):
+                        with open(output_dir, "rb") as f:
+                            simulation_agents = pickle.load(f)
+                        # Begin the evaluation function
+                        logger.info(f'{evaluation.name} evaluation started!')
+                        begin_evaluation(simulation_agents, evaluation_episodes)
                     else:
-                        raise NotImplementedError(f"Evaluation type {eval_configs.evaluation_to_run} not implemented")
+                        if evaluation == EvaluationType.DIVERSITY:
+                            # All the vehicles in the simulation, regardless sof the ground truth cluster, will have the
+                            # same policy
+                            driving_style_model_paths = EVAL_POLICIES[policy]
+                            driving_style_model_paths = {c: driving_style_model_paths[cluster]
+                                                         for c in driving_style_model_paths}
+                        elif evaluation == EvaluationType.HUMAN_LIKENESS:
+                            assert cluster == "All", "Human likeness evaluation only supports 'All' cluster. Got {cluster}"
+                            driving_style_model_paths = EVAL_POLICIES[policy]
+                        else:
+                            raise NotImplementedError(f"Evaluation type {evaluation} not implemented")
 
-                    # The cluster below is "All" rather than `cluster` because we use `cluster` to load the correct
-                    # policy, but then `All` the vehicles will have that policy
-                    evaluator = TrajectoryExtractor(eval_configs, evaluation_episodes, policy_type=policy,
-                                                    cluster="All", load_policy=load_policy,
-                                                    driving_style_model_paths=driving_style_model_paths)
-                    simulation_agents = evaluator.simulation(visualization=VISUALIZATION)
+                        # The cluster below is "All" rather than `cluster` because we use `cluster` to load the correct policy,
+                        # but then `All` the vehicles will have that policy
+                        evaluator = TrajectoryExtractor(eval_configs, evaluation_episodes, policy_type=policy,
+                                                        cluster="All", load_policy=load_policy,
+                                                        driving_style_model_paths=driving_style_model_paths)
+                        simulation_agents = evaluator.simulation(visualization=VISUALIZATION)
 
-                    # Create the directory if it does not exist
-                    os.makedirs(os.path.dirname(output_dir), exist_ok=True)
-                    with open(output_dir, "wb") as f:
-                        pickle.dump(simulation_agents, f)
+                        # Create the directory if it does not exist
+                        os.makedirs(os.path.dirname(output_dir), exist_ok=True)
+                        with open(output_dir, "wb") as f:
+                            pickle.dump(simulation_agents, f)
 
-                    logger.info(f'Trajectories for {cluster} in map {map_to_use} saved!')
+                        logger.info(f'Trajectories for {cluster} in map {map_to_use} saved!')
 
 
 if __name__ == "__main__":

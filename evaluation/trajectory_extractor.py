@@ -35,7 +35,7 @@ class TrajectoryExtractor:
     def simulation(self, visualization: bool = True):
         """Using the simulator to simulate trajectories of all agents"""
         self.sim.full_reset()
-        done = False  # TODO: uncomment this to run until we use all vehicles
+        done = False
         while not done:
             assert self.sim.spawn_method != "random", "we will never finish!"
             done = self.sim.step(return_done=True)

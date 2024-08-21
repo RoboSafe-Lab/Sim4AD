@@ -321,15 +321,15 @@ class IRLEnv:
         thw_front, thw_rear = self._get_thw()
 
         # centerline deviation
-        _, d = utils.local2frenet(self.vehicle.position, self.vehicle.lane.midline)
-        d_centerline = abs(d)
+        # _, d = utils.local2frenet(self.vehicle.position, self.vehicle.lane.midline)
+        # d_centerline = abs(d)
 
         # ego vehicle human-likeness
         ego_likeness = self.vehicle.calculate_human_likeness()
 
         # feature array
         features = np.array([ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk,
-                             thw_front, thw_rear, d_centerline])
+                             thw_front, thw_rear])
 
         # normalize features using exponential
         normalized_features = self.exponential_normalization(features)

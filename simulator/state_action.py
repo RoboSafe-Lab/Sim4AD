@@ -75,16 +75,18 @@ class State:
     Class for a state in the simulator.
     """
 
-    def __init__(self, time: float, position: Union[np.ndarray[float, float], Point], speed: float, acceleration: float,
-                 heading: float, agent_length: float, agent_width: float, lane: Lane = None):
+    def __init__(self, time: float, position: Union[np.ndarray[float, float], Point], vx: float, vy: float,
+                 ax: float, ay: float, heading: float, agent_length: float, agent_width: float, lane: Lane = None):
         self.time = time
 
         if isinstance(position, np.ndarray) or isinstance(position, list) or isinstance(position, tuple):
             self.position = Point(position[0], position[1])
         else:
             self.position = position
-        self.speed = speed
-        self.acceleration = acceleration
+        self.vx = vx
+        self.vy = vy
+        self.ax = ax
+        self.ay = ay
         self.heading = heading
         self.lane = lane
 
@@ -107,13 +109,14 @@ class Action:
     Class for an action in the simulator.
     """
 
-    def __init__(self, acceleration: float, yaw_rate: float):
-        self.__acceleration = acceleration
+    def __init__(self, ax: float, ay: float, yaw_rate: float):
+        self.__ax = ax  # acceleration in x direction
+        self.__ay = ay  # acceleration in y direction
         self.__yaw_rate = yaw_rate
 
     @property
     def acceleration(self):
-        return self.__acceleration
+        return self.__ax, self.__ay
 
     @property
     def yaw_rate(self):

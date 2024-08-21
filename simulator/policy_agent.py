@@ -67,13 +67,13 @@ class PolicyAgent:
 
         obs = history[-1]
         if isinstance(self.policy, SAC):
-            (acceleration, delta), _ = self.policy.predict(obs, deterministic=True)
+            (ax, ay, delta), _ = self.policy.predict(obs, deterministic=True)
         elif isinstance(self.policy, BC):
-            acceleration, delta = self.policy(history)[0].tolist()
+            ax, ay, delta = self.policy(history)[0].tolist()
         else:
-            acceleration, delta = self.policy.act(obs, device=self.device, deterministic=True)
+            ax, ay, delta = self.policy.act(obs, device=self.device, deterministic=True)
 
-        action = Action(acceleration=acceleration, yaw_rate=delta)
+        action = Action(ax=ax, ay=ay, yaw_rate=delta)
 
         return action
 
@@ -112,13 +112,8 @@ class PolicyAgent:
         """
 
         state = self.state_trajectory[-1]
-        acc = state.acceleration
-        long_acc = acc * np.cos(state.heading)
-        lat_acc = acc * np.sin(state.heading)
-
-        assert (np.sqrt(long_acc ** 2 + lat_acc ** 2) - np.abs(state.acceleration) < 1e-6), \
-               f"Computed acceleration: {np.sqrt(long_acc ** 2 + lat_acc ** 2)}, " \
-               f"state acceleration: {state.acceleration}"
+        long_acc = state.ax
+        lat_acc = state.ay
 
         self.__long_acc.append(long_acc)
         self.__lat_acc.append(lat_acc)
@@ -218,7 +213,7 @@ class PolicyAgent:
 
             if vehicle is not None:
                 vehicle = {"agent_id": vehicle.agent_id, "position": vehicle.state.position,
-                           "speed": vehicle.state.speed, "metadata": vehicle.metadata,
+                           "vx": vehicle.state.vx, "vy": vehicle.state.vy, "metadata": vehicle.metadata,
                            "heading": vehicle.state.heading}
 
             nearby_vehicles_new[position] = vehicle

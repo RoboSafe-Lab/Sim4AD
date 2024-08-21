@@ -1,3 +1,4 @@
+import json
 import logging
 from collections import defaultdict
 from typing import Dict, Any, List
@@ -17,6 +18,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 logger = logging.getLogger(__name__)
+
+
+def get_clusters(scenario_name):
+    with open(f"scenarios/configs/{scenario_name}_drivingStyle.json", "rb") as f:
+        return json.load(f)
 
 
 class EvaluationFeaturesExtractor:
@@ -103,34 +109,49 @@ class EvaluationFeaturesExtractor:
 
         aid = get_agent_id_combined(episode_id, agent.agent_id)
 
-        self.agents[aid]["death_cause"] = death_cause.value
-        self.agents[aid]["states"] = states
-        self.agents[aid]["observations"] = obs
+        self.__agents[aid]["death_cause"] = death_cause.value
+        self.__agents[aid]["states"] = states
+        self.__agents[aid]["observations"] = obs
         # self.agents[agent.agent_id]["actions"] = actions
 
         # compute ttcs and tths
         for i in range(len(states)):
             self.compute_ttc_tth(agent, states[i], agent.nearby_vehicles[i], episode_id, add=True)
 
-        self.agents[aid]["nearby_vehicles"] = agent.nearby_vehicles
-        self.agents[aid]["midline_distance"] = agent.distance_midline
-        self.agents[aid]["time"] = [state.time for state in states]
+        self.__agents[aid]["nearby_vehicles"] = agent.nearby_vehicles
+        self.__agents[aid]["midline_distance"] = agent.distance_midline
+        self.__agents[aid]["time"] = [state.time for state in states]
         if isinstance(agent.policy, str):
-            self.agents[aid]["policy_type"] = agent.policy
+            self.__agents[aid]["policy_type"] = agent.policy
         elif isinstance(agent.policy, SAC):
-            self.agents[aid]["policy_type"] = "sac"
+            self.__agents[aid]["policy_type"] = "sac"
         elif isinstance(agent.policy, Actor):
-            self.agents[aid]["policy_type"] = "offlinerl"
+            self.__agents[aid]["policy_type"] = "offlinerl"
         else:
-            self.agents[aid]["policy_type"] = agent.policy.name
+            self.__agents[aid]["policy_type"] = agent.policy.name
 
-        self.agents[aid]["interference"] = agent.interferences
+        self.__agents[aid]["interference"] = agent.interferences
 
     def get_picklable_agents(self):
         """
         Return the agents in a format that can be pickled.
         """
         return dict(self.__agents)
+
+    # def cluster_agents(self, agents, cluster):
+    #     """Return agents of a specific cluster"""
+    #     if cluster is None:
+    #         return agents
+    #
+    #     cluster_per_episode = {}
+    #     agents_in_cluster = {}
+    #     for agent_id in agents:
+    #         scenario_name = agent_id.split("-")[2]
+    #         if scenario_name not in cluster_per_episode:
+    #             cluster_per_episode[scenario_name] = get_clusters(scenario_name)
+    #         if cluster_per_episode[scenario_name][agent_id] == cluster:
+    #             agents_in_cluster[agent_id] = agents[agent_id]
+    #     return agents_in_cluster
 
     def compute_ttc_tth(self, agent: PolicyAgent, state: State, nearby_vehicles: Dict[PNA, Dict[str, Any]], episode_id,
                         add=True):
@@ -154,8 +175,8 @@ class EvaluationFeaturesExtractor:
             if position in [PNA.CENTER_IN_FRONT, PNA.CENTER_BEHIND] and nearby_agent is not None:
                 d = (state.position.distance(nearby_agent["position"]) - agent.meta.length / 2 -
                      nearby_agent["metadata"].length / 2)
-                v_ego = abs(state.speed)
-                v_other = abs(nearby_agent["speed"])
+                v_ego = abs(np.sqrt(state.vx ** 2 + state.vy ** 2))
+                v_other = abs(np.sqrt(nearby_agent["vx"] ** 2 + nearby_agent["vy"] ** 2))
 
                 if position == PNA.CENTER_IN_FRONT:
                     ttc[position] = d / (v_ego - v_other)
@@ -200,7 +221,7 @@ class EvaluationFeaturesExtractor:
 
         return real_speeds, simulated_speeds
 
-    def compute_all_ittc_tth(self):
+    def compute_all_ittc_tth(self, cluster=None):
         """
         Compute the inverse TTC (iTTC) and TTH distributions of the agents.
         """
@@ -209,6 +230,8 @@ class EvaluationFeaturesExtractor:
         all_real_ittcs = []
         all_real_tths = []
 
+
+        # agents = self.cluster_agents(self.__agents, cluster)
         for agent_id, features in self.__agents.items():
             for v in features["TTC"]:
                 if v[PNA.CENTER_IN_FRONT] is not None:
@@ -424,9 +447,9 @@ class EvaluationFeaturesExtractor:
 
         plt.show()
 
-    def plot_criticality_distribution(self):
+    def plot_criticality_distribution(self, cluster=None):
         """plot criticality distribution for diversity analysis"""
-        all_simulated_ittcs, all_real_ittcs, all_simulated_tths, all_real_tths = self.compute_all_ittc_tth()
+        all_simulated_ittcs, all_real_ittcs, all_simulated_tths, all_real_tths = self.compute_all_ittc_tth(cluster=cluster)
 
         self.plot_distogram(label='iTTC (1/s)', real_data=all_real_ittcs, simulated_data=all_simulated_ittcs)
         self.plot_distogram(label='THW (s)', real_data=all_real_tths, simulated_data=all_simulated_tths)

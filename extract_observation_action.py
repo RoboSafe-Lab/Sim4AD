@@ -56,21 +56,16 @@ class ExtractObservationAction:
         # self._feature_mean_std = self.load_feature_normalization()
         self._clustered_demonstrations = {"All": [], "clustered": []}
 
-    @staticmethod
-    def combine(x, y):
-        return np.sqrt(np.array(x) ** 2 + np.array(y) ** 2)
-
     def extract_mdp(self, episode, aid, agent):
         """Extract mdp values for one agent"""
         mdp = MDPValues()
         # calculate yaw rate
         yaw_rate = self.extract_yaw_rate(agent)
 
-        speed = self.combine(agent.vx_vec, agent.vy_vec)
-
         ego_agent_observations = defaultdict(list)
         ego_agent_observations['time'] = agent.time
-        ego_agent_observations['speed'] = speed
+        ego_agent_observations['vx'] = agent.vx_vec
+        ego_agent_observations['vy'] = agent.vy_vec
         ego_agent_observations['heading'] = agent.psi_vec
         ego_agent_observations['distance_left_lane_marking'] = agent.distance_left_lane_marking
         ego_agent_observations['distance_right_lane_marking'] = agent.distance_right_lane_marking
@@ -78,8 +73,7 @@ class ExtractObservationAction:
         # todo: explain that ego_agent_observations should be a dataframe where the rows are the timestamps
         # and the columns are the features. then, we have a list of these dataframes, one for each agent
 
-        acceleration = self.combine(agent.ax_vec, agent.ay_vec)
-        ego_agent_actions = {'acceleration': acceleration, 'yaw_rate': yaw_rate}
+        ego_agent_actions = {'ax': agent.ax_vec, 'ay': agent.ay_vec, 'yaw_rate': yaw_rate}
         ego_agent_features = []
 
         skip_vehicle = False
@@ -100,23 +94,23 @@ class ExtractObservationAction:
                     surrounding_agent_inx = surrounding_agent.next_index_of_specific_time(t)
                     surrounding_rel_dx = long_distance
                     surrounding_rel_dy = lat_distance
-                    surrounding_rel_speed = (self.combine(surrounding_agent.vx_vec[surrounding_agent_inx],
-                                                          surrounding_agent.vy_vec[surrounding_agent_inx])
-                                             - speed[inx])
-                    surrounding_rel_a = (self.combine(surrounding_agent.ax_vec[surrounding_agent_inx],
-                                                      surrounding_agent.ay_vec[surrounding_agent_inx])
-                                         - acceleration[inx])
+                    surrounding_rel_vx = (surrounding_agent.vx_vec[surrounding_agent_inx] - agent.vx_vec[inx])
+                    surrounding_rel_vy = (surrounding_agent.vy_vec[surrounding_agent_inx] - agent.vy_vec[inx])
+                    surrounding_rel_ax = (surrounding_agent.ax_vec[surrounding_agent_inx] - agent.ax_vec[inx])
+                    surrounding_rel_ay = (surrounding_agent.ay_vec[surrounding_agent_inx] - agent.ay_vec[inx])
                     surrounding_heading = surrounding_agent.psi_vec[surrounding_agent_inx]
 
                 else:
                     # Set to invalid value if there is no surrounding agent
-                    surrounding_rel_dx = surrounding_rel_dy = surrounding_rel_speed = surrounding_rel_a \
-                        = surrounding_heading = MISSING_NEARBY_AGENT_VALUE
+                    surrounding_rel_dx = surrounding_rel_dy = surrounding_rel_vx = surrounding_rel_vx \
+                        = surrounding_rel_ax = surrounding_rel_ay = surrounding_heading = MISSING_NEARBY_AGENT_VALUE
 
                 ego_agent_observations[f'{surrounding_agent_relation}_rel_dx'].append(surrounding_rel_dx)
                 ego_agent_observations[f'{surrounding_agent_relation}_rel_dy'].append(surrounding_rel_dy)
-                ego_agent_observations[f'{surrounding_agent_relation}_rel_speed'].append(surrounding_rel_speed)
-                ego_agent_observations[f'{surrounding_agent_relation}_rel_a'].append(surrounding_rel_a)
+                ego_agent_observations[f'{surrounding_agent_relation}_rel_vx'].append(surrounding_rel_vx)
+                ego_agent_observations[f'{surrounding_agent_relation}_rel_vy'].append(surrounding_rel_vx)
+                ego_agent_observations[f'{surrounding_agent_relation}_rel_ax'].append(surrounding_rel_ax)
+                ego_agent_observations[f'{surrounding_agent_relation}_rel_ay'].append(surrounding_rel_ay)
                 ego_agent_observations[f'{surrounding_agent_relation}_heading'].append(surrounding_heading)
 
             # extract features to compute rewards
@@ -180,17 +174,6 @@ class ExtractObservationAction:
                     continue  # known issue with this agent, where it spawns out of the road
                 agent_mdp_values = self.extract_mdp(episode, aid, agent)
 
-                if round(agent.x_vec[0]) in range(-80, -65) and round(agent.y_vec[0]) in range(-100,150):
-                    # print the position and the map
-                    logger.error(f"SPAWNED OUTSIDE: {aid}")
-                    # map = Map.parse_from_opendrive(episode.map_file)
-                    # import matplotlib.pyplot as plt
-                    # fig, ax = plt.subplots()
-                    # plot_map(map, markings=True,
-                    #          hide_road_bounds_in_junction=True, ax=ax)
-                    # plt.scatter(agent.x_vec, agent.y_vec)
-                    # plt.show()
-                    continue
                 if agent_mdp_values is None:
                     continue
 
@@ -213,9 +196,9 @@ class ExtractObservationAction:
     def extract_yaw_rate(agent) -> List:
         """Extract yaw rate here"""
         dt = agent.delta_t
-        theta_dot_vec = [(agent.psi_vec[i] - agent.psi_vec[i - 1]) / dt for i in range(1, len(agent.psi_vec))]
+        theta_dot_vec = [(agent.psi_vec[i+1] - agent.psi_vec[i]) / dt for i in range(0, len(agent.psi_vec)-1)]
         # make sure yaw_rate has the same length as time
-        theta_dot_vec.insert(0, theta_dot_vec[0])
+        theta_dot_vec.insert(len(agent.psi_vec), theta_dot_vec[-1])
 
         return theta_dot_vec
 

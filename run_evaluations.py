@@ -48,9 +48,9 @@ EVAL_POLICIES = {
         "All": "results/offlineRL/All_checkpoint.pt"},
     PolicyType.BC: {
         "Aggressive": "bc-all-obs-5_pi_cluster_Aggressive",
-        "Normal": "bc-all-obs-5_pi_cluster_Aggressive",
-        "Cautious": "bc-all-obs-5_pi_cluster_Aggressive",
-        "All": "bc-all-obs-5_pi_cluster_Aggressive"}
+        "Normal": "bc-all-obs-5_pi_cluster_Normal",
+        "Cautious": "bc-all-obs-5_pi_cluster_Cautious",
+        "All": "bc-all-obs-5_pi_cluster_All"}
 }
 
 
@@ -64,7 +64,7 @@ class EvaluationType(Enum):
 @dataclass
 class EvalConfig:
     """ PARAMETERS FOR THE EVALUATION """
-    policies_to_evaluate: str = "offlinerl"  # e.g., "sac_basic_reward-sac_irl_reward-offlinerl-bc"
+    policies_to_evaluate: str = "bc-sac_basic_reward-sac_irl_reward"  # e.g., "sac_basic_reward-sac_irl_reward-offlinerl-bc"
     evaluation_to_run = EvaluationType.DIVERSITY.name
 
     env_name: str = "SimulatorEnv-v0"
@@ -193,3 +193,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+import pickle
+from dataclasses import dataclass, field
+from typing import List

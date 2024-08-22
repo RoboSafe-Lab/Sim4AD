@@ -138,7 +138,7 @@ class ExtractObservationAction:
             mdp.observations = ego_agent_observations.values
             mdp.actions = ego_agent_actions.values
             mdp.rewards = [np.dot(feature, self._theta) for feature in ego_agent_features]
-            mdp.terminals = [False for _ in range(len(agent.time)-1)] + [True]
+            mdp.terminals = [False for _ in range(len(agent.time) - 1)] + [True]
 
             return mdp
         else:
@@ -161,7 +161,8 @@ class ExtractObservationAction:
 
         for episode in self._episodes:
             for aid, agent in episode.agents.items():
-                if aid == "29c74d22-9aa7-442d-b3ca-8a710ef26185" or aid=="88849c8f-5765-4898-8833-88589b72b0bd":
+                if aid == "29c74d22-9aa7-442d-b3ca-8a710ef26185" or aid == "88849c8f-5765-4898-8833-88589b72b0bd" or \
+                        aid == "c6025d47-2d30-419b-8b18-48ec83a3619c":
                     # # print the position and the map
                     # print(aid)
                     # map = Map.parse_from_opendrive(episode.map_file)
@@ -171,7 +172,8 @@ class ExtractObservationAction:
                     #          hide_road_bounds_in_junction=True, ax=ax)
                     # plt.scatter(agent.x_vec, agent.y_vec)
                     # plt.show()
-                    continue  # known issue with this agent, where it spawns out of the road
+                    continue  # known issue with this agent, where it spawns out of the road, agent with sudden
+                    # changed velocity
                 agent_mdp_values = self.extract_mdp(episode, aid, agent)
 
                 if agent_mdp_values is None:
@@ -196,7 +198,7 @@ class ExtractObservationAction:
     def extract_yaw_rate(agent) -> List:
         """Extract yaw rate here"""
         dt = agent.delta_t
-        theta_dot_vec = [(agent.psi_vec[i+1] - agent.psi_vec[i]) / dt for i in range(0, len(agent.psi_vec)-1)]
+        theta_dot_vec = [(agent.psi_vec[i + 1] - agent.psi_vec[i]) / dt for i in range(0, len(agent.psi_vec) - 1)]
         # make sure yaw_rate has the same length as time
         theta_dot_vec.insert(len(agent.psi_vec), theta_dot_vec[-1])
 

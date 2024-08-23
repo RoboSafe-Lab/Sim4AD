@@ -9,7 +9,7 @@ import joblib
 from feature_normalization import extract_features
 from sim4ad.opendrive import Map, plot_map
 from sim4ad.path_utils import write_common_property
-from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
+from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE, REMOVED_AGENTS
 from sim4ad.irlenv.irlenvsim import IRLEnv
 from loguru import logger
 
@@ -161,8 +161,7 @@ class ExtractObservationAction:
 
         for episode in self._episodes:
             for aid, agent in episode.agents.items():
-                if aid == "29c74d22-9aa7-442d-b3ca-8a710ef26185" or aid == "88849c8f-5765-4898-8833-88589b72b0bd" or \
-                        aid == "c6025d47-2d30-419b-8b18-48ec83a3619c":
+                if aid in REMOVED_AGENTS:
                     # # print the position and the map
                     # print(aid)
                     # map = Map.parse_from_opendrive(episode.map_file)

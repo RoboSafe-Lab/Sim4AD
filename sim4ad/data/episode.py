@@ -133,7 +133,8 @@ class DatasetEpisodeLoader(EpisodeLoader):
         dynObjectList = dynWorld.get_list_of_dynamic_objects()
         agents = {}
 
-        # recompute the accelerations as the difference of velocities -- the accelerations are not correct in the dataset
+        # recompute the accelerations as the difference of velocities -- the accelerations are not correct in the
+        # dataset
         for dynObj in dynObjectList:
             dynObj.ay_vec = np.diff(dynObj.vy_vec) / dynWorld.delta_t
             dynObj.ax_vec = np.diff(dynObj.vx_vec) / dynWorld.delta_t

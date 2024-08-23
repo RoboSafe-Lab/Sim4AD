@@ -20,7 +20,7 @@ import pickle
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 from sim4ad.data import ScenarioConfig
 from sim4ad.path_utils import get_config_path
-
+from sim4ad.util import parse_args
 TensorBatch = List[torch.Tensor]
 
 
@@ -630,6 +630,10 @@ class TD3_BC_Loader:
 
 @pyrallis.wrap()
 def train(config: TrainConfig):
+    args = parse_args()
+    driving_styles = {0: 'Cautious', 1: 'Normal', 2: 'Aggressive', -1: 'All'}
+    TrainConfig.driving_style = driving_styles[args.driving_style_idx]
+
     logger.info(f"Training {TrainConfig.driving_style} using TD3 + BC, Env: {config.env}")
 
     map_configs = ScenarioConfig.load(get_config_path(TrainConfig.map_name))

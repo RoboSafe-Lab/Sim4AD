@@ -171,6 +171,7 @@ class ExtractObservationAction:
                     #          hide_road_bounds_in_junction=True, ax=ax)
                     # plt.scatter(agent.x_vec, agent.y_vec)
                     # plt.show()
+                    logger.info(f'{aid} is removed because of inaccurate data')
                     continue  # known issue with this agent, where it spawns out of the road, agent with sudden
                     # changed velocity
                 agent_mdp_values = self.extract_mdp(episode, aid, agent)

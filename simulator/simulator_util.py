@@ -219,10 +219,8 @@ def get_vehicle_features(nearby_vehicle: "PolicyAgent", state: State):
     if nearby_vehicle is not None:
         features["rel_dx"] = nearby_vehicle.state.position.x - state.position.x
         features["rel_dy"] = nearby_vehicle.state.position.y - state.position.y
-        features["rel_vx"] = nearby_vehicle.state.vx - state.vx
-        features["rel_vy"] = nearby_vehicle.state.vy - state.vy
-        features["rel_ax"] = nearby_vehicle.state.ax - state.ax
-        features["rel_ay"] = nearby_vehicle.state.ay - state.ay
+        features["rel_v"] = nearby_vehicle.state.velocity - state.velocity
+        features["rel_a"] = nearby_vehicle.state.acceleration - state.acceleration
         features["heading"] = nearby_vehicle.state.heading
         features["length"] = nearby_vehicle.meta.length
     return features

@@ -18,10 +18,8 @@ from loguru import logger
 class SurroundingAgentFeature:
     rel_dx: Optional[float] = None
     rel_dy: Optional[float] = None
-    vx: Optional[float] = None
-    vy: Optional[float] = None
-    ax: Optional[float] = None
-    ay: Optional[float] = None
+    velocity: Optional[float] = None
+    acceleration: Optional[float] = None
     psi: Optional[float] = None
 
 
@@ -64,8 +62,7 @@ class ExtractObservationAction:
 
         ego_agent_observations = defaultdict(list)
         ego_agent_observations['time'] = agent.time
-        ego_agent_observations['vx'] = agent.vx_vec
-        ego_agent_observations['vy'] = agent.vy_vec
+        ego_agent_observations['velocity'] = agent.vx_vec
         ego_agent_observations['heading'] = agent.psi_vec
         ego_agent_observations['distance_left_lane_marking'] = agent.distance_left_lane_marking
         ego_agent_observations['distance_right_lane_marking'] = agent.distance_right_lane_marking
@@ -73,7 +70,8 @@ class ExtractObservationAction:
         # todo: explain that ego_agent_observations should be a dataframe where the rows are the timestamps
         # and the columns are the features. then, we have a list of these dataframes, one for each agent
 
-        ego_agent_actions = {'ax': agent.ax_vec, 'ay': agent.ay_vec, 'yaw_rate': yaw_rate}
+        # The acceleration is the longitudinal acceleration, hence the acceleration in the direction of the heading.
+        ego_agent_actions = {'acceleration': agent.ax_vec, 'yaw_rate': yaw_rate}
         ego_agent_features = []
 
         skip_vehicle = False
@@ -95,22 +93,20 @@ class ExtractObservationAction:
                     surrounding_rel_dx = long_distance
                     surrounding_rel_dy = lat_distance
                     surrounding_rel_vx = (surrounding_agent.vx_vec[surrounding_agent_inx] - agent.vx_vec[inx])
-                    surrounding_rel_vy = (surrounding_agent.vy_vec[surrounding_agent_inx] - agent.vy_vec[inx])
                     surrounding_rel_ax = (surrounding_agent.ax_vec[surrounding_agent_inx] - agent.ax_vec[inx])
-                    surrounding_rel_ay = (surrounding_agent.ay_vec[surrounding_agent_inx] - agent.ay_vec[inx])
                     surrounding_heading = surrounding_agent.psi_vec[surrounding_agent_inx]
 
                 else:
                     # Set to invalid value if there is no surrounding agent
-                    surrounding_rel_dx = surrounding_rel_dy = surrounding_rel_vx = surrounding_rel_vx \
-                        = surrounding_rel_ax = surrounding_rel_ay = surrounding_heading = MISSING_NEARBY_AGENT_VALUE
+                    surrounding_rel_dx = surrounding_rel_dy = surrounding_rel_vx \
+                        = surrounding_rel_ax = surrounding_heading = MISSING_NEARBY_AGENT_VALUE
 
                 ego_agent_observations[f'{surrounding_agent_relation}_rel_dx'].append(surrounding_rel_dx)
                 ego_agent_observations[f'{surrounding_agent_relation}_rel_dy'].append(surrounding_rel_dy)
-                ego_agent_observations[f'{surrounding_agent_relation}_rel_vx'].append(surrounding_rel_vx)
-                ego_agent_observations[f'{surrounding_agent_relation}_rel_vy'].append(surrounding_rel_vx)
-                ego_agent_observations[f'{surrounding_agent_relation}_rel_ax'].append(surrounding_rel_ax)
-                ego_agent_observations[f'{surrounding_agent_relation}_rel_ay'].append(surrounding_rel_ay)
+                ego_agent_observations[f'{surrounding_agent_relation}_rel_v'].append(surrounding_rel_vx)
+                # ax is the longitudinal acceleration, hence the acceleration in the direction of the heading.
+                # we don't need ay here, as it is the lateral acceleration
+                ego_agent_observations[f'{surrounding_agent_relation}_rel_a'].append(surrounding_rel_ax)
                 ego_agent_observations[f'{surrounding_agent_relation}_heading'].append(surrounding_heading)
 
             # extract features to compute rewards

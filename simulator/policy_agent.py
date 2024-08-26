@@ -112,8 +112,13 @@ class PolicyAgent:
         """
 
         state = self.state_trajectory[-1]
-        long_acc = state.ax
-        lat_acc = state.ay
+        acc = state.acceleration
+        long_acc = acc * np.cos(state.heading)
+        lat_acc = acc * np.sin(state.heading)
+
+        assert (np.sqrt(long_acc ** 2 + lat_acc ** 2) - np.abs(state.acceleration) < 1e-6), \
+            f"Computed acceleration: {np.sqrt(long_acc ** 2 + lat_acc ** 2)}, " \
+            f"state acceleration: {state.acceleration}"
 
         self.__long_acc.append(long_acc)
         self.__lat_acc.append(lat_acc)
@@ -213,7 +218,7 @@ class PolicyAgent:
 
             if vehicle is not None:
                 vehicle = {"agent_id": vehicle.agent_id, "position": vehicle.state.position,
-                           "vx": vehicle.state.vx, "vy": vehicle.state.vy, "metadata": vehicle.metadata,
+                           "velocity": vehicle.state.velocity, "metadata": vehicle.metadata,
                            "heading": vehicle.state.heading}
 
             nearby_vehicles_new[position] = vehicle

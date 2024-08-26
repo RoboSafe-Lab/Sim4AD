@@ -474,7 +474,7 @@ def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_sc
     if config.checkpoints_path is not None:
         torch.save(
             trainer.state_dict(),
-            os.path.join(config.checkpoints_path, f"{TrainConfig.driving_style}_checkpoint.pt"),
+            os.path.join(config.checkpoints_path, f"{config.driving_style}_checkpoint.pt"),
         )
 
     wandb.log(
@@ -640,10 +640,10 @@ class TD3_BC_Loader:
 
 @pyrallis.wrap()
 def train(config: TrainConfig):
-    logger.info(f"Training {TrainConfig.driving_style} using TD3 + BC, Env: {config.env}")
+    logger.info(f"Training {config.driving_style} using TD3 + BC, Env: {config.env}")
 
-    map_configs = ScenarioConfig.load(get_config_path(TrainConfig.map_name))
-    idx = map_configs.dataset_split[TrainConfig.dataset_split]
+    map_configs = ScenarioConfig.load(get_config_path(config.map_name))
+    idx = map_configs.dataset_split[config.dataset_split]
     training_episodes = [x.recording_id for i, x in enumerate(map_configs.episodes) if i in idx]
 
     # initialize trainer
@@ -655,8 +655,8 @@ def train(config: TrainConfig):
 
     # preprocess data
     all_demonstrations = load_demonstration_data(config.driving_style, config.map_name)
-    state_mean, state_std, reward_mean, reward_std = compute_normalization_parameters(
-        trainer_loader.state_dim, all_demonstrations, config.normalize)
+    state_mean, state_std, reward_mean, reward_std = compute_normalization_parameters(all_demonstrations,
+                                                                                      config.normalize)
 
     env = wrap_env(trainer_loader.env, state_mean=state_mean, state_std=state_std,
                    reward_mean=reward_mean, reward_std=reward_std,

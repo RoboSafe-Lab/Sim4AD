@@ -254,10 +254,9 @@ class Sim4ADSimulation:
         heading = agent.psi_vec[time_step]
         lane = self.__scenario_map.best_lane_at(center, heading)
 
-        return State(time=self.__time, position=center, vx=float(agent.vx_vec[time_step]),
-                     vy=float(agent.vy_vec[time_step]), ax=float(agent.ax_vec[time_step]),
-                     ay=float(agent.ay_vec[time_step]), heading=heading, lane=lane, agent_width=agent.width,
-                     agent_length=agent.length)
+        return State(time=self.__time, position=center, velocity=float(agent.vx_vec[time_step]),
+                     acceleration=float(agent.ax_vec[time_step]), heading=heading, lane=lane,
+                     agent_width=agent.width, agent_length=agent.length)
 
     def remove_agent(self, agent_id: str, death_cause: DeathCause):
         """ Remove an agent from the simulation.
@@ -570,7 +569,7 @@ class Sim4ADSimulation:
                 new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
             elif agent.policy == "rl":
                 assert agent_id == self.__agent_evaluated, "Only the agent being evaluated can have policy 'rl'"
-                action = Action(ax=ego_action[0], ay=ego_action[1], yaw_rate=ego_action[2])
+                action = Action(acceleration=ego_action[0], yaw_rate=ego_action[1])
                 new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
             else:
                 raise NotImplementedError(f"Policy {agent.policy} not found.")
@@ -624,8 +623,8 @@ class Sim4ADSimulation:
             new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
         else:
             deltas = ExtractObservationAction.extract_yaw_rate(agent=dataset_agent)
-            action = Action(ax=float(dataset_agent.ax_vec[dataset_time_step]),
-                            ay=float(dataset_agent.ay_vec[dataset_time_step]),
+            #
+            action = Action(acceleration=float(dataset_agent.ax_vec[dataset_time_step]),
                             yaw_rate=deltas[dataset_time_step])
 
             if dataset_time_step + 1 < len(dataset_agent.x_vec):
@@ -753,9 +752,8 @@ class Sim4ADSimulation:
         # heading = (current_state.heading + d_theta * self.__dt + np.pi) % (2 * np.pi) - np.pi
 
         # Unicycle model
-        ax, ay = np.clip(action.acceleration, - agent.meta.max_acceleration, agent.meta.max_acceleration)
-        vx = current_state.vx + ax * self.__dt
-        vy = current_state.vy + ay * self.__dt  # TODO: in the AUTOMATUM dataset, ay>0, decrease the speed
+        acceleration = np.clip(action.acceleration, - agent.meta.max_acceleration, agent.meta.max_acceleration)
+        velocity = current_state.velocity + acceleration * self.__dt
 
         if agent.idm.activated():
             raise NotImplementedError("IDM is not implemented for the unicycle model with separate x and y speeds.")
@@ -770,20 +768,20 @@ class Sim4ADSimulation:
         else:
             d_theta = action.yaw_rate
 
+            # transform the velocity w.r.t the vehicle's frame to the global frame
+            vx = velocity * np.cos(current_state.heading)
+            vy = velocity * np.sin(current_state.heading)
+
             # update heading but respect the (-pi, pi) convention
             heading = (current_state.heading + d_theta * self.__dt + np.pi) % (2 * np.pi) - np.pi
-            # transform the vx, vy from the ego frame to the world frame, from which the heading is computed
-            # Transform vx, vy from the vehicle frame to the global frame using the current heading
-            vx_prime = vx * np.cos(current_state.heading) - vy * np.sin(current_state.heading)
-            vy_prime = vx * np.sin(current_state.heading) + vy * np.cos(current_state.heading)
 
-            # Assuming vx is the forward velocity and vy is the lateral velocity w.r.t. the vehicle/heading
-            d_position = np.array([vx_prime, vy_prime]) * self.__dt
+            # update the position
+            d_position = np.array([vx, vy]) * self.__dt
 
             center = np.array([current_state.position.x, current_state.position.y]) + d_position
             new_lane = self.__scenario_map.best_lane_at(center, heading)
 
-        return State(time=self.time + self.dt, position=center, vx=vx, vy=vy, ax=ax, ay=ay,
+        return State(time=self.time + self.dt, position=center, velocity=velocity, acceleration=acceleration,
                      heading=heading, lane=new_lane, agent_width=agent.meta.width, agent_length=agent.meta.length)
 
     def _check_death_cause(self, agent):
@@ -901,8 +899,7 @@ class Sim4ADSimulation:
         d_centerline = abs(d)
 
         info.update({
-            "ego_vx": state.vx,
-            "ego_vy": state.vy,
+            "ego_velocity": state.velocity,
             "ego_long_acc": ax,
             "ego_lat_acc": ay,
             "ego_long_jerk": long_jerk,
@@ -1050,52 +1047,39 @@ class Sim4ADSimulation:
     def _build_observation(state, nearby_agents_features, distance_left_lane_marking,
                            distance_right_lane_marking):
         return {
-            "vx": state.vx,
-            "vy": state.vy,
+            "velocity": state.velocity,
             "heading": state.heading,
             "distance_left_lane_marking": distance_left_lane_marking,
             "distance_right_lane_marking": distance_right_lane_marking,
             "front_ego_rel_dx": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_dx", 0),
             "front_ego_rel_dy": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_dy", 0),
-            "front_ego_rel_vx": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_vx", 0),
-            "front_ego_rel_vy": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_vy", 0),
-            "front_ego_rel_ax": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_ax", 0),
-            "front_ego_rel_ay": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_ay", 0),
+            "front_ego_rel_v": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_v", 0),
+            "front_ego_rel_a": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_a", 0),
             "front_ego_heading": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("heading", 0),
             "behind_ego_rel_dx": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_dx", 0),
             "behind_ego_rel_dy": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_dy", 0),
-            "behind_ego_rel_vx": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_vx", 0),
-            "behind_ego_rel_vy": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_vy", 0),
-            "behind_ego_rel_ax": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_ax", 0),
-            "behind_ego_rel_ay": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_ay", 0),
+            "behind_ego_rel_v": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_v", 0),
+            "behind_ego_rel_a": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_a", 0),
             "behind_ego_heading": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("heading", 0),
             "front_left_rel_dx": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_dx", 0),
             "front_left_rel_dy": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_dy", 0),
-            "front_left_rel_vx": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_vx", 0),
-            "front_left_rel_vy": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_vy", 0),
-            "front_left_rel_ax": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_ax", 0),
-            "front_left_rel_ay": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_ay", 0),
+            "front_left_rel_v": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_v", 0),
+            "front_left_rel_a": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_a", 0),
             "front_left_heading": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("heading", 0),
             "behind_left_rel_dx": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_dx", 0),
             "behind_left_rel_dy": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_dy", 0),
-            "behind_left_rel_vx": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_vx", 0),
-            "behind_left_rel_vy": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_vy", 0),
-            "behind_left_rel_ax": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_ax", 0),
-            "behind_left_rel_ay": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_ay", 0),
+            "behind_left_rel_v": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_v", 0),
+            "behind_left_rel_a": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_a", 0),
             "behind_left_heading": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("heading", 0),
             "front_right_rel_dx": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_dx", 0),
             "front_right_rel_dy": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_dy", 0),
-            "front_right_rel_vx": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_vx", 0),
-            "front_right_rel_vy": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_vy", 0),
-            "front_right_rel_ax": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_ax", 0),
-            "front_right_rel_ay": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_ay", 0),
+            "front_right_rel_v": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_v", 0),
+            "front_right_rel_a": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_a", 0),
             "front_right_heading": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("heading", 0),
             "behind_right_rel_dx": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_dx", 0),
             "behind_right_rel_dy": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_dy", 0),
-            "behind_right_rel_vx": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_vx", 0),
-            "behind_right_rel_vy": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_vy", 0),
-            "behind_right_rel_ax": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_ax", 0),
-            "behind_right_rel_ay": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_ay", 0),
+            "behind_right_rel_v": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_v", 0),
+            "behind_right_rel_a": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_a", 0),
             "behind_right_heading": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("heading", 0)
         }
 

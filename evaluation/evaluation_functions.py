@@ -175,8 +175,8 @@ class EvaluationFeaturesExtractor:
             if position in [PNA.CENTER_IN_FRONT, PNA.CENTER_BEHIND] and nearby_agent is not None:
                 d = (state.position.distance(nearby_agent["position"]) - agent.meta.length / 2 -
                      nearby_agent["metadata"].length / 2)
-                v_ego = abs(np.sqrt(state.vx ** 2 + state.vy ** 2))
-                v_other = abs(np.sqrt(nearby_agent["vx"] ** 2 + nearby_agent["vy"] ** 2))
+                v_ego = abs(state.velocity)
+                v_other = abs(nearby_agent["velocity"])
 
                 if position == PNA.CENTER_IN_FRONT:
                     ttc[position] = d / (v_ego - v_other)

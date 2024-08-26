@@ -46,11 +46,11 @@ class SimulatorEnv(gym.Env):
         self.MIN_YAW_RATE = -0.08
         self.MAX_YAW_RATE = 0.08
 
-        assert action_features == ["ax", "ay", "yaw_rate"], (f"Action features are not as expected: "
-                                                              f"{action_features}. Change below.")
+        assert action_features == ["acceleration", "yaw_rate"], (f"Action features are not as expected: "
+                                                                  f"{action_features}. Change below.")
         self.action_space = Box(
-            low=np.array([-5, -5, self.MIN_YAW_RATE]),  # ax, ay, yaw_rate
-            high=np.array([5, 5, self.MAX_YAW_RATE])
+            low=np.array([-5, self.MIN_YAW_RATE]),  # ax, ay, yaw_rate
+            high=np.array([5, self.MAX_YAW_RATE])
         )
 
         obs_space = len(obs_features)
@@ -131,7 +131,7 @@ class SimulatorEnv(gym.Env):
     def step(self, action):
         """
 
-        :param action: (ax, ay, yaw_rate)
+        :param action: (acceleration, yaw_rate)
         :return:
         """
 

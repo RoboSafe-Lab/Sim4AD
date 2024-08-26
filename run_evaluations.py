@@ -151,7 +151,8 @@ def main():
 
                 for cluster in eval_configs.clusters:
                     output_dir = get_file_name_trajectories(experiment_name=evaluation.name,
-                                                            map_name=map_to_use, policy_type=policy.name, cluster=cluster,
+                                                            map_name=map_to_use, policy_type=policy.name,
+                                                            cluster=cluster,
                                                             irl_weights=eval_configs.use_irl_reward,
                                                             spawn_method=eval_configs.spawn_method,
                                                             episode_names=evaluation_episodes,
@@ -164,7 +165,7 @@ def main():
                         with open(output_dir, "rb") as f:
                             simulation_agents = pickle.load(f)
                         # Begin the evaluation function
-                        logger.info(f'{evaluation.name} evaluation started!')
+                        logger.info(f'{evaluation.name} evaluation started for {cluster} policy!')
                         begin_evaluation(simulation_agents, evaluation_episodes)
                     else:
                         if evaluation == EvaluationType.DIVERSITY:
@@ -174,13 +175,14 @@ def main():
                             driving_style_model_paths = {c: driving_style_model_paths[cluster]
                                                          for c in driving_style_model_paths}
                         elif evaluation == EvaluationType.HUMAN_LIKENESS:
-                            assert cluster == "All", "Human likeness evaluation only supports 'All' cluster. Got {cluster}"
+                            assert cluster == "All", "Human likeness evaluation only supports 'All' cluster. Got {" \
+                                                     "cluster}"
                             driving_style_model_paths = EVAL_POLICIES[policy]
                         else:
                             raise NotImplementedError(f"Evaluation type {evaluation} not implemented")
 
-                        # The cluster below is "All" rather than `cluster` because we use `cluster` to load the correct policy,
-                        # but then `All` the vehicles will have that policy
+                        # The cluster below is "All" rather than `cluster` because we use `cluster` to load the
+                        # correct policy, but then `All` the vehicles will have that policy
                         evaluator = TrajectoryExtractor(eval_configs, evaluation_episodes, policy_type=policy,
                                                         cluster="All", load_policy=load_policy,
                                                         driving_style_model_paths=driving_style_model_paths)
@@ -196,6 +198,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-import pickle
-from dataclasses import dataclass, field
-from typing import List
+

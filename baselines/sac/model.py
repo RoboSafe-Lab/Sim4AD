@@ -99,9 +99,7 @@ def make_env(env_id, seed, run_name, args, evaluation=False, normalisation: bool
 
     if normalisation:
         state_mean, state_std, reward_mean, reward_std = get_normalisation_parameters(driving_style=env.unwrapped.driving_style,
-                                                                                      map_name=env.unwrapped.map_name,
-                                                                                      dataset_split=env.unwrapped.dataset_split,
-                                                                                      state_dim=env.observation_space.shape[0])
+                                                                                      map_name=env.unwrapped.map_name)
         env = wrap_env(env, state_mean=state_mean, state_std=state_std, reward_mean=reward_mean, reward_std=reward_std,
                        reward_normalization=True)
 

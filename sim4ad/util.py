@@ -346,10 +346,10 @@ def parse_args() -> argparse.Namespace:
                         type=bool)
 
     # defined for training IRL
-    parser.add_argument('--driving_style_idx', '-d',
-                        default=-1,
-                        help="which clustered driving style is used: 0-Cautious, 1-Normal, 2-Aggressive, -1-All",
-                        type=int)
+    parser.add_argument('--driving_style', '-d',
+                        default='All',
+                        help="which clustered driving style is used: Aggressive, Cautious, Normal, All",
+                        type=str)
 
     args = parser.parse_args()
 

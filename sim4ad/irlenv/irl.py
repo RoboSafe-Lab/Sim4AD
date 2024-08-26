@@ -5,6 +5,7 @@ import pickle
 
 from sim4ad.opendrive import Map
 from sim4ad.irlenv import IRLEnv
+from sim4ad.common_constants import REMOVED_AGENTS
 
 
 class IRL:
@@ -46,6 +47,9 @@ class IRL:
         human_traj_features_one_agent = []
         buffer_one_agent = []
         aid, agent = item
+
+        if aid in REMOVED_AGENTS:
+            return None, None
 
         logger.info(f"Ego agent: {aid}")
 
@@ -105,8 +109,9 @@ class IRL:
             for aid, agent in agents.items():
                 human_traj_features_one_agent, buffer_one_agent = self.get_feature_one_agent((aid, agent))
                 if self.save_buffer:
-                    self.human_traj_features.extend(human_traj_features_one_agent)
-                    self.buffer.extend(buffer_one_agent)
+                    if human_traj_features_one_agent is not None and buffer_one_agent is not None:
+                        self.human_traj_features.extend(human_traj_features_one_agent)
+                        self.buffer.extend(buffer_one_agent)
 
     def save_buffer_data(self, driving_style=''):
         # save buffer data to avoid repeated computation

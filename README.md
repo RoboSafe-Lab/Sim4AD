@@ -26,8 +26,7 @@ set (at the bottom of the file) are `spawn_method` = which is "dataset_one" for 
 and "dataset_all" for macro analysis, `policy_type` = which is "bc-all-obs-5_pi" for BC, "sac_5_rl" for SAC (after training it as above),
 or "idm" for IDM
 
-- first install igp2 (sim4ad branch) with `pip3 install -e .` in the root folder of IGP2 after cloning
-- then pip install -e . in the root folder of sim4ad # todo update the requirements
+- pip install -e . in the root folder of sim4ad # todo update the requirements
 t
 - install Pytorch from the official website
 - `pip install -r requirements.txt` in the root folder of sim4ad

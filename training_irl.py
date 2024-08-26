@@ -25,34 +25,31 @@ def main():
     irl_instance = IRL(multiprocessing=False, num_processes=12,
                        save_buffer=False, save_training_log=True)
 
-    driving_styles = {0: 'Cautious', 1: 'Normal', 2: 'Aggressive', -1: 'All'}
-
     new_buffer = []
     for episode in config.episodes:
         episode_id = episode.recording_id
 
         # load all buffered features
-        if args.driving_style_idx < 0:
+        if args.driving_style == 'All':
             logger.info(f'Loading {episode_id} for training.')
-            for key, value in driving_styles.items():
-                if key >= 0:
-                    buffer = load_pkl(value + '_' + episode_id)
-                    if buffer is None:
-                        continue
-                    # If new_buffer is empty, simply assign buffer to it
-                    if not new_buffer:
-                        new_buffer = buffer.copy()
-                    else:
-                        # Otherwise, concatenate the current buffer to each corresponding sublist in new_buffer
-                        new_buffer = [nb + b for nb, b in zip(new_buffer, buffer)]
+            for driving_style in ['Aggressive', 'Normal', 'Cautious']:
+                buffer = load_pkl(driving_style + '_' + episode_id)
+                if buffer is None:
+                    continue
+                # If new_buffer is empty, simply assign buffer to it
+                if not new_buffer:
+                    new_buffer = buffer.copy()
+                else:
+                    # Otherwise, concatenate the current buffer to each corresponding sublist in new_buffer
+                    new_buffer = [nb + b for nb, b in zip(new_buffer, buffer)]
 
         # load buffered features for a specific driving style
         else:
-            buffer = load_pkl(driving_styles[args.driving_style_idx] + '_' + episode_id)
+            buffer = load_pkl(args.driving_style + '_' + episode_id)
             # file not existing
             if buffer is None:
                 continue
-            logger.info(f'Loading {driving_styles[args.driving_style_idx]} {episode_id} for training.')
+            logger.info(f'Loading {args.driving_style} {episode_id} for training.')
             # If new_buffer is empty, simply assign buffer to it
             if not new_buffer:
                 new_buffer = buffer.copy()
@@ -65,7 +62,7 @@ def main():
 
     if irl_instance.save_training_log:
         logger.info('Saved training log.')
-        with open(driving_styles[args.driving_style_idx] + "training_log.pkl", "wb") as file:
+        with open(args.driving_style + "training_log.pkl", "wb") as file:
             pickle.dump(irl_instance.training_log, file)
 
 

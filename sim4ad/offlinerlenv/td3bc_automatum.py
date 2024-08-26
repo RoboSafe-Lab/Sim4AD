@@ -20,7 +20,7 @@ import pickle
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 from sim4ad.data import ScenarioConfig
 from sim4ad.path_utils import get_config_path
-
+from sim4ad.util import parse_args
 TensorBatch = List[torch.Tensor]
 
 
@@ -42,7 +42,7 @@ class TrainConfig:
     seed: int = 0  # Sets Gym, PyTorch and Numpy seeds
     eval_freq: int = 10  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
-    max_timesteps: int = 5000  # Max time steps to run environment
+    max_timesteps: int = 2000  # Max time steps to run environment
     checkpoints_path: Optional[str] = 'results/offlineRL'  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
     # TD3
@@ -474,7 +474,7 @@ def evaluate(config, env, actor, trainer, evaluations, ref_max_score, ref_min_sc
     if config.checkpoints_path is not None:
         torch.save(
             trainer.state_dict(),
-            os.path.join(config.checkpoints_path, f"{TrainConfig.driving_style}_checkpoint.pt"),
+            os.path.join(config.checkpoints_path, f"{config.driving_style}_checkpoint.pt"),
         )
 
     wandb.log(
@@ -489,20 +489,33 @@ def get_normalized_score(score, ref_max_score, ref_min_score):
     return (score - ref_min_score) / (ref_max_score - ref_min_score)
 
 
-def load_demonstration_data(driving_style: str, map_name: str, dataset_split: str = "train"):
+def load_demonstration_data(driving_style: str, map_name: str, dataset_split=None):
     """load demonstration data"""
-    with open(f'scenarios/data/{dataset_split}/{driving_style}{map_name}_demonstration.pkl', 'rb') as file:
-        return pickle.load(file)
+    if dataset_split is not None:
+        logger.info(f'Loading {driving_style} demonstrations for {dataset_split}.')
+        with open(f'scenarios/data/{dataset_split}/{driving_style}{map_name}_demonstration.pkl', 'rb') as file:
+            return pickle.load(file)
+    else:
+        # load all data (train and test) for normalization
+        logger.info(f'Loading {driving_style} demonstrations in all data splits for normalization.')
+        all_demonstrations = {'All': [], 'clustered': []}
+        for dataset_split in ['test', 'train']:
+            with open(f'scenarios/data/{dataset_split}/{driving_style}{map_name}_demonstration.pkl', 'rb') as file:
+                demonstration = pickle.load(file)
+                all_demonstrations['All'].extend(demonstration.get('All', []))
+                all_demonstrations['clustered'].extend(demonstration.get('clustered', []))
+        return all_demonstrations
 
 
-def compute_normalization_parameters(state_dim, dataset, normalize: bool):
+def compute_normalization_parameters(dataset, normalize: bool):
     """Get state mean, std and reward mean and std for normalization"""
+    dataset_to_use = dataset['All'] if dataset['All'] else dataset['clustered']
+
+    all_rewards = []
+    state_dim = dataset_to_use[0].observations.shape[1]
     total_count = np.zeros(state_dim)
     mean_obs = np.zeros(state_dim)
     m2 = np.zeros(state_dim)
-    all_rewards = []
-
-    dataset_to_use = dataset['All'] if dataset['All'] else dataset['clustered']
     for agent_mdp in dataset_to_use:
         if normalize:
             all_rewards.extend(agent_mdp.rewards)
@@ -532,18 +545,15 @@ def compute_normalization_parameters(state_dim, dataset, normalize: bool):
     return state_mean, state_std, reward_mean, reward_std
 
 
-def get_normalisation_parameters(driving_style: str, map_name: str, dataset_split: str, state_dim: int):
+def get_normalisation_parameters(driving_style: str, map_name: str):
     """
 
     :param driving_style:
     :param map_name:
-    :param dataset_split:
-    :param state_dim: dimension of the state space. e.g., 34 if using an observation space with 34 elements. Otherwise,
-                        self.env.observation_space.shape[0]
     :return: state_mean, state_std, reward_mean, reward_std
     """
-    demonstrations = load_demonstration_data(driving_style, map_name, dataset_split)
-    return compute_normalization_parameters(state_dim, demonstrations, normalize=True)
+    demonstrations = load_demonstration_data(driving_style, map_name)
+    return compute_normalization_parameters(demonstrations, normalize=True)
 
 
 def initialize_model(state_dim, action_dim, max_action, config):
@@ -630,10 +640,10 @@ class TD3_BC_Loader:
 
 @pyrallis.wrap()
 def train(config: TrainConfig):
-    logger.info(f"Training {TrainConfig.driving_style} using TD3 + BC, Env: {config.env}")
+    logger.info(f"Training {config.driving_style} using TD3 + BC, Env: {config.env}")
 
-    map_configs = ScenarioConfig.load(get_config_path(TrainConfig.map_name))
-    idx = map_configs.dataset_split[TrainConfig.dataset_split]
+    map_configs = ScenarioConfig.load(get_config_path(config.map_name))
+    idx = map_configs.dataset_split[config.dataset_split]
     training_episodes = [x.recording_id for i, x in enumerate(map_configs.episodes) if i in idx]
 
     # initialize trainer
@@ -644,9 +654,9 @@ def train(config: TrainConfig):
     wandb_init(asdict(config))
 
     # preprocess data
-    demonstrations = load_demonstration_data(config.driving_style, config.map_name, dataset_split=config.dataset_split)
-    state_mean, state_std, reward_mean, reward_std = compute_normalization_parameters(
-        trainer_loader.state_dim, demonstrations, config.normalize)
+    all_demonstrations = load_demonstration_data(config.driving_style, config.map_name)
+    state_mean, state_std, reward_mean, reward_std = compute_normalization_parameters(all_demonstrations,
+                                                                                      config.normalize)
 
     env = wrap_env(trainer_loader.env, state_mean=state_mean, state_std=state_std,
                    reward_mean=reward_mean, reward_std=reward_std,
@@ -656,6 +666,7 @@ def train(config: TrainConfig):
     ref_min_score = float('inf')
     # create a replay buffer for each vehicle
     replay_buffers = []
+    demonstrations = load_demonstration_data(config.driving_style, config.map_name, dataset_split=config.dataset_split)
     agent_mdps = demonstrations['All'] if demonstrations['All'] else demonstrations['clustered']
     for agent_mdp in agent_mdps:
         agent_data = qlearning_dataset(dataset=agent_mdp)

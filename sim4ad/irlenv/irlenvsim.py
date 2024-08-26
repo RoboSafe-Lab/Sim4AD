@@ -6,6 +6,8 @@ import joblib
 from sim4ad.irlenv.vehicle.humandriving import HumanLikeVehicle, DatasetVehicle
 from sim4ad.opendrive import plot_map
 from sim4ad.irlenv import utils
+from simulator.state_action import State
+from simulator.simulator_util import compute_distance_markings
 
 
 class IRLEnv:
@@ -321,15 +323,23 @@ class IRLEnv:
         thw_front, thw_rear = self._get_thw()
 
         # centerline deviation
-        _, d = utils.local2frenet(self.vehicle.position, self.vehicle.lane.midline)
-        d_centerline = abs(d)
+        # _, d = utils.local2frenet(self.vehicle.position, self.vehicle.lane.midline)
+        # d_centerline = abs(d)
+
+        # lateral distance to the nearest lane marker
+        state = State(time=self.vehicle.timer, position=self.vehicle.position, vx=self.vehicle.velocity[0],
+                      vy=self.vehicle.velocity[1], ax=self.vehicle.acceleration[0], ay=self.vehicle.acceleration[1],
+                      heading=self.vehicle.heading, lane=self.vehicle.lane, agent_width=self.vehicle.WIDTH,
+                      agent_length=self.vehicle.LENGTH)
+        distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=state)
+        nearest_distance_lane_marking = min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
 
         # ego vehicle human-likeness
         ego_likeness = self.vehicle.calculate_human_likeness()
 
         # feature array
         features = np.array([ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk,
-                             thw_front, thw_rear, d_centerline])
+                             thw_front, thw_rear, nearest_distance_lane_marking])
 
         # normalize features using exponential
         normalized_features = self.exponential_normalization(features)

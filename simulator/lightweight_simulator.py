@@ -126,9 +126,7 @@ class Sim4ADSimulation:
 
         state_mean, state_std, reward_mean, reward_std = get_normalisation_parameters(
             driving_style=driving_style,
-            map_name=self.map_name,
-            dataset_split="test",  # TODO: change dataset split
-            state_dim=34)  # TODO: change ti if changing features
+            map_name=self.map_name)
 
         params["state_mean"] = state_mean
         params["state_std"] = state_std

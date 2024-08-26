@@ -5,6 +5,7 @@ import joblib
 import sys
 from typing import List, Optional
 from sim4ad.irlenv.vehicle.behavior import IDMVehicle
+from simulator.simulator_util import compute_distance_markings
 from loguru import logger
 
 
@@ -59,11 +60,13 @@ def extract_features(inx, t, agent, episode) -> Optional[List]:
     thw_rear = np.exp(-1 / thw_rear) if thw_rear is not None else 1
 
     # centerline deviation
-    d = (agent.distance_left_lane_marking[inx] - agent.distance_right_lane_marking[inx]) / 2
-    d_centerline = abs(d)
+    # d = (agent.distance_left_lane_marking[inx] - agent.distance_right_lane_marking[inx]) / 2
+    # d_centerline = abs(d)
+    distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=agent.state)
+    nearest_distance_lane_marking = min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
 
     # feature array
-    features = [ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk, thw_front, thw_rear, d_centerline]
+    features = [ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk, thw_front, thw_rear, nearest_distance_lane_marking]
 
     return features
 

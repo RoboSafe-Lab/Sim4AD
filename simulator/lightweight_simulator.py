@@ -36,7 +36,7 @@ from simulator.simulator_util import DeathCause, get_nearby_vehicles, compute_di
 from simulator.simulator_util import PositionNearbyAgent as PNA
 from evaluation.evaluation_functions import EvaluationFeaturesExtractor
 
-from sim4ad.common_constants import DEFAULT_DECELERATION_VALUE
+from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE as MNAV
 
 logger = logging.getLogger(__name__)
 
@@ -1049,36 +1049,36 @@ class Sim4ADSimulation:
             "heading": state.heading,
             "distance_left_lane_marking": distance_left_lane_marking,
             "distance_right_lane_marking": distance_right_lane_marking,
-            "front_ego_rel_dx": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_dx", 0),
-            "front_ego_rel_dy": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_dy", 0),
-            "front_ego_rel_v": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_v", 0),
-            "front_ego_rel_a": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_a", 0),
-            "front_ego_heading": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("heading", 0),
-            "behind_ego_rel_dx": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_dx", 0),
-            "behind_ego_rel_dy": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_dy", 0),
-            "behind_ego_rel_v": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_v", 0),
-            "behind_ego_rel_a": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_a", 0),
-            "behind_ego_heading": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("heading", 0),
-            "front_left_rel_dx": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_dx", 0),
-            "front_left_rel_dy": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_dy", 0),
-            "front_left_rel_v": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_v", 0),
-            "front_left_rel_a": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_a", 0),
-            "front_left_heading": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("heading", 0),
-            "behind_left_rel_dx": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_dx", 0),
-            "behind_left_rel_dy": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_dy", 0),
-            "behind_left_rel_v": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_v", 0),
-            "behind_left_rel_a": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_a", 0),
-            "behind_left_heading": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("heading", 0),
-            "front_right_rel_dx": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_dx", 0),
-            "front_right_rel_dy": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_dy", 0),
-            "front_right_rel_v": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_v", 0),
-            "front_right_rel_a": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_a", 0),
-            "front_right_heading": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("heading", 0),
-            "behind_right_rel_dx": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_dx", 0),
-            "behind_right_rel_dy": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_dy", 0),
-            "behind_right_rel_v": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_v", 0),
-            "behind_right_rel_a": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_a", 0),
-            "behind_right_heading": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("heading", 0)
+            "front_ego_rel_dx": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_dx", MNAV),
+            "front_ego_rel_dy": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_dy", MNAV),
+            "front_ego_rel_v": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_v", MNAV),
+            "front_ego_rel_a": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_a", MNAV),
+            "front_ego_heading": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("heading", MNAV),
+            "behind_ego_rel_dx": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_dx", MNAV),
+            "behind_ego_rel_dy": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_dy", MNAV),
+            "behind_ego_rel_v": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_v", MNAV),
+            "behind_ego_rel_a": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_a", MNAV),
+            "behind_ego_heading": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("heading", MNAV),
+            "front_left_rel_dx": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_dx", MNAV),
+            "front_left_rel_dy": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_dy", MNAV),
+            "front_left_rel_v": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_v", MNAV),
+            "front_left_rel_a": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_a", MNAV),
+            "front_left_heading": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("heading", MNAV),
+            "behind_left_rel_dx": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_dx", MNAV),
+            "behind_left_rel_dy": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_dy", MNAV),
+            "behind_left_rel_v": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_v", MNAV),
+            "behind_left_rel_a": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_a", MNAV),
+            "behind_left_heading": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("heading", MNAV),
+            "front_right_rel_dx": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_dx", MNAV),
+            "front_right_rel_dy": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_dy", MNAV),
+            "front_right_rel_v": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_v", MNAV),
+            "front_right_rel_a": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_a", MNAV),
+            "front_right_heading": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("heading", MNAV),
+            "behind_right_rel_dx": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_dx", MNAV),
+            "behind_right_rel_dy": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_dy", MNAV),
+            "behind_right_rel_v": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_v", MNAV),
+            "behind_right_rel_a": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_a", MNAV),
+            "behind_right_heading": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("heading", MNAV)
         }
 
     def __change_episode(self):

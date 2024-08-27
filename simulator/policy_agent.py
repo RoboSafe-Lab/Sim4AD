@@ -12,7 +12,7 @@ from simulator.simulator_util import PositionNearbyAgent
 from simulator.state_action import Observation, Action, State
 from sim4ad.agentstate import AgentMetadata
 from baselines.bc_baseline import BCBaseline as BC
-
+from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 import logging
 
 logger = logging.getLogger(__name__)
@@ -67,13 +67,14 @@ class PolicyAgent:
 
         obs = history[-1]
         if isinstance(self.policy, SAC):
-            (ax, ay, delta), _ = self.policy.predict(obs, deterministic=True)
+            (acceleration, delta), _ = self.policy.predict(obs, deterministic=True)
         elif isinstance(self.policy, BC):
-            ax, ay, delta = self.policy(history)[0].tolist()
+            acceleration, delta = self.policy(history)[0].tolist()
         else:
-            ax, ay, delta = self.policy.act(obs, device=self.device, deterministic=True)
+            obs_mask = (obs != MISSING_NEARBY_AGENT_VALUE)
+            acceleration, delta = self.policy.act(obs * obs_mask, device=self.device, deterministic=True)
 
-        action = Action(ax=ax, ay=ay, yaw_rate=delta)
+        action = Action(acceleration=acceleration, yaw_rate=delta)
 
         return action
 

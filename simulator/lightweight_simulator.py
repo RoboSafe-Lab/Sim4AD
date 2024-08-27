@@ -26,7 +26,7 @@ from extract_observation_action import ExtractObservationAction
 from sim4ad.irlenv import utils
 from sim4ad.data import ScenarioConfig, DatasetScenario
 from sim4ad.irlenv.vehicle.behavior import IDMVehicle
-from sim4ad.offlinerlenv.td3bc_automatum import get_normalisation_parameters
+from sim4ad.offlinerlenv.td3bc_automatum import get_normalisation_parameters, normalize_states
 from sim4ad.opendrive import plot_map, Map
 from sim4ad.path_utils import get_path_to_automatum_scenario, get_path_to_automatum_map, get_config_path
 from sim4ad.util import Box
@@ -36,7 +36,7 @@ from simulator.simulator_util import DeathCause, get_nearby_vehicles, compute_di
 from simulator.simulator_util import PositionNearbyAgent as PNA
 from evaluation.evaluation_functions import EvaluationFeaturesExtractor
 
-from sim4ad.common_constants import DEFAULT_DECELERATION_VALUE
+from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 
 logger = logging.getLogger(__name__)
 
@@ -565,6 +565,17 @@ class Sim4ADSimulation:
                 action = agent.next_action(history=agent.observation_trajectory)
                 # Use the bicycle model to find where the agent will be at t+1
                 new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
+                ################# for debug #############
+                # plot_map(self.__scenario_map, markings=True, midline=False, drivable=True, plot_background=False)
+                # pos_x = []
+                # pos_y = []
+                # for state in agent.state_trajectory:
+                #     pos_x.append(state.position.x)
+                #     pos_y.append(state.position.y)
+                # plt.scatter(pos_x, pos_y)
+                # plt.text(pos_x[-1], pos_y[-1] + 0.2, f'Yaw rate: {action.yaw_rate:.2f}', fontsize=8, ha='center',
+                #          bbox=dict(boxstyle='round,pad=0.2', facecolor='wheat', alpha=0.5))
+                # plt.show()
             elif agent.policy == "rl":
                 assert agent_id == self.__agent_evaluated, "Only the agent being evaluated can have policy 'rl'"
                 action = Action(acceleration=ego_action[0], yaw_rate=ego_action[1])
@@ -881,8 +892,8 @@ class Sim4ADSimulation:
         driving_style = self.get_driving_style_vehicle(agent.agent_id)
         params = self.normalisation_parameters[driving_style]
 
-        obs = np.array(obs)
-        obs = (obs - params["state_mean"]) / params["state_std"]
+        obs = np.array(obs).reshape(1, -1)
+        obs = normalize_states(obs, params["state_mean"],  params["state_std"])
 
         return obs
 
@@ -977,6 +988,13 @@ class Sim4ADSimulation:
 
                 position = np.array([state.position.x, state.position.y])
                 ax.plot(*position, marker=".", color=color)
+                # Update the text box with new values
+                textstr = '\n'.join((
+                    r'$\mathrm{a}=%.2f$' % (state.acceleration,),
+                    r'$\mathrm{heading}=%.2f$' % (state.heading,)))
+                # Display text above the agent's position
+                ax.text(position[0], position[1] + 0.5, textstr, fontsize=8, ha='center',
+                        bbox=dict(boxstyle='round,pad=0.2', facecolor='wheat', alpha=0.5))
 
                 # Plot the bounding box of the agent
                 bbox = state.bbox.boundary
@@ -1051,36 +1069,36 @@ class Sim4ADSimulation:
             "heading": state.heading,
             "distance_left_lane_marking": distance_left_lane_marking,
             "distance_right_lane_marking": distance_right_lane_marking,
-            "front_ego_rel_dx": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_dx", 0),
-            "front_ego_rel_dy": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_dy", 0),
-            "front_ego_rel_v": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_v", 0),
-            "front_ego_rel_a": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_a", 0),
-            "front_ego_heading": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("heading", 0),
-            "behind_ego_rel_dx": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_dx", 0),
-            "behind_ego_rel_dy": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_dy", 0),
-            "behind_ego_rel_v": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_v", 0),
-            "behind_ego_rel_a": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_a", 0),
-            "behind_ego_heading": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("heading", 0),
-            "front_left_rel_dx": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_dx", 0),
-            "front_left_rel_dy": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_dy", 0),
-            "front_left_rel_v": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_v", 0),
-            "front_left_rel_a": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_a", 0),
-            "front_left_heading": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("heading", 0),
-            "behind_left_rel_dx": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_dx", 0),
-            "behind_left_rel_dy": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_dy", 0),
-            "behind_left_rel_v": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_v", 0),
-            "behind_left_rel_a": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_a", 0),
-            "behind_left_heading": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("heading", 0),
-            "front_right_rel_dx": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_dx", 0),
-            "front_right_rel_dy": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_dy", 0),
-            "front_right_rel_v": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_v", 0),
-            "front_right_rel_a": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_a", 0),
-            "front_right_heading": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("heading", 0),
-            "behind_right_rel_dx": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_dx", 0),
-            "behind_right_rel_dy": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_dy", 0),
-            "behind_right_rel_v": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_v", 0),
-            "behind_right_rel_a": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_a", 0),
-            "behind_right_heading": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("heading", 0)
+            "front_ego_rel_dx": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_dx", MISSING_NEARBY_AGENT_VALUE),
+            "front_ego_rel_dy": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_dy", MISSING_NEARBY_AGENT_VALUE),
+            "front_ego_rel_v": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_v", MISSING_NEARBY_AGENT_VALUE),
+            "front_ego_rel_a": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_a", MISSING_NEARBY_AGENT_VALUE),
+            "front_ego_heading": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("heading", MISSING_NEARBY_AGENT_VALUE),
+            "behind_ego_rel_dx": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_dx", MISSING_NEARBY_AGENT_VALUE),
+            "behind_ego_rel_dy": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_dy", MISSING_NEARBY_AGENT_VALUE),
+            "behind_ego_rel_v": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_v", MISSING_NEARBY_AGENT_VALUE),
+            "behind_ego_rel_a": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_a", MISSING_NEARBY_AGENT_VALUE),
+            "behind_ego_heading": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("heading", MISSING_NEARBY_AGENT_VALUE),
+            "front_left_rel_dx": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_dx", MISSING_NEARBY_AGENT_VALUE),
+            "front_left_rel_dy": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_dy", MISSING_NEARBY_AGENT_VALUE),
+            "front_left_rel_v": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_v", MISSING_NEARBY_AGENT_VALUE),
+            "front_left_rel_a": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_a", MISSING_NEARBY_AGENT_VALUE),
+            "front_left_heading": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("heading", MISSING_NEARBY_AGENT_VALUE),
+            "behind_left_rel_dx": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_dx", MISSING_NEARBY_AGENT_VALUE),
+            "behind_left_rel_dy": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_dy", MISSING_NEARBY_AGENT_VALUE),
+            "behind_left_rel_v": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_v", MISSING_NEARBY_AGENT_VALUE),
+            "behind_left_rel_a": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_a", MISSING_NEARBY_AGENT_VALUE),
+            "behind_left_heading": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("heading", MISSING_NEARBY_AGENT_VALUE),
+            "front_right_rel_dx": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_dx", MISSING_NEARBY_AGENT_VALUE),
+            "front_right_rel_dy": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_dy", MISSING_NEARBY_AGENT_VALUE),
+            "front_right_rel_v": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_v", MISSING_NEARBY_AGENT_VALUE),
+            "front_right_rel_a": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_a", MISSING_NEARBY_AGENT_VALUE),
+            "front_right_heading": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("heading", MISSING_NEARBY_AGENT_VALUE),
+            "behind_right_rel_dx": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_dx", MISSING_NEARBY_AGENT_VALUE),
+            "behind_right_rel_dy": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_dy", MISSING_NEARBY_AGENT_VALUE),
+            "behind_right_rel_v": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_v", MISSING_NEARBY_AGENT_VALUE),
+            "behind_right_rel_a": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_a", MISSING_NEARBY_AGENT_VALUE),
+            "behind_right_heading": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("heading", MISSING_NEARBY_AGENT_VALUE)
         }
 
     def __change_episode(self):

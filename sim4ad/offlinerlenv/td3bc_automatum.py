@@ -222,7 +222,8 @@ def eval_actor(
         state = state[0]
         episode_reward = 0.0
         while not terminated and not truncated:
-            action = actor.act(state, device)
+            state_mask = (state != MISSING_NEARBY_AGENT_VALUE)
+            action = actor.act(state * state_mask, device)
             state, reward, terminated, truncated, _ = env.step(action)
             episode_reward += reward
 
@@ -330,7 +331,7 @@ class TD3_BC:
                 -self.noise_clip, self.noise_clip
             )
 
-            next_action = (self.actor_target(next_state) + noise).clamp(
+            next_action = (self.actor_target(next_state * next_state_mask) + noise).clamp(
                 -self.max_action, self.max_action
             )
 
@@ -509,36 +510,41 @@ def load_demonstration_data(driving_style: str, map_name: str, dataset_split=Non
 
 def compute_normalization_parameters(dataset, normalize: bool):
     """Get state mean, std and reward mean and std for normalization"""
+
+    # Determine which dataset to use
     dataset_to_use = dataset['All'] if dataset['All'] else dataset['clustered']
 
-    all_rewards = []
-    state_dim = dataset_to_use[0].observations.shape[1]
-    total_count = np.zeros(state_dim)
-    mean_obs = np.zeros(state_dim)
-    m2 = np.zeros(state_dim)
-    for agent_mdp in dataset_to_use:
-        if normalize:
-            all_rewards.extend(agent_mdp.rewards)
-            # Iterate over each observation
-            for obs in agent_mdp.observations:
-                # Create a mask for valid observations
-                mask = obs != MISSING_NEARBY_AGENT_VALUE
-
-                # Update total count
-                total_count[mask] += 1
-
-                # Compute mean and m2 incrementally for valid observations
-                delta = obs[mask] - mean_obs[mask]
-                mean_obs[mask] += delta / total_count[mask]
-                delta2 = obs[mask] - mean_obs[mask]
-                m2[mask] += delta * delta2
-
     if normalize:
-        state_mean = mean_obs
-        state_std = np.sqrt(m2 / total_count)
+        # Get the state dimension from the first observation
+        state_dim = dataset_to_use[0].observations.shape[1]
+
+        # Initialize lists to collect all valid observations and rewards
+        all_rewards = []
+        all_valid_observations = [[] for _ in range(state_dim)]
+
+        # Iterate over each agent's MDP data
+        for agent_mdp in dataset_to_use:
+            all_rewards.extend(agent_mdp.rewards)
+
+            # Iterate over observations and collect valid data per dimension
+            for obs in agent_mdp.observations:
+                for dim in range(state_dim):
+                    if obs[dim] != MISSING_NEARBY_AGENT_VALUE:
+                        all_valid_observations[dim].append(obs[dim])
+
+        # Convert lists to NumPy arrays for each dimension
+        all_valid_observations = [np.array(dim_data) for dim_data in all_valid_observations]
+        all_rewards = np.array(all_rewards)
+
+        # Compute mean and std for each dimension
+        state_mean = np.array([np.mean(dim_data) for dim_data in all_valid_observations])
+        state_std = np.array([np.std(dim_data) for dim_data in all_valid_observations])
+
+        # Compute mean and std for rewards
         reward_mean = np.mean(all_rewards)
         reward_std = np.std(all_rewards)
     else:
+        # If normalization is not required, set default values
         state_mean, state_std = 0, 1
         reward_mean, reward_std = 0, 1
 

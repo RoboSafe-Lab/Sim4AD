@@ -132,7 +132,7 @@ class IRL:
             buffer_scenes = buffer[1]
 
         for i in range(IRL.n_iters):
-            logger.info(f'interation: {i + 1}/{IRL.n_iters}')
+            logger.info(f'iteration: {i + 1}/{IRL.n_iters}')
 
             feature_exp = np.zeros([IRL.feature_num])
             human_feature_exp = np.zeros([IRL.feature_num])

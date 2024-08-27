@@ -327,10 +327,9 @@ class IRLEnv:
         # d_centerline = abs(d)
 
         # lateral distance to the nearest lane marker
-        state = State(time=self.vehicle.timer, position=self.vehicle.position, vx=self.vehicle.velocity[0],
-                      vy=self.vehicle.velocity[1], ax=self.vehicle.acceleration[0], ay=self.vehicle.acceleration[1],
-                      heading=self.vehicle.heading, lane=self.vehicle.lane, agent_width=self.vehicle.WIDTH,
-                      agent_length=self.vehicle.LENGTH)
+        state = State(time=self.vehicle.timer, position=self.vehicle.position, velocity=self.vehicle.velocity[0],
+                      acceleration=self.vehicle.acceleration[0], heading=self.vehicle.heading,
+                      lane=self.vehicle.lane, agent_width=self.vehicle.WIDTH, agent_length=self.vehicle.LENGTH)
         distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=state)
         nearest_distance_lane_marking = min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
 

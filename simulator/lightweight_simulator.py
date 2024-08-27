@@ -846,7 +846,7 @@ class Sim4ADSimulation:
         done = collision or off_road or truncated or reached_goal
         info = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated,
                 "ego_speed": None, "ego_long_acc": None, "ego_lat_acc": None, "ego_long_jerk": None,
-                "thw_front": None, "thw_rear": None, "d_centerline": None
+                "thw_front": None, "thw_rear": None, "nearest_distance_lane_marking": None
                 }
         if not done:
             observation = self._build_observation(state, nearby_agents_features, distance_left_lane_marking,
@@ -893,8 +893,10 @@ class Sim4ADSimulation:
                                                 episode_id=None, add=False)
         thw_front, thw_rear = thw[PNA.CENTER_IN_FRONT], thw[PNA.CENTER_BEHIND]
 
-        _, d = utils.local2frenet(state.position, state.lane.midline)
-        d_centerline = abs(d)
+        # _, d = utils.local2frenet(state.position, state.lane.midline)
+        # d_centerline = abs(d)
+        distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=state)
+        nearest_distance_lane_marking = min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
 
         info.update({
             "ego_velocity": state.velocity,
@@ -903,7 +905,7 @@ class Sim4ADSimulation:
             "ego_long_jerk": long_jerk,
             "thw_front": thw_front,
             "thw_rear": thw_rear,
-            "d_centerline": d_centerline,
+            "nearest_distance_lane_marking": nearest_distance_lane_marking,
         })
 
         return info

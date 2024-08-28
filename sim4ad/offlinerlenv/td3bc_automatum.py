@@ -17,10 +17,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import wandb
 import pickle
-from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
+from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE, HEADING_IN_FEATURES
 from sim4ad.data import ScenarioConfig
 from sim4ad.path_utils import get_config_path
-from sim4ad.util import parse_args
 TensorBatch = List[torch.Tensor]
 
 
@@ -42,7 +41,7 @@ class TrainConfig:
     seed: int = 0  # Sets Gym, PyTorch and Numpy seeds
     eval_freq: int = 10  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
-    max_timesteps: int = 2000  # Max time steps to run environment
+    max_timesteps: int = 1200  # Max time steps to run environment
     checkpoints_path: Optional[str] = 'results/offlineRL'  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
     # TD3
@@ -77,11 +76,19 @@ def normalize_states(states: np.ndarray, mean: np.ndarray, std: np.ndarray):
     # Create a mask for valid values (those that are not MISSING_NEARBY_AGENT_VALUE)
     mask = states != MISSING_NEARBY_AGENT_VALUE
 
+    normalized_states = []
     # Normalize the states element-wise where mask is True
     for i in range(states.shape[1]):  # Iterate over each column
-        col_mask = mask[:, i]  # Mask for the current column
-        states[col_mask, i] = (states[col_mask, i] - mean[i]) / std[i]
-    return states
+        if i in HEADING_IN_FEATURES:
+            normalized_states.append(states[:, i])
+        else:
+            col_mask = mask[:, i]  # Mask for the current column
+            normalized_col = np.zeros(states.shape[0])  # Initialize with zeros # Initialize with zeros
+            normalized_col[col_mask] = (states[col_mask, i] - mean[i]) / std[i]
+            normalized_col[~col_mask] = MISSING_NEARBY_AGENT_VALUE
+            normalized_states.append(normalized_col)
+    normalized_states = np.column_stack(normalized_states)
+    return normalized_states
 
 
 def normalized_rewards(rewards: np.ndarray, mean: float, std: float):
@@ -99,18 +106,12 @@ def wrap_env(
         reward_std: float = 1.0,
         reward_normalization: bool = False,
 ) -> gym.Env:
-    # PEP 8: E731 do not assign a lambda expression, use a def
     def normalize_state(state):
         if state is None:
             return state
         else:
             state = np.array(state).reshape(1, -1)
-            # Mask the states what do not have a nearby agent
-            mask = state != MISSING_NEARBY_AGENT_VALUE
-            for i in range(state.shape[1]):
-                col_mask = mask[:, i]
-                state[col_mask, i] = (state[col_mask, i] - state_mean[i]) / state_std[i]
-            return state
+            return normalize_states(state, state_mean, state_std)
 
     def normalize_reward(reward):
         reward = (reward - reward_mean) / reward_std  # epsilon should be already added in std.
@@ -222,8 +223,7 @@ def eval_actor(
         state = state[0]
         episode_reward = 0.0
         while not terminated and not truncated:
-            state_mask = (state != MISSING_NEARBY_AGENT_VALUE)
-            action = actor.act(state * state_mask, device)
+            action = actor.act(state, device)
             state, reward, terminated, truncated, _ = env.step(action)
             episode_reward += reward
 
@@ -321,29 +321,25 @@ class TD3_BC:
         state, action, reward, next_state, done = batch
         not_done = 1 - done
 
-        # Create masks for valid states
-        state_mask = (state != MISSING_NEARBY_AGENT_VALUE)
-        next_state_mask = (next_state != MISSING_NEARBY_AGENT_VALUE)
-
         with torch.no_grad():
             # Select action according to actor and add clipped noise
             noise = (torch.randn_like(action) * self.policy_noise).clamp(
                 -self.noise_clip, self.noise_clip
             )
 
-            next_action = (self.actor_target(next_state * next_state_mask) + noise).clamp(
+            next_action = (self.actor_target(next_state) + noise).clamp(
                 -self.max_action, self.max_action
             )
 
             # Compute the target Q value
-            target_q1 = self.critic_1_target(next_state * next_state_mask, next_action)
-            target_q2 = self.critic_2_target(next_state * next_state_mask, next_action)
+            target_q1 = self.critic_1_target(next_state, next_action)
+            target_q2 = self.critic_2_target(next_state, next_action)
             target_q = torch.min(target_q1, target_q2)
             target_q = reward + not_done * self.discount * target_q
 
         # Get current Q estimates
-        current_q1 = self.critic_1(state * state_mask, action)
-        current_q2 = self.critic_2(state * state_mask, action)
+        current_q1 = self.critic_1(state, action)
+        current_q2 = self.critic_2(state, action)
 
         # Compute critic loss
         critic_loss = F.mse_loss(current_q1, target_q) + F.mse_loss(current_q2, target_q)
@@ -361,8 +357,8 @@ class TD3_BC:
         # Delayed actor updates
         if self.total_it % self.policy_freq == 0:
             # Compute actor loss
-            pi = self.actor(state * state_mask)
-            q = self.critic_1(state * state_mask, pi)
+            pi = self.actor(state)
+            q = self.critic_1(state, pi)
             # using detach to prevent lmbda from affecting q
             lmbda = self.alpha / q.abs().mean().detach()
 

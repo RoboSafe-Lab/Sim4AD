@@ -71,8 +71,7 @@ class PolicyAgent:
         elif isinstance(self.policy, BC):
             acceleration, delta = self.policy(history)[0].tolist()
         else:
-            obs_mask = (obs != MISSING_NEARBY_AGENT_VALUE)
-            acceleration, delta = self.policy.act(obs * obs_mask, device=self.device, deterministic=True)
+            acceleration, delta = self.policy.act(obs, device=self.device, deterministic=True)
 
         action = Action(acceleration=acceleration, yaw_rate=delta)
 

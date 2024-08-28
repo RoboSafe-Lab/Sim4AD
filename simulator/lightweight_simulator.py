@@ -1064,41 +1064,65 @@ class Sim4ADSimulation:
     @staticmethod
     def _build_observation(state, nearby_agents_features, distance_left_lane_marking,
                            distance_right_lane_marking):
+        def get_cos_sin_or_default(heading):
+            if heading != MNAV:
+                return np.cos(heading), np.sin(heading)
+            return MNAV, MNAV
+
         return {
             "velocity": state.velocity,
-            "heading": state.heading,
+            "cos_heading": np.cos(state.heading),
+            "sin_heading": np.sin(state.heading),
             "distance_left_lane_marking": distance_left_lane_marking,
             "distance_right_lane_marking": distance_right_lane_marking,
             "front_ego_rel_dx": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_dx", MNAV),
             "front_ego_rel_dy": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_dy", MNAV),
             "front_ego_rel_v": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_v", MNAV),
             "front_ego_rel_a": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("rel_a", MNAV),
-            "front_ego_heading": nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("heading", MNAV),
+            "front_ego_cos_heading":
+                get_cos_sin_or_default(nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("heading", MNAV))[0],
+            "front_ego_sin_heading":
+                get_cos_sin_or_default(nearby_agents_features.get(PNA.CENTER_IN_FRONT, {}).get("heading", MNAV))[1],
             "behind_ego_rel_dx": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_dx", MNAV),
             "behind_ego_rel_dy": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_dy", MNAV),
             "behind_ego_rel_v": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_v", MNAV),
             "behind_ego_rel_a": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("rel_a", MNAV),
-            "behind_ego_heading": nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("heading", MNAV),
+            "behind_ego_cos_heading":
+                get_cos_sin_or_default(nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("heading", MNAV))[0],
+            "behind_ego_sin_heading":
+                get_cos_sin_or_default(nearby_agents_features.get(PNA.CENTER_BEHIND, {}).get("heading", MNAV))[1],
             "front_left_rel_dx": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_dx", MNAV),
             "front_left_rel_dy": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_dy", MNAV),
             "front_left_rel_v": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_v", MNAV),
             "front_left_rel_a": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("rel_a", MNAV),
-            "front_left_heading": nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("heading", MNAV),
+            "front_left_cos_heading":
+                get_cos_sin_or_default(nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("heading", MNAV))[0],
+            "front_left_sin_heading":
+                get_cos_sin_or_default(nearby_agents_features.get(PNA.LEFT_IN_FRONT, {}).get("heading", MNAV))[1],
             "behind_left_rel_dx": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_dx", MNAV),
             "behind_left_rel_dy": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_dy", MNAV),
             "behind_left_rel_v": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_v", MNAV),
             "behind_left_rel_a": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("rel_a", MNAV),
-            "behind_left_heading": nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("heading", MNAV),
+            "behind_left_cos_heading":
+                get_cos_sin_or_default(nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("heading", MNAV))[0],
+            "behind_left_sin_heading":
+                get_cos_sin_or_default(nearby_agents_features.get(PNA.LEFT_BEHIND, {}).get("heading", MNAV))[1],
             "front_right_rel_dx": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_dx", MNAV),
             "front_right_rel_dy": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_dy", MNAV),
             "front_right_rel_v": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_v", MNAV),
             "front_right_rel_a": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("rel_a", MNAV),
-            "front_right_heading": nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("heading", MNAV),
+            "front_right_cos_heading":
+                get_cos_sin_or_default(nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("heading", MNAV))[0],
+            "front_right_sin_heading":
+                get_cos_sin_or_default(nearby_agents_features.get(PNA.RIGHT_IN_FRONT, {}).get("heading", MNAV))[1],
             "behind_right_rel_dx": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_dx", MNAV),
             "behind_right_rel_dy": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_dy", MNAV),
             "behind_right_rel_v": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_v", MNAV),
             "behind_right_rel_a": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("rel_a", MNAV),
-            "behind_right_heading": nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("heading", MNAV)
+            "behind_right_cos_heading":
+                get_cos_sin_or_default(nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("heading", MNAV))[0],
+            "behind_right_sin_heading":
+                get_cos_sin_or_default(nearby_agents_features.get(PNA.RIGHT_BEHIND, {}).get("heading", MNAV))[1]
         }
 
     def __change_episode(self):

@@ -63,7 +63,8 @@ class ExtractObservationAction:
         ego_agent_observations = defaultdict(list)
         ego_agent_observations['time'] = agent.time
         ego_agent_observations['velocity'] = agent.vx_vec
-        ego_agent_observations['heading'] = agent.psi_vec
+        ego_agent_observations['cos_heading'] = np.cos(agent.psi_vec)
+        ego_agent_observations['sin_heading'] = np.sin(agent.psi_vec)
         ego_agent_observations['distance_left_lane_marking'] = agent.distance_left_lane_marking
         ego_agent_observations['distance_right_lane_marking'] = agent.distance_right_lane_marking
 
@@ -107,7 +108,8 @@ class ExtractObservationAction:
                 # ax is the longitudinal acceleration, hence the acceleration in the direction of the heading.
                 # we don't need ay here, as it is the lateral acceleration
                 ego_agent_observations[f'{surrounding_agent_relation}_rel_a'].append(surrounding_rel_ax)
-                ego_agent_observations[f'{surrounding_agent_relation}_heading'].append(surrounding_heading)
+                ego_agent_observations[f'{surrounding_agent_relation}_cos_heading'].append(np.cos(surrounding_heading))
+                ego_agent_observations[f'{surrounding_agent_relation}_sin_heading'].append(np.sin(surrounding_heading))
 
             # extract features to compute rewards
             features = extract_features(inx, t, agent, episode)

@@ -47,5 +47,20 @@
         "yaw_rate"
     ],
     "alpha2.5_batch_size256_buffer_size2000_dataset_splittest_devicecuda_discount0.99_driving_styleGeneral_envSimulatorEnv-v0_eval_freq10_expl_noise0.1_groupTD3_BC-Automatum_load_model_map_nameappershofen_max_timesteps5000_n_episodes10_noise_clip0.5_normalizeTrue_normalize_rewardTrue_policy_freq2_policy_noise0.2_projectCORL_seed0_tau0.005_use_irl_rewardTrue": "371782c41b507202a56fdf0a07992625",
-    "experiment_name:DIVERSITY_map_name:appershofen_policy_type:OFFLINERL_cluster:Normal_irl_weights:True_spawn_method:dataset_all_episode_names:hw-a9-appershofen-014-29b621a2-e0d5-483b-b0c7-de3b7b990cb8_hw-a9-appershofen-016-332aed83-f9c3-4f12-947b-f8b3d83c1281_dataset_split:test_state_normalization:True_reward_normalization:True": "b0a38f774471689137d01b2ca52576da"
+    "HEADING_IN_FEATURES": [
+        1,
+        2,
+        9,
+        10,
+        15,
+        16,
+        21,
+        22,
+        27,
+        28,
+        33,
+        34,
+        39,
+        40
+    ]
 }

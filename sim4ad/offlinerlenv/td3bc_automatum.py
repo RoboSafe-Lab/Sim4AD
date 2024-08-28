@@ -17,9 +17,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import wandb
 import pickle
-from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE, HEADING_IN_FEATURES
+from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 from sim4ad.data import ScenarioConfig
-from sim4ad.path_utils import get_config_path
+from sim4ad.path_utils import get_config_path, get_common_property
+
 TensorBatch = List[torch.Tensor]
 
 
@@ -79,7 +80,7 @@ def normalize_states(states: np.ndarray, mean: np.ndarray, std: np.ndarray):
     normalized_states = []
     # Normalize the states element-wise where mask is True
     for i in range(states.shape[1]):  # Iterate over each column
-        if i in HEADING_IN_FEATURES:
+        if i in list(get_common_property("HEADING_IN_FEATURES")):
             normalized_states.append(states[:, i])
         else:
             col_mask = mask[:, i]  # Mask for the current column

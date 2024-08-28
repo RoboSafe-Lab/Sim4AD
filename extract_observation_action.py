@@ -133,6 +133,11 @@ class ExtractObservationAction:
             # part across the project, common_elements.json.
             write_common_property('FEATURES_IN_OBSERVATIONS', ego_agent_observations.columns.tolist())
             write_common_property('FEATURES_IN_ACTIONS', ego_agent_actions.columns.tolist())
+            heading_inx = []
+            for inx, key in enumerate(ego_agent_observations.keys()):
+                if 'heading' in key:
+                    heading_inx.append(inx)
+            write_common_property('HEADING_IN_FEATURES', heading_inx)
 
             # save mdp values
             mdp.observations = ego_agent_observations.values

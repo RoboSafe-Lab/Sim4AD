@@ -45,7 +45,7 @@ class TrainConfig:
     checkpoints_path: Optional[str] = 'results/offlineRL'  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
     # TD3
-    buffer_size: int = 50_000  # Replay buffer size
+    buffer_size: int = 2_000  # Replay buffer size
     batch_size: int = 256  # Batch size for all networks
     discount: float = 0.99  # Discount
     expl_noise: float = 0.1  # Std of Gaussian exploration noise
@@ -678,9 +678,14 @@ def train(config: TrainConfig):
     ref_max_score = -float('inf')
     ref_min_score = float('inf')
     # create a replay buffer for each vehicle
-    replay_buffers = []
     demonstrations = load_demonstration_data(config.driving_style, config.map_name, dataset_split=config.dataset_split)
     agent_mdps = demonstrations['All'] if demonstrations['All'] else demonstrations['clustered']
+    buffer_size = sum([len(agent_mdp.observations) for agent_mdp in agent_mdps])
+    replay_buffer = ReplayBuffer(
+        trainer_loader.state_dim,
+        trainer_loader.action_dim,
+        buffer_size,
+    )
     for agent_mdp in agent_mdps:
         agent_data = qlearning_dataset(dataset=agent_mdp)
 
@@ -703,30 +708,25 @@ def train(config: TrainConfig):
         if score < ref_min_score:
             ref_min_score = score
 
-        replay_buffer = ReplayBuffer(
-            trainer_loader.state_dim,
-            trainer_loader.action_dim,
-            config.buffer_size,
-        )
+
         replay_buffer.load_automatum_dataset(agent_data)
-        replay_buffers.append(replay_buffer)
 
     # Training loop
     logger.info("Training on data from each agent separately!")
     evaluations = []
     for t in tqdm(range(int(config.max_timesteps))):
         iteration_log_dict = {}
-        for replay_buffer in replay_buffers:
-            batch = replay_buffer.sample(config.batch_size)
-            batch = [b.to(config.device) for b in batch]
-            log_dict = trainer.train(batch)
 
-            # Accumulate logs from this batch into the iteration log dictionary
-            for key, value in log_dict.items():
-                if key in iteration_log_dict:
-                    iteration_log_dict[key].append(value)
-                else:
-                    iteration_log_dict[key] = [value]
+        batch = replay_buffer.sample(config.batch_size)
+        batch = [b.to(config.device) for b in batch]
+        log_dict = trainer.train(batch)
+
+        # Accumulate logs from this batch into the iteration log dictionary
+        for key, value in log_dict.items():
+            if key in iteration_log_dict:
+                iteration_log_dict[key].append(value)
+            else:
+                iteration_log_dict[key] = [value]
         trainer.total_it += 1
 
         # Calculate the average of the accumulated logs for this iteration

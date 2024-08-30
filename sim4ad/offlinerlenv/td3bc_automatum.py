@@ -20,7 +20,6 @@ import pickle
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE
 from sim4ad.data import ScenarioConfig
 from sim4ad.path_utils import get_config_path, get_common_property
-
 TensorBatch = List[torch.Tensor]
 
 
@@ -36,23 +35,25 @@ class TrainConfig:
     spawn_method: str = "dataset_one" # whether to use the gym env
     # need to be changed according to the policy to be trained
     map_name: str = "appershofen"
-    driving_style: str = "Aggressive"
+    driving_style: str = "Normal"
 
     # TD3 + BC training-specific parameters
     seed: int = 0  # Sets Gym, PyTorch and Numpy seeds
     eval_freq: int = 10  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
-    max_timesteps: int = 1200  # Max time steps to run environment
+    max_timesteps: int = 2000  # Max time steps to run environment
     checkpoints_path: Optional[str] = 'results/offlineRL'  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
     # TD3
-    buffer_size: int = 2_000  # Replay buffer size
+    buffer_size: int = 50_000  # Replay buffer size
     batch_size: int = 256  # Batch size for all networks
     discount: float = 0.99  # Discount
     expl_noise: float = 0.1  # Std of Gaussian exploration noise
     tau: float = 0.005  # Target network update rate
-    policy_noise: float = 0.2  # Noise added to target actor during critic update
-    noise_clip: float = 0.5  # Range to clip target actor noise
+    policy_noise_acc: float = 0.1  # Noise added to target actor during critic update
+    noise_clip_acc: float = 0.2  # Range to clip target actor noise
+    policy_noise_yaw_rate: float = 0.005  # Noise added to target actor during critic update
+    noise_clip_yaw_rate: float = 0.01  # Range to clip target actor noise
     policy_freq: int = 2  # Frequency of delayed actor updates
     # TD3 + BC
     alpha: float = 2.5  # Coefficient for Q function in actor loss
@@ -95,7 +96,7 @@ def normalize_states(states: np.ndarray, mean: np.ndarray, std: np.ndarray):
 def normalized_rewards(rewards: np.ndarray, mean: float, std: float):
     for i in range(rewards.shape[0]):
         rewards[i] = (rewards[i] - mean) / std
-        rewards[i] = np.clip(rewards[i], -1, 1)
+        rewards[i] = np.clip(rewards[i], -4, 4)
     return rewards
 
 
@@ -287,8 +288,10 @@ class TD3_BC:
             critic_2_optimizer: torch.optim.Optimizer,
             discount: float = 0.99,
             tau: float = 0.005,
-            policy_noise: float = 0.2,
-            noise_clip: float = 0.5,
+            policy_noise_acc: float = 0.1,
+            policy_noise_yaw_rate: float = 0.005,
+            noise_clip_acc: float = 0.2,
+            noise_clip_yaw_rate: float = 0.01,
             policy_freq: int = 2,
             alpha: float = 2.5,
             grad_clip: float = 2.0,
@@ -307,8 +310,10 @@ class TD3_BC:
         self.max_action = torch.tensor(max_action, dtype=torch.float, device=device)
         self.discount = discount
         self.tau = tau
-        self.policy_noise = torch.tensor(policy_noise, dtype=torch.float, device=device)
-        self.noise_clip = torch.tensor(noise_clip, dtype=torch.float, device=device)
+        self.policy_noise_acc = torch.tensor(policy_noise_acc, dtype=torch.float, device=device)
+        self.policy_noise_yaw_rate = torch.tensor(policy_noise_yaw_rate, dtype=torch.float, device=device)
+        self.noise_clip_acc = torch.tensor(noise_clip_acc, dtype=torch.float, device=device)
+        self.noise_clip_yaw_rate = torch.tensor(noise_clip_yaw_rate, dtype=torch.float, device=device)
         self.policy_freq = policy_freq
         self.alpha = alpha
 
@@ -324,9 +329,12 @@ class TD3_BC:
 
         with torch.no_grad():
             # Select action according to actor and add clipped noise
-            noise = (torch.randn_like(action) * self.policy_noise).clamp(
-                -self.noise_clip, self.noise_clip
-            )
+            noise_acc = (torch.randn_like(action[:, 0]) * self.policy_noise_acc).clamp(-self.noise_clip_acc,
+                                                                                       self.noise_clip_acc)
+            noise_yaw = (torch.randn_like(action[:, 1]) * self.policy_noise_yaw_rate).clamp(-self.noise_clip_yaw_rate,
+                                                                                       self.noise_clip_yaw_rate)
+            # Combine the noise into a single tensor
+            noise = torch.stack((noise_acc, noise_yaw), dim=1)
 
             next_action = (self.actor_target(next_state) + noise).clamp(
                 -self.max_action, self.max_action
@@ -580,8 +588,10 @@ def initialize_model(state_dim, action_dim, max_action, config):
         "tau": config.tau,
         "device": config.device,
         # TD3
-        "policy_noise": config.policy_noise * max_action,
-        "noise_clip": config.noise_clip * max_action,
+        "policy_noise_acc": config.policy_noise_acc,
+        "noise_clip_acc": config.noise_clip_acc,
+        "policy_noise_yaw_rate": config.policy_noise_yaw_rate,
+        "noise_clip_yaw_rate": config.noise_clip_yaw_rate,
         "policy_freq": config.policy_freq,
         # TD3 + BC
         "alpha": config.alpha,
@@ -697,7 +707,6 @@ def train(config: TrainConfig):
             trainer_loader.state_dim,
             trainer_loader.action_dim,
             config.buffer_size,
-            config.device,
         )
         replay_buffer.load_automatum_dataset(agent_data)
         replay_buffers.append(replay_buffer)

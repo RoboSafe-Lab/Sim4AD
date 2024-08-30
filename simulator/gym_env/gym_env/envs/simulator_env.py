@@ -49,7 +49,7 @@ class SimulatorEnv(gym.Env):
         assert action_features == ["acceleration", "yaw_rate"], (f"Action features are not as expected: "
                                                                   f"{action_features}. Change below.")
         self.action_space = Box(
-            low=np.array([-5, self.MIN_YAW_RATE]),  # ax, ay, yaw_rate
+            low=np.array([-5, self.MIN_YAW_RATE]),  # acceleration, yaw_rate
             high=np.array([5, self.MAX_YAW_RATE])
         )
 

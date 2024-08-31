@@ -156,23 +156,21 @@ class ReplayBuffer:
 
     # Loads data in tensor format, i.e. from Dict[str, np.array].
     def load_automatum_dataset(self, data: Dict[str, np.ndarray]):
-        if self._size != 0:
-            raise ValueError("Trying to load data into non-empty replay buffer")
         n_transitions = data["observations"].shape[0]
-        if n_transitions > self._buffer_size:
-            raise ValueError(
-                "Replay buffer is smaller than the dataset you are trying to load!"
-            )
-        self._states[:n_transitions] = self._to_tensor(data["observations"])
-        self._actions[:n_transitions] = self._to_tensor(data["actions"])
-        self._rewards[:n_transitions] = self._to_tensor(data["rewards"][..., None])
-        self._next_states[:n_transitions] = self._to_tensor(data["next_observations"])
-        self._dones[:n_transitions] = self._to_tensor(data["terminals"][..., None])
+
+        # Insert data into the buffer starting from the current pointer position
+        self._states[self._pointer:self._pointer + n_transitions] = self._to_tensor(data["observations"])
+        self._actions[self._pointer:self._pointer + n_transitions] = self._to_tensor(data["actions"])
+        self._rewards[self._pointer:self._pointer + n_transitions] = self._to_tensor(data["rewards"][..., None])
+        self._next_states[self._pointer:self._pointer + n_transitions] = self._to_tensor(data["next_observations"])
+        self._dones[self._pointer:self._pointer + n_transitions] = self._to_tensor(data["terminals"][..., None])
+
+        # Update the pointer and size to reflect the new data added
+        self._pointer += n_transitions
         self._size += n_transitions
-        self._pointer = min(self._size, n_transitions)
 
     def sample(self, batch_size: int) -> TensorBatch:
-        indices = np.random.randint(0, min(self._size, self._pointer), size=batch_size)
+        indices = np.random.randint(0, self._size, size=batch_size)
         states = self._states[indices]
         actions = self._actions[indices]
         rewards = self._rewards[indices]

@@ -46,7 +46,7 @@ class TrainConfig:
     load_model: str = ""  # Model load file name, "" doesn't load
     # TD3
     buffer_size: int = 2_000  # Replay buffer size
-    batch_size: int = 256  # Batch size for all networks
+    batch_size: int = 128  # Batch size for all networks
     discount: float = 0.99  # Discount
     expl_noise: float = 0.1  # Std of Gaussian exploration noise
     tau: float = 0.005  # Target network update rate
@@ -156,21 +156,23 @@ class ReplayBuffer:
 
     # Loads data in tensor format, i.e. from Dict[str, np.array].
     def load_automatum_dataset(self, data: Dict[str, np.ndarray]):
+        if self._size != 0:
+            raise ValueError("Trying to load data into non-empty replay buffer")
         n_transitions = data["observations"].shape[0]
-
-        # Insert data into the buffer starting from the current pointer position
-        self._states[self._pointer:self._pointer + n_transitions] = self._to_tensor(data["observations"])
-        self._actions[self._pointer:self._pointer + n_transitions] = self._to_tensor(data["actions"])
-        self._rewards[self._pointer:self._pointer + n_transitions] = self._to_tensor(data["rewards"][..., None])
-        self._next_states[self._pointer:self._pointer + n_transitions] = self._to_tensor(data["next_observations"])
-        self._dones[self._pointer:self._pointer + n_transitions] = self._to_tensor(data["terminals"][..., None])
-
-        # Update the pointer and size to reflect the new data added
-        self._pointer += n_transitions
+        if n_transitions > self._buffer_size:
+            raise ValueError(
+                "Replay buffer is smaller than the dataset you are trying to load!"
+            )
+        self._states[:n_transitions] = self._to_tensor(data["observations"])
+        self._actions[:n_transitions] = self._to_tensor(data["actions"])
+        self._rewards[:n_transitions] = self._to_tensor(data["rewards"][..., None])
+        self._next_states[:n_transitions] = self._to_tensor(data["next_observations"])
+        self._dones[:n_transitions] = self._to_tensor(data["terminals"][..., None])
         self._size += n_transitions
+        self._pointer = min(self._size, n_transitions)
 
     def sample(self, batch_size: int) -> TensorBatch:
-        indices = np.random.randint(0, self._size, size=batch_size)
+        indices = np.random.randint(0, min(self._size, self._pointer), size=batch_size)
         states = self._states[indices]
         actions = self._actions[indices]
         rewards = self._rewards[indices]
@@ -676,14 +678,9 @@ def train(config: TrainConfig):
     ref_max_score = -float('inf')
     ref_min_score = float('inf')
     # create a replay buffer for each vehicle
+    replay_buffers = []
     demonstrations = load_demonstration_data(config.driving_style, config.map_name, dataset_split=config.dataset_split)
     agent_mdps = demonstrations['All'] if demonstrations['All'] else demonstrations['clustered']
-    buffer_size = sum([len(agent_mdp.observations) for agent_mdp in agent_mdps])
-    replay_buffer = ReplayBuffer(
-        trainer_loader.state_dim,
-        trainer_loader.action_dim,
-        buffer_size,
-    )
     for agent_mdp in agent_mdps:
         agent_data = qlearning_dataset(dataset=agent_mdp)
 
@@ -706,25 +703,31 @@ def train(config: TrainConfig):
         if score < ref_min_score:
             ref_min_score = score
 
-
+        replay_buffer = ReplayBuffer(
+            trainer_loader.state_dim,
+            trainer_loader.action_dim,
+            config.buffer_size,
+            config.device
+        )
         replay_buffer.load_automatum_dataset(agent_data)
+        replay_buffers.append(replay_buffer)
 
     # Training loop
     logger.info("Training on data from each agent separately!")
     evaluations = []
     for t in tqdm(range(int(config.max_timesteps))):
         iteration_log_dict = {}
+        for replay_buffer in replay_buffers:
+            batch = replay_buffer.sample(config.batch_size)
+            batch = [b.to(config.device) for b in batch]
+            log_dict = trainer.train(batch)
 
-        batch = replay_buffer.sample(config.batch_size)
-        batch = [b.to(config.device) for b in batch]
-        log_dict = trainer.train(batch)
-
-        # Accumulate logs from this batch into the iteration log dictionary
-        for key, value in log_dict.items():
-            if key in iteration_log_dict:
-                iteration_log_dict[key].append(value)
-            else:
-                iteration_log_dict[key] = [value]
+            # Accumulate logs from this batch into the iteration log dictionary
+            for key, value in log_dict.items():
+                if key in iteration_log_dict:
+                    iteration_log_dict[key].append(value)
+                else:
+                    iteration_log_dict[key] = [value]
         trainer.total_it += 1
 
         # Calculate the average of the accumulated logs for this iteration

@@ -28,12 +28,11 @@ def get_reward(terminated, truncated, info, irl_weights=None):
         long_acc = np.exp(-1 / abs(info["ego_long_acc"])) if info["ego_long_acc"] else 0
         lat_acc = np.exp(-1 / abs(info["ego_lat_acc"])) if info["ego_lat_acc"] else 0
         long_jerk = np.exp(-1 / abs(info["ego_long_jerk"])) if info["ego_long_jerk"] else 0
-        thw_front = np.exp(-1 / abs(info["thw_front"])) if info["thw_front"] else 1
-        thw_rear = np.exp(-1 / abs(info["thw_rear"])) if info["thw_rear"] else 1
+        thw_front = np.exp(-1 / abs(info["thw_front"])) if info["thw_front"] else 0
+        thw_rear = np.exp(-1 / abs(info["thw_rear"])) if info["thw_rear"] else 0
         # d_centerline = np.exp(-1 / abs(info["d_centerline"])) if info["d_centerline"] else 0
         nearest_distance_lane_marking = np.exp(-1 / abs(info["nearest_distance_lane_marking"])) \
             if info["nearest_distance_lane_marking"] else 0
-        collision = info["collision"]
 
         features = np.array([speed, long_acc, lat_acc, long_jerk,
                              thw_front, thw_rear, nearest_distance_lane_marking])
@@ -43,8 +42,8 @@ def get_reward(terminated, truncated, info, irl_weights=None):
         assert irl_weights is not None, "IRL weights are not provided."
         assert len(irl_weights) == len(features), "IRL weights and features have different lengths."
         # Compute the reward
-        if collision:
-            return -1
+        if info["collision"] or info["off_road"]:
+            return -np.inf
         return np.dot(irl_weights, features)
 
     else:

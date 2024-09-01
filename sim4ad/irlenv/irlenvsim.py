@@ -291,10 +291,8 @@ class IRLEnv:
     def _get_thw(self) -> Tuple[float, float]:
         """Determine the thw for front and rear vehicle"""
         front_vehicle, rear_vehicle = DatasetVehicle.get_front_rear_vehicle(self.active_vehicles, self.vehicle)
-        thw_front = front_vehicle[1] / self.vehicle.velocity[0] if front_vehicle[0] is not None else np.inf
-        thw_rear = -rear_vehicle[1] / rear_vehicle[0].velocity[0] if rear_vehicle[0] is not None else np.inf
-        thw_front = np.exp(-1 / thw_front)
-        thw_rear = np.exp(-1 / thw_rear)
+        thw_front = front_vehicle[1] / self.vehicle.velocity[0] if front_vehicle[0] is not None else 0
+        thw_rear = abs(rear_vehicle[1] / rear_vehicle[0].velocity[0]) if rear_vehicle[0] is not None else 0
 
         return thw_front, thw_rear
 
@@ -331,7 +329,8 @@ class IRLEnv:
                       acceleration=self.vehicle.acceleration[0], heading=self.vehicle.heading,
                       lane=self.vehicle.lane, agent_width=self.vehicle.WIDTH, agent_length=self.vehicle.LENGTH)
         distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=state)
-        nearest_distance_lane_marking = min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
+        nearest_distance_lane_marking = (min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
+                                         - self.vehicle.WIDTH /2)
 
         # ego vehicle human-likeness
         ego_likeness = self.vehicle.calculate_human_likeness()
@@ -382,11 +381,7 @@ class IRLEnv:
         """Using exponential for normalization"""
         normalized_features = [None for _ in range(len(features))]
         for inx, feature in enumerate(features):
-            # skip THW
-            if inx == 4 or inx == 5:
-                normalized_features[inx] = feature
-            else:
-                normalized_features[inx] = np.exp(-1 / feature) if feature else 0
+            normalized_features[inx] = np.exp(-1 / feature) if feature else 0
 
         return normalized_features
 

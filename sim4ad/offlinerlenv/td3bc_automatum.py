@@ -96,7 +96,7 @@ def normalize_states(states: np.ndarray, mean: np.ndarray, std: np.ndarray):
 def normalized_rewards(rewards: np.ndarray, mean: float, std: float):
     for i in range(rewards.shape[0]):
         rewards[i] = (rewards[i] - mean) / std
-        rewards[i] = np.clip(rewards[i], -4, 4)
+        rewards[i] = np.tanh(rewards[i])
     return rewards
 
 
@@ -116,9 +116,8 @@ def wrap_env(
             return normalize_states(state, state_mean, state_std)
 
     def normalize_reward(reward):
-        reward = (reward - reward_mean) / reward_std  # epsilon should be already added in std.
-        reward = np.clip(reward, -1, 1)
-        return float(reward)
+        return float(normalized_rewards(
+            np.array(reward).reshape(1, -1), reward_mean, reward_std))
 
     env = gym.wrappers.TransformObservation(env, normalize_state)
     if reward_normalization:

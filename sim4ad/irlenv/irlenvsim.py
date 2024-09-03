@@ -291,8 +291,8 @@ class IRLEnv:
     def _get_thw(self) -> Tuple[float, float]:
         """Determine the thw for front and rear vehicle"""
         front_vehicle, rear_vehicle = DatasetVehicle.get_front_rear_vehicle(self.active_vehicles, self.vehicle)
-        thw_front = front_vehicle[1] / self.vehicle.velocity[0] if front_vehicle[0] is not None else 0
-        thw_rear = abs(rear_vehicle[1] / rear_vehicle[0].velocity[0]) if rear_vehicle[0] is not None else 0
+        thw_front = front_vehicle[1] / self.vehicle.velocity[0] if front_vehicle[0] is not None else np.inf
+        thw_rear = - rear_vehicle[1] / rear_vehicle[0].velocity[0] if rear_vehicle[0] is not None else np.inf
 
         return thw_front, thw_rear
 
@@ -379,11 +379,19 @@ class IRLEnv:
     @staticmethod
     def exponential_normalization(features):
         """Using exponential for normalization"""
-        normalized_features = [None for _ in range(len(features))]
+        normalized_features = np.zeros_like(features)  # Initialize normalized features array
+        epsilon = 1e-10  # Small value to avoid division by zero
         for inx, feature in enumerate(features):
-            normalized_features[inx] = np.exp(-1 / feature) if feature else 0
+            if feature != 0:
+                value = -1 / (feature + epsilon)
+                if value > -700:
+                    normalized_features[inx] = np.exp(value)
+                else:
+                    normalized_features[inx] = 0
+            else:
+                normalized_features[inx] = 0
 
-        return normalized_features
+        return normalized_features.tolist()
 
     @staticmethod
     def load_feature_normalization():

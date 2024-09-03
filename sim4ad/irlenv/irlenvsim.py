@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from loguru import logger
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 import joblib
 from sim4ad.irlenv.vehicle.humandriving import HumanLikeVehicle, DatasetVehicle
 from sim4ad.opendrive import plot_map
@@ -140,7 +140,7 @@ class IRLEnv:
 
         logger.error(f"aid: {self.ego.UUID}, ego_time: {self.ego.time[-1]}, frame_time: {self.episode.frames[-1].time}")
 
-    def _simulate(self, action, debug) -> Optional[np.ndarray]:
+    def _simulate(self, action, debug) -> Optional[List[np.ndarray]]:
         """
         Perform several steps of simulation with the planned trajectory
         """
@@ -202,9 +202,9 @@ class IRLEnv:
             logger.warning(f'features is None, length of planned tra is {len(self.vehicle.planned_trajectory)}')
             return None
 
-        human_likeness = features[-1]
-        trajectory_features = np.sum(trajectory_features, axis=0)
-        trajectory_features[-1] = human_likeness
+        # human_likeness = features[-1]
+        # trajectory_features = np.sum(trajectory_features, axis=0)
+        # trajectory_features[-1] = human_likeness
 
         return trajectory_features
 
@@ -291,8 +291,11 @@ class IRLEnv:
     def _get_thw(self) -> Tuple[float, float]:
         """Determine the thw for front and rear vehicle"""
         front_vehicle, rear_vehicle = DatasetVehicle.get_front_rear_vehicle(self.active_vehicles, self.vehicle)
-        thw_front = front_vehicle[1] / self.vehicle.velocity[0] if front_vehicle[0] is not None else 0
-        thw_rear = abs(rear_vehicle[1] / rear_vehicle[0].velocity[0]) if rear_vehicle[0] is not None else 0
+        thw_front = front_vehicle[1] / self.vehicle.velocity[0] if front_vehicle[0] is not None else np.inf
+        thw_rear = - rear_vehicle[1] / rear_vehicle[0].velocity[0] if rear_vehicle[0] is not None else np.inf
+
+        thw_front = np.exp(-1/thw_front)
+        thw_rear = np.exp(-1/thw_rear)
 
         return thw_front, thw_rear
 
@@ -339,11 +342,9 @@ class IRLEnv:
         features = np.array([ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk,
                              thw_front, thw_rear, nearest_distance_lane_marking])
 
-        # normalize features using exponential
-        normalized_features = self.exponential_normalization(features)
         # add ego likeness for monitoring
-        normalized_features = np.append(normalized_features, ego_likeness)
-        return normalized_features
+        features = np.append(features, ego_likeness)
+        return features
 
     def get_buffer_scene(self, t, save_planned_tra=False):
         """Get the features of sampled trajectories"""
@@ -362,8 +363,8 @@ class IRLEnv:
                     return buffer_scene
 
                 # get the features
-                traj_features = features[:-1]
-                human_likeness = features[-1]
+                traj_features = [f[:-1] for f in features]
+                human_likeness = features[-1][-1]
 
                 # add scene trajectories to buffer
                 if save_planned_tra:

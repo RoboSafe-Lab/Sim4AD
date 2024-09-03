@@ -335,7 +335,7 @@ def parse_args() -> argparse.Namespace:
                         help="name of the map to be processed",
                         type=str)
     parser.add_argument('--episode_idx', '-e',
-                        default=None,
+                        default=0,
                         help="the index of the episode",
                         type=int)
 

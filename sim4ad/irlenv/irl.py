@@ -6,7 +6,7 @@ import pickle
 from sim4ad.opendrive import Map
 from sim4ad.irlenv import IRLEnv
 from sim4ad.common_constants import REMOVED_AGENTS
-
+from sim4ad.path_utils import write_common_property
 
 class IRL:
     feature_num = 7
@@ -72,11 +72,11 @@ class IRL:
                 irl_env.reset(reset_time=t, human=True)
                 features, terminated, info = irl_env.step()
 
-                if terminated or features[-1] > 2.5:
+                if terminated or features[-1][-1] > 2.5:
                     continue
 
                 # save to buffer
-                human_traj = features[:-1]
+                human_traj = [f[:-1] for f in features ]
                 human_traj_features_one_agent.append(human_traj)
                 buffer_one_agent.append(buffer_scene)
             except AttributeError as e:
@@ -111,6 +111,28 @@ class IRL:
                         self.buffer.extend(buffer_one_agent)
 
     def save_buffer_data(self, driving_style=''):
+        # get max and min values
+        max_feature = np.full(IRL.feature_num, -np.inf)
+        min_feature = np.full(IRL.feature_num, np.inf)
+        for scene in self.buffer:
+            for inx, trajectory in enumerate(scene):
+                max_value = np.max(trajectory[2], axis=0)
+                min_value = np.min(trajectory[2], axis=0)
+                for i in range(IRL.feature_num):
+                    if max_value[i] > max_feature[i]:
+                        max_feature[i] = max_value[i]
+                    if min_value[i] < min_feature[i]:
+                        min_feature[i] = min_value[i]
+        write_common_property('IRL_MAX', max_feature.tolist())
+        write_common_property('IRL_MIN', min_feature.tolist())
+
+        # normalization
+        for scenes in [self.buffer, self.human_traj_features]:
+            for scene in scenes:
+                for inx, trajectories in enumerate(scene):
+                    normalized_trj = (trajectories[2] - min_feature) / (max_feature - min_feature)
+                    scene[inx] = (trajectories[0], trajectories[1], np.sum(normalized_trj, axis=0), trajectories[3])
+
         # save buffer data to avoid repeated computation
         if self.save_buffer:
             logger.info('Saved buffer data.')

@@ -332,7 +332,7 @@ class IRLEnv:
                       acceleration=self.vehicle.acceleration[0], heading=self.vehicle.heading,
                       lane=self.vehicle.lane, agent_width=self.vehicle.WIDTH, agent_length=self.vehicle.LENGTH)
         distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=state)
-        nearest_distance_lane_marking = (min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
+        nearest_distance_lane_marking = abs(min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
                                          - self.vehicle.WIDTH /2)
 
         # ego vehicle human-likeness

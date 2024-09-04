@@ -56,15 +56,15 @@ def extract_features(inx, t, agent, episode) -> Optional[List]:
     except IndexError as e:
         return None
     thw_rear = agent.tth_dict_vec[inx]['behind_ego']
-    thw_front =  thw_front if thw_front is not None else 0
-    thw_rear = thw_rear if thw_rear is not None else 0
+    thw_front =  thw_front if thw_front is not None else np.inf
+    thw_rear = thw_rear if thw_rear is not None else np.inf
 
     # centerline deviation
     # d = (agent.distance_left_lane_marking[inx] - agent.distance_right_lane_marking[inx]) / 2
     # d_centerline = abs(d)
 
-    nearest_distance_lane_marking = min(abs(agent.distance_left_lane_marking[inx]),
-                                        abs(agent.distance_right_lane_marking[inx])) - agent.width / 2
+    nearest_distance_lane_marking = abs(min(abs(agent.distance_left_lane_marking[inx]),
+                                        abs(agent.distance_right_lane_marking[inx])) - agent.width / 2)
 
     # feature array
     features = [ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk, thw_front, thw_rear, nearest_distance_lane_marking]

@@ -12,7 +12,9 @@ from sim4ad.path_utils import write_common_property
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE, REMOVED_AGENTS
 from sim4ad.irlenv.irlenvsim import IRLEnv
 from loguru import logger
-
+# import matplotlib
+# matplotlib.use('TkAgg')
+# import matplotlib.pyplot as plt
 
 @dataclass
 class SurroundingAgentFeature:
@@ -115,11 +117,23 @@ class ExtractObservationAction:
 
             # extract features to compute rewards
             features = extract_features(inx, t, agent, episode)
-
-            # normalize features
             normalized_features = IRLEnv.exponential_normalization(features)
-
             ego_agent_features.append(normalized_features)
+
+            # scenario_map = Map.parse_from_opendrive(episode.map_file)
+            # plot_map(scenario_map, markings=True, midline=False, drivable=True, plot_background=False)
+            # plt.scatter(agent.x_vec[:inx], agent.y_vec[:inx])
+            # print(f'weights are: {self._theta}')
+            # print(f'features are: {normalized_features}')
+            #
+            # mean = 7.043490768410265e-07
+            # std =0.9999998807907104
+            # reward = np.dot(normalized_features, self._theta)
+            # normalized_reward = (reward - mean) / std
+            # print(f'reward is {reward}, normalized reward is {normalized_reward}')
+            # plt.text(agent.x_vec[inx], agent.y_vec[inx] + 0.2, f'R: {(np.dot(normalized_features, self._theta) - mean)/std:.2f}', fontsize=8, ha='center',
+            #          bbox=dict(boxstyle='round,pad=0.2', facecolor='wheat', alpha=0.5))
+            # plt.show()
 
         if not skip_vehicle:
             ego_agent_observations = pd.DataFrame(ego_agent_observations, index=agent.time)

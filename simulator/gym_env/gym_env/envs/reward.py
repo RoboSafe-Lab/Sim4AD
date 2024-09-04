@@ -28,8 +28,8 @@ def get_reward(terminated, truncated, info, irl_weights=None):
         long_acc = np.exp(-1 / abs(info["ego_long_acc"])) if info["ego_long_acc"] else 0
         lat_acc = np.exp(-1 / abs(info["ego_lat_acc"])) if info["ego_lat_acc"] else 0
         long_jerk = np.exp(-1 / abs(info["ego_long_jerk"])) if info["ego_long_jerk"] else 0
-        thw_front = np.exp(-1 / abs(info["thw_front"])) if info["thw_front"] else 0
-        thw_rear = np.exp(-1 / abs(info["thw_rear"])) if info["thw_rear"] else 0
+        thw_front = np.exp(-abs(info["thw_front"]))
+        thw_rear = np.exp(-abs(info["thw_rear"]))
         # d_centerline = np.exp(-1 / abs(info["d_centerline"])) if info["d_centerline"] else 0
         nearest_distance_lane_marking = np.exp(-1 / abs(info["nearest_distance_lane_marking"])) \
             if info["nearest_distance_lane_marking"] else 0

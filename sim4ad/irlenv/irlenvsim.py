@@ -381,7 +381,12 @@ class IRLEnv:
         """Using exponential for normalization"""
         normalized_features = np.zeros_like(features)  # Initialize normalized features array
         for inx, feature in enumerate(features):
-            normalized_features[inx] = np.exp(-1 / feature) if feature else 0
+            # index for thw
+            if inx == 4 or inx == 5:
+                assert feature >=0, 'THW is negative!'
+                normalized_features[inx] = np.exp(-feature)
+            else:
+                normalized_features[inx] = np.exp(-1 / feature) if feature else 0
 
         return normalized_features.tolist()
 

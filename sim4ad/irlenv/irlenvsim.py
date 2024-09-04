@@ -329,7 +329,7 @@ class IRLEnv:
                       acceleration=self.vehicle.acceleration[0], heading=self.vehicle.heading,
                       lane=self.vehicle.lane, agent_width=self.vehicle.WIDTH, agent_length=self.vehicle.LENGTH)
         distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=state)
-        nearest_distance_lane_marking = (min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
+        nearest_distance_lane_marking = abs(min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
                                          - self.vehicle.WIDTH /2)
 
         # ego vehicle human-likeness
@@ -380,16 +380,8 @@ class IRLEnv:
     def exponential_normalization(features):
         """Using exponential for normalization"""
         normalized_features = np.zeros_like(features)  # Initialize normalized features array
-        epsilon = 1e-10  # Small value to avoid division by zero
         for inx, feature in enumerate(features):
-            if feature != 0:
-                value = -1 / (feature + epsilon)
-                if value > -700:
-                    normalized_features[inx] = np.exp(value)
-                else:
-                    normalized_features[inx] = 0
-            else:
-                normalized_features[inx] = 0
+            normalized_features[inx] = np.exp(-1 / feature) if feature else 0
 
         return normalized_features.tolist()
 

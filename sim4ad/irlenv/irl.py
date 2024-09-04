@@ -123,8 +123,8 @@ class IRL:
                         max_feature[i] = max_value[i]
                     if min_value[i] < min_feature[i]:
                         min_feature[i] = min_value[i]
-        write_common_property('IRL_MAX', max_feature.tolist())
-        write_common_property('IRL_MIN', min_feature.tolist())
+        write_common_property(driving_style + '_MAX', max_feature.tolist())
+        write_common_property(driving_style +'_MIN', min_feature.tolist())
 
         # normalization
         for scenes in [self.buffer, self.human_traj_features]:

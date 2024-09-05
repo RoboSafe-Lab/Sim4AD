@@ -6,7 +6,7 @@ import pickle
 from sim4ad.opendrive import Map
 from sim4ad.irlenv import IRLEnv
 from sim4ad.common_constants import REMOVED_AGENTS
-from sim4ad.path_utils import write_common_property
+from sim4ad.path_utils import write_common_property, get_common_property
 
 class IRL:
     feature_num = 7
@@ -110,7 +110,7 @@ class IRL:
                         self.human_traj_features.extend(human_traj_features_one_agent)
                         self.buffer.extend(buffer_one_agent)
 
-    def save_buffer_data(self, driving_style=''):
+    def save_buffer_data(self, episode_idx, driving_style=''):
         # get max and min values
         max_feature = np.full(IRL.feature_num, -np.inf)
         min_feature = np.full(IRL.feature_num, np.inf)
@@ -123,15 +123,8 @@ class IRL:
                         max_feature[i] = max_value[i]
                     if min_value[i] < min_feature[i]:
                         min_feature[i] = min_value[i]
-        write_common_property(driving_style + '_MAX', max_feature.tolist())
-        write_common_property(driving_style +'_MIN', min_feature.tolist())
-
-        # normalization
-        for scenes in [self.buffer, self.human_traj_features]:
-            for scene in scenes:
-                for inx, trajectories in enumerate(scene):
-                    normalized_trj = (trajectories[2] - min_feature) / (max_feature - min_feature)
-                    scene[inx] = (trajectories[0], trajectories[1], np.sum(normalized_trj, axis=0), trajectories[3])
+        write_common_property(str(episode_idx) + '_' + driving_style + '_MAX', max_feature.tolist())
+        write_common_property(str(episode_idx) + '_' + driving_style +'_MIN', min_feature.tolist())
 
         # save buffer data to avoid repeated computation
         if self.save_buffer:
@@ -139,6 +132,17 @@ class IRL:
             episode_id = self.episode.config.recording_id
             with open(driving_style + '_' + episode_id + '_buffer.pkl', "wb") as file:
                 pickle.dump([self.human_traj_features, self.buffer], file)
+
+    @staticmethod
+    def get_max_min_features():
+        """Get the max and min features for normalization"""
+        max_min_features = get_common_property("MAXMIN")
+        max_feature = np.max(max_min_features['MAX'], axis=0)
+        min_feature = np.min(max_min_features['MIN'], axis=0)
+        write_common_property('MAX_FEATURES', max_feature.tolist())
+        write_common_property('MIN_FEATURES', min_feature.tolist())
+
+        return max_feature, min_feature
 
     def maxent_irl(self, buffer=None):
         """training the weights under each iteration"""
@@ -149,6 +153,19 @@ class IRL:
         else:
             human_features = buffer[0]
             buffer_scenes = buffer[1]
+
+        # normalization
+        max_feature, min_feature = self.get_max_min_features()
+        for index, scenes in enumerate([buffer_scenes, human_features]):
+            for sid, scene in enumerate(scenes):
+                if index == 0:
+                    for tid, trajectories in enumerate(scene):
+                        if isinstance(trajectories, tuple):
+                            normalized_trj = (trajectories[2] - min_feature) / (max_feature - min_feature)
+                            scene[tid] = (trajectories[0], trajectories[1], np.sum(normalized_trj, axis=0), trajectories[3])
+                else:
+                    normalized_trj = (scene - min_feature) / (max_feature - min_feature)
+                    scenes[sid] = np.sum(normalized_trj, axis=0)
 
         for i in range(IRL.n_iters):
             logger.info(f'iteration: {i + 1}/{IRL.n_iters}')

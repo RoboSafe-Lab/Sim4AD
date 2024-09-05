@@ -21,15 +21,15 @@ def episode_split(episode, clustering):
     return episode_splits
 
 
-def feature_extraction_irl(episode, agents=None, driving_style=''):
+def feature_extraction_irl(episode, episode_idx=0, agents=None, driving_style=''):
     """Extracting the features for IRL in the dataset"""
     irl_instance = IRL(episode=episode, multiprocessing=False, num_processes=12,
-                       save_buffer=False, save_training_log=False)
+                       save_buffer=True, save_training_log=False)
     # compute features
     irl_instance.get_simulated_features(agents)
 
     # save buffered features
-    irl_instance.save_buffer_data(driving_style)
+    irl_instance.save_buffer_data(episode_idx, driving_style)
 
 
 def main():
@@ -51,7 +51,7 @@ def main():
             if agents == {}:
                 continue
             logger.info(f'Computing {episode.config.recording_id} with {driving_style} cluster.')
-            feature_extraction_irl(episode, agents, driving_style)
+            feature_extraction_irl(episode, args.episode_idx, agents, driving_style)
 
 
 if __name__ == "__main__":

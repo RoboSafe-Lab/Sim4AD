@@ -36,8 +36,16 @@ def get_common_property(property_name):
     project."""
     with open(_common_elements_path()) as f:
         common_elements = json.load(f)
-
-    return common_elements[property_name]
+    if property_name == 'MAXMIN':
+        result = {'MAX': [], 'MIN': []}
+        for key, value in common_elements.items():
+            if key.endswith('_MAX'):
+                result['MAX'].append(value)
+            elif key.endswith('_MIN'):
+                result['MIN'].append(value)
+        return result
+    else:
+        return common_elements[property_name]
 
 
 def write_common_property(property_name, value):

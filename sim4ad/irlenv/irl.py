@@ -75,11 +75,8 @@ class IRL:
                 if terminated or features[-1] > 2.5:
                     continue
 
-                # process data
-                buffer_scene.append([0, 0, features[:-1], features[-1]])
-
                 # save to buffer
-                human_traj = buffer_scene[-1][2]
+                human_traj = features[:-1]
                 human_traj_features_one_agent.append(human_traj)
                 buffer_one_agent.append(buffer_scene)
             except AttributeError as e:

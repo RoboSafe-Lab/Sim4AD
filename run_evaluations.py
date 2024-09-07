@@ -64,7 +64,7 @@ class EvaluationType(Enum):
 @dataclass
 class EvalConfig:
     """ PARAMETERS FOR THE EVALUATION """
-    policies_to_evaluate: str = "sac_irl_reward-sac_basic_reward-bc"  # e.g., "sac_basic_reward-sac_irl_reward-offlinerl-bc"
+    policies_to_evaluate: str = "bc-sac_irl_reward-sac_basic_reward"  # e.g., "sac_basic_reward-sac_irl_reward-offlinerl-bc"
     evaluation_to_run = f"{EvaluationType.DIVERSITY.name}-{EvaluationType.HUMAN_LIKENESS.name}"
 
     env_name: str = "SimulatorEnv-v0"
@@ -136,8 +136,10 @@ def main():
     evaluation_methods = EvalConfig.evaluation_to_run.split("-")
 
     for evaluation in evaluation_methods:
+        logger.info(f"Running evaluation: {evaluation}")
         evaluation = EvaluationType[evaluation.upper()]
         for policy in policies_to_evaluate:
+            logger.info(f"Running evaluation for policy: {policy}")
             policy = PolicyType[policy.upper()]
             # Concatenate the configs for the evaluation type and the policy
             eval_configs = EvalConfig(**POLICY_CONFIGS[policy],
@@ -145,11 +147,13 @@ def main():
             logger.info(f"Evaluation with params: {eval_configs}")
 
             for map_to_use in [eval_configs.test_map, eval_configs.generalization_map]:
+                logger.info(f"Running evaluation for map: {map_to_use}")
                 map_configs = ScenarioConfig.load(get_config_path(map_to_use))
                 idx = map_configs.dataset_split[eval_configs.dataset_split]
                 evaluation_episodes = [x.recording_id for i, x in enumerate(map_configs.episodes) if i in idx]
 
                 for cluster in eval_configs.clusters:
+                    logger.info(f"Running evaluation for cluster: {cluster}")
                     output_dir = get_file_name_trajectories(experiment_name=evaluation.name,
                                                             map_name=map_to_use, policy_type=policy.name,
                                                             cluster=cluster,

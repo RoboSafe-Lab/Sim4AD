@@ -25,7 +25,8 @@ from loguru import logger
 
 
 class BCBaseline:
-    def __init__(self, name: str, evaluation=False, cluster=DEFAULT_CLUSTER, scenario=DEFAULT_SCENARIO):
+    def __init__(self, name: str, evaluation=False, cluster=DEFAULT_CLUSTER, scenario=DEFAULT_SCENARIO,
+                 batch_size=128, shuffle=True, epochs=1000, lr=1e-3, hidden_size=128):
 
         logger.debug(f"Creating BC baseline with name {name}, evaluation = {evaluation}, cluster = {cluster}, "
                      f"scenario = {scenario}. If eval is true, the cluster is only used for the input and action space.")
@@ -34,11 +35,11 @@ class BCBaseline:
             self.name = name
         else:
             self.name = f"{name}_cluster_{cluster}"
-        self.BATCH_SIZE = 128
-        self.SHUFFLE = True
-        self.EPOCHS = 1000
-        self.LR = 1e-3
-        LSTM_HIDDEN_SIZE = 128
+        self.BATCH_SIZE = batch_size
+        self.SHUFFLE = shuffle
+        self.EPOCHS = epochs
+        self.LR = lr
+        LSTM_HIDDEN_SIZE = hidden_size
         FC_HIDDEN_SIZE = 512
         DROPOUT = 0.2 if not evaluation else 0.0
 
@@ -217,7 +218,9 @@ class BCBaseline:
 if __name__ == '__main__':
     args = argparse.ArgumentParser()
     args.add_argument("--cluster", type=str, default=DEFAULT_CLUSTER)
+    args.add_argument("--lr", type=float, default=1e-3)
+    args.add_argument("--epochs", type=int, default=1000)
     args = args.parse_args()
 
-    policy_network = BCBaseline("bc-all-obs-5_pi", cluster=args.cluster)
+    policy_network = BCBaseline("bc-all-obs-5_pi", cluster=args.cluster, lr=args.lr, epochs=args.epochs)
     policy_network.train(num_epochs=policy_network.EPOCHS, learning_rate=policy_network.LR)

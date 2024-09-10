@@ -32,3 +32,11 @@ t
 - `pip install -r requirements.txt` in the root folder of sim4ad
 
 - maps: change line `<OpenDRIVE xmlns="http://www.opendrive.org">` to `<OpenDRIVE>` in each of the map if there is an error about a None header not having attribute `name`
+
+
+BASELINES:
+- SAC: `Sim4AD/baselines/sac/model.py --use_irl_reward --cluster All`: you can omit the `--use_irl_reward` if you want to use 
+the basic reward function. You can also change the `--cluster` parameter to `All`, `Aggressive`, `Normal` or `Cautious` to train the model 
+on the corresponding driving style group.
+- BC: `Sim4AD/baselines/bc_baseline.py --cluster All --lr 1e-3 --epochs 1000 --name name_of_svaed_model`: you can change the `--cluster` parameter to `All`, `Aggressive`, `Normal` or `Cautious` to train the model.
+  - The model will be saved in `Sim4AD/baselines/` adn will be of the format `{name}_cluster_{cluster_name}.pth`

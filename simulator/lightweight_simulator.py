@@ -907,8 +907,7 @@ class Sim4ADSimulation:
         # _, d = utils.local2frenet(state.position, state.lane.midline)
         # d_centerline = abs(d)
         distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=state)
-        nearest_distance_lane_marking = (min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
-                                         - agent.meta.width / 2)
+        nearest_distance_lane_marking = min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
 
         info.update({
             "ego_velocity": state.velocity,

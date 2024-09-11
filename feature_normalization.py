@@ -63,8 +63,8 @@ def extract_features(inx, t, agent, episode) -> Optional[List]:
     # d = (agent.distance_left_lane_marking[inx] - agent.distance_right_lane_marking[inx]) / 2
     # d_centerline = abs(d)
 
-    nearest_distance_lane_marking = abs(min(abs(agent.distance_left_lane_marking[inx]),
-                                        abs(agent.distance_right_lane_marking[inx])) - agent.width / 2)
+    nearest_distance_lane_marking = min(abs(agent.distance_left_lane_marking[inx]),
+                                        abs(agent.distance_right_lane_marking[inx]))
 
     # feature array
     features = [ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk, thw_front, thw_rear, nearest_distance_lane_marking]

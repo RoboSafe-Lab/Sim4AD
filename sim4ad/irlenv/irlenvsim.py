@@ -8,7 +8,7 @@ from sim4ad.opendrive import plot_map
 from sim4ad.irlenv import utils
 from simulator.state_action import State
 from simulator.simulator_util import compute_distance_markings
-
+from sim4ad.path_utils import get_common_property
 
 class IRLEnv:
     forward_simulation_time = 5  # time_horizon
@@ -26,8 +26,8 @@ class IRLEnv:
         self.reset_time = None
         self.start_frame = None
         self.reset_ego_state = None
-        # using exponential normalization, no longer necessary to load mean and std
-        # self._feature_mean_std = self.load_feature_normalization()
+        # using max and min normalization
+        self._feature_max_min = self.load_feature_normalization()
 
     def reset(self, reset_time, human=False):
         """
@@ -294,6 +294,8 @@ class IRLEnv:
         thw_front = front_vehicle[1] / self.vehicle.velocity[0] if front_vehicle[0] is not None else np.inf
         thw_rear = - rear_vehicle[1] / rear_vehicle[0].velocity[0] if rear_vehicle[0] is not None else np.inf
 
+        thw_front = np.exp(-thw_front)
+        thw_rear = np.exp(-thw_rear)
         return thw_front, thw_rear
 
     def _features(self) -> np.ndarray:
@@ -329,8 +331,7 @@ class IRLEnv:
                       acceleration=self.vehicle.acceleration[0], heading=self.vehicle.heading,
                       lane=self.vehicle.lane, agent_width=self.vehicle.WIDTH, agent_length=self.vehicle.LENGTH)
         distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=state)
-        nearest_distance_lane_marking = abs(min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
-                                         - self.vehicle.WIDTH /2)
+        nearest_distance_lane_marking = min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
 
         # ego vehicle human-likeness
         ego_likeness = self.vehicle.calculate_human_likeness()
@@ -340,7 +341,7 @@ class IRLEnv:
                              thw_front, thw_rear, nearest_distance_lane_marking])
 
         # normalize features using exponential
-        normalized_features = self.exponential_normalization(features)
+        normalized_features = self.feature_normalization(features)
         # add ego likeness for monitoring
         normalized_features = np.append(normalized_features, ego_likeness)
         return normalized_features
@@ -376,21 +377,12 @@ class IRLEnv:
 
         return buffer_scene
 
-    @staticmethod
-    def exponential_normalization(features):
+    def feature_normalization(self, features):
         """Using exponential for normalization"""
-        normalized_features = np.zeros_like(features)  # Initialize normalized features array
-        for inx, feature in enumerate(features):
-            # index for thw
-            if inx == 4 or inx == 5:
-                assert feature >=0, 'THW is negative!'
-                normalized_features[inx] = np.exp(-feature)
-            else:
-                normalized_features[inx] = np.exp(-1 / feature) if feature else 0
-
-        return normalized_features.tolist()
+        return [a / b for a, b in zip(features, self._feature_max_min)]
 
     @staticmethod
     def load_feature_normalization():
         """Loading the mean and standard deviation for feature normalization"""
-        return joblib.load('results/feature_normalization.pkl')
+        max_features = list(get_common_property("MAX_FEATURES"))
+        return max_features

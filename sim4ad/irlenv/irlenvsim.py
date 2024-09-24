@@ -14,7 +14,7 @@ class IRLEnv:
     forward_simulation_time = 5  # time_horizon
     delta_t = 0.033366700033366704
 
-    def __init__(self, episode, scenario_map, ego=None, idm=False):
+    def __init__(self, episode=None, scenario_map=None, ego=None, idm=False):
         self.human = False
         self.episode = episode
         self.scenario_map = scenario_map
@@ -294,8 +294,8 @@ class IRLEnv:
         thw_front = front_vehicle[1] / self.vehicle.velocity[0] if front_vehicle[0] is not None else np.inf
         thw_rear = - rear_vehicle[1] / rear_vehicle[0].velocity[0] if rear_vehicle[0] is not None else np.inf
 
-        thw_front = np.exp(-thw_front)
-        thw_rear = np.exp(-thw_rear)
+        thw_front = np.exp(-1/thw_front)
+        thw_rear = np.exp(-1/thw_rear)
         return thw_front, thw_rear
 
     def _features(self) -> np.ndarray:

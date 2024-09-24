@@ -58,6 +58,8 @@ def extract_features(inx, t, agent, episode) -> Optional[List]:
     thw_rear = agent.tth_dict_vec[inx]['behind_ego']
     thw_front =  thw_front if thw_front is not None else np.inf
     thw_rear = thw_rear if thw_rear is not None else np.inf
+    thw_front = np.exp(-1/thw_front)
+    thw_rear = np.exp(-1/thw_rear)
 
     # centerline deviation
     # d = (agent.distance_left_lane_marking[inx] - agent.distance_right_lane_marking[inx]) / 2

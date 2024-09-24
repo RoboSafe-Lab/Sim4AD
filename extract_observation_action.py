@@ -117,7 +117,8 @@ class ExtractObservationAction:
 
             # extract features to compute rewards
             features = extract_features(inx, t, agent, episode)
-            normalized_features = IRLEnv.exponential_normalization(features)
+            irl = IRLEnv()
+            normalized_features = irl.feature_normalization(features)
             ego_agent_features.append(normalized_features)
 
             # scenario_map = Map.parse_from_opendrive(episode.map_file)

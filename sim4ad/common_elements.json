@@ -69,6 +69,10 @@
         4448.045092433021,
         1.0,
         1.0,
-        2.0
-    ]
+        2.0,
+        1.0,
+        1.0,
+        1.0
+    ],
+    "experiment_name:DIVERSITY_map_name:appershofen_policy_type:OFFLINERL_cluster:Normal_irl_weights:True_spawn_method:dataset_all_episode_names:hw-a9-appershofen-014-29b621a2-e0d5-483b-b0c7-de3b7b990cb8_hw-a9-appershofen-016-332aed83-f9c3-4f12-947b-f8b3d83c1281_dataset_split:test_state_normalization:True_reward_normalization:True": "b0a38f774471689137d01b2ca52576da"
 }

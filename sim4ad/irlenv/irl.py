@@ -9,7 +9,7 @@ from sim4ad.common_constants import REMOVED_AGENTS
 
 
 class IRL:
-    feature_num = 7
+    feature_num = 10
     n_iters = 200
     beta1 = 0.9
     beta2 = 0.999

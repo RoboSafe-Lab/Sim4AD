@@ -323,22 +323,32 @@ class IRLEnv:
         thw_front, thw_rear = self._get_thw()
 
         # centerline deviation
-        # _, d = utils.local2frenet(self.vehicle.position, self.vehicle.lane.midline)
-        # d_centerline = abs(d)
+        _, d = utils.local2frenet(self.vehicle.position, self.vehicle.lane.midline)
+        d_centerline = abs(d)
+
+        # lane deviation rate
+        lane_deviation_rate = 0.0
+        if len(self.vehicle.traj) > 1:
+            _, d = utils.local2frenet(self.vehicle.traj[-2][0], self.vehicle.lane.midline)
+            d_centerline_previous = abs(d)
+            lane_deviation_rate = abs(d_centerline - d_centerline_previous) / self.delta_t
+
+        # lane availability features
+        left_lane_available, right_lane_available = self.check_adjacent_lanes(self.vehicle.lane)
 
         # lateral distance to the nearest lane marker
-        state = State(time=self.vehicle.timer, position=self.vehicle.position, velocity=self.vehicle.velocity[0],
-                      acceleration=self.vehicle.acceleration[0], heading=self.vehicle.heading,
-                      lane=self.vehicle.lane, agent_width=self.vehicle.WIDTH, agent_length=self.vehicle.LENGTH)
-        distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=state)
-        nearest_distance_lane_marking = min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
+        # state = State(time=self.vehicle.timer, position=self.vehicle.position, velocity=self.vehicle.velocity[0],
+        #               acceleration=self.vehicle.acceleration[0], heading=self.vehicle.heading,
+        #               lane=self.vehicle.lane, agent_width=self.vehicle.WIDTH, agent_length=self.vehicle.LENGTH)
+        # distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=state)
+        # nearest_distance_lane_marking = min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
 
         # ego vehicle human-likeness
         ego_likeness = self.vehicle.calculate_human_likeness()
 
         # feature array
-        features = np.array([ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk,
-                             thw_front, thw_rear, nearest_distance_lane_marking])
+        features = np.array([ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk, thw_front, thw_rear,
+                             d_centerline, lane_deviation_rate, left_lane_available, right_lane_available])
 
         # normalize features using exponential
         normalized_features = self.feature_normalization(features)
@@ -386,3 +396,29 @@ class IRLEnv:
         """Loading the mean and standard deviation for feature normalization"""
         max_features = list(get_common_property("MAX_FEATURES"))
         return max_features
+
+    @staticmethod
+    def check_adjacent_lanes(lane):
+        current_lane_id = lane.id
+        lane_section = lane.lane_section
+
+        # Initialize availability of adjacent lanes
+        left_lane_available = False
+        right_lane_available = False
+
+        # Search through all lanes in the lane section
+        for l in lane_section.all_lanes:
+            if current_lane_id > 0:
+                # Right-side lanes: check for left lane (id - 1) and right lane (id + 1)
+                if l.id == current_lane_id - 1:
+                    left_lane_available = True
+                if l.id == current_lane_id + 1:
+                    right_lane_available = True
+            elif current_lane_id < 0:
+                # Left-side lanes: check for left lane (id + 1) and right lane (id - 1)
+                if l.id == current_lane_id + 1:
+                    left_lane_available = True
+                if l.id == current_lane_id - 1:
+                    right_lane_available = True
+
+        return left_lane_available, right_lane_available

@@ -6,6 +6,8 @@ import sys
 from typing import List, Optional
 from sim4ad.irlenv.vehicle.behavior import IDMVehicle
 from simulator.simulator_util import compute_distance_markings
+from sim4ad.opendrive import Map
+from sim4ad.irlenv.irlenvsim import IRLEnv
 from loguru import logger
 
 
@@ -62,14 +64,28 @@ def extract_features(inx, t, agent, episode) -> Optional[List]:
     thw_rear = np.exp(-1/thw_rear)
 
     # centerline deviation
-    # d = (agent.distance_left_lane_marking[inx] - agent.distance_right_lane_marking[inx]) / 2
-    # d_centerline = abs(d)
+    d = (agent.distance_left_lane_marking[inx] - agent.distance_right_lane_marking[inx]) / 2
+    d_centerline = abs(d)
 
-    nearest_distance_lane_marking = min(abs(agent.distance_left_lane_marking[inx]),
-                                        abs(agent.distance_right_lane_marking[inx]))
+    lane_deviation_rate = 0.0
+    if len(agent.distance_left_lane_marking) > 1:
+        d = (agent.distance_left_lane_marking[inx - 1] - agent.distance_right_lane_marking[inx - 1]) / 2
+        d_centerline_previous = abs(d)
+        lane_deviation_rate = abs(d_centerline - d_centerline_previous) / agent.delta_t
+
+    # nearest_distance_lane_marking = min(abs(agent.distance_left_lane_marking[inx]),
+    #                                     abs(agent.distance_right_lane_marking[inx]))
+
+    # lane availability features
+    center = np.array([float(agent.x_vec[inx]), float(agent.y_vec[inx])])
+    heading = agent.psi_vec[inx]
+    scenario_map = Map.parse_from_opendrive(episode.map_file)
+    lane = scenario_map.best_lane_at(center, heading)
+    left_lane_available, right_lane_available = IRLEnv.check_adjacent_lanes(lane)
 
     # feature array
-    features = [ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk, thw_front, thw_rear, nearest_distance_lane_marking]
+    features = [ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk, thw_front, thw_rear, d_centerline,
+                lane_deviation_rate, left_lane_available, right_lane_available]
 
     return features
 

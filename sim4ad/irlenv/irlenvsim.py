@@ -9,6 +9,7 @@ from sim4ad.irlenv import utils
 from simulator.state_action import State
 from simulator.simulator_util import compute_distance_markings
 
+import json
 
 class IRLEnv:
     forward_simulation_time = 5  # time_horizon
@@ -174,8 +175,11 @@ class IRLEnv:
 
             self.time += 1
             self.run_step += 1
-            features = self._features()
-            trajectory_features.append(features)
+            #xiugai
+            potential_features = self._features()
+            if potential_features is not None:
+                features = self._features()
+                trajectory_features.append(features)
 
             # show the forward simulation
             if debug and self.time % 5 == 0:
@@ -299,11 +303,34 @@ class IRLEnv:
 
         return thw_front, thw_rear
 
+    def log_error_to_file(self,error_data, file_path="error_log.json"):
+        """
+        :param error_data: 记录错误信息的字典
+        :param file_path: 保存错误信息的文件路径
+        """
+        # 读取现有的错误日志文件内容
+        with open(file_path, 'r') as file:
+            error_log = json.load(file)
+
+        # 添加新的错误信息
+        error_log.append(error_data)
+
+        # 将更新后的日志内容写回文件
+        with open(file_path, 'w') as file:
+            json.dump(error_log, file, indent=4)
+
+        print(f"错误信息已记录到 {file_path}")
+
     def _features(self) -> np.ndarray:
         """
         Hand-crafted features
         :return: the array of the defined features
         """
+        # range
+        LONG_ACC_MAX = 10.0  #  m/s^2
+        LAT_ACC_MAX = 5.0   #  m/s^2 
+        LONG_JERK_MAX = 10.0 #  m/s^3
+
         # ego motion
         ego_long_speeds = np.array(self.vehicle.velocity_history)[:, 0] if self.time >= 3 else [0]
         ego_long_accs = (ego_long_speeds[1:] - ego_long_speeds[:-1]) / self.delta_t if self.time >= 3 else [0]
@@ -319,6 +346,24 @@ class IRLEnv:
         ego_long_acc = abs(ego_long_accs[-1])
         ego_lat_acc = abs(ego_lateral_accs[-1])
         ego_long_jerk = abs(ego_long_jerks[-1])
+
+        # check feature if valid
+        if ego_long_acc > LONG_ACC_MAX or ego_lat_acc > LAT_ACC_MAX or ego_long_jerk > LONG_JERK_MAX:
+        # 记录异常信息
+            error_data = {
+                "time": self.time,
+                "delta_t": self.delta_t,
+                "ego_long_speeds[1:]": ego_long_speeds[1:],  # 当前和上一个时间步的纵向速度
+                "ego_long_speeds[:-1]": ego_long_speeds[:-1],
+                "ego_long_accs": ego_long_accs,  # 纵向加速度数组
+                "final_long_acc": ego_long_acc,   # 最后的纵向加速度值
+                "ego_lateral_speeds[1:]": ego_lateral_speeds[1:],  # 当前和上一个时间步的横向速度
+                "ego_lateral_speeds[:-1]": ego_lateral_speeds[:-1],
+                "ego_lat_accs": ego_lateral_accs,  # 横向加速度数组
+                "final_lat_acc": ego_lat_acc  # 最后的横向加速度值
+            }
+            self.log_error_to_file(error_data)  # 将错误信息保存到文件
+            return None  # 跳过存储这个特征
 
         # time headway front (thw_front) and time headway behind (thw_rear)
         thw_front, thw_rear = self._get_thw()

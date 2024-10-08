@@ -8,6 +8,7 @@ from sim4ad.irlenv import IRLEnv
 from sim4ad.common_constants import REMOVED_AGENTS
 from sim4ad.path_utils import write_common_property, get_common_property
 
+import sys
 class IRL:
     feature_num = 7
     n_iters = 200
@@ -55,7 +56,7 @@ class IRL:
 
         irl_env = IRLEnv(episode=self.episode, scenario_map=self.scenario_map, ego=agent, idm=False)
         for inx, t in enumerate(agent.time):
-            # if the agents is reaching its life end, continue, because the planned trajectory is not complete and few
+            # if the agents is reaching its life end, continue, because the planned trajectory is not complete and f
             # points exist
             if agent.time[-1] - t < 1:
                 continue
@@ -89,7 +90,7 @@ class IRL:
         """get the features of forward simulations as well as human driver features"""
         # load the open drive map
         self.scenario_map = Map.parse_from_opendrive(self.episode.map_file)
-        # determine whether the data is clustered
+        # determine whether the data is clustered 
         agents = self.episode.agents
         if split_agents is not None:
             agents = split_agents
@@ -103,13 +104,22 @@ class IRL:
                         self.human_traj_features.extend(res[0])
                         self.buffer.extend(res[1])
         else:
-            for aid, agent in agents.items():
+            print("Starting loop")  # 确认代码进入循环
+          #  for aid, agent in agents.items():
+            for idx, (aid, agent) in enumerate(agents.items()):
+                print(f"Current idx: {idx}")  # 打印当前的 idx 值
                 human_traj_features_one_agent, buffer_one_agent = self.get_feature_one_agent((aid, agent))
+                #if buffer_one_agent[2] > 10:
+                pr
                 if self.save_buffer:
                     if human_traj_features_one_agent is not None and buffer_one_agent is not None:
                         self.human_traj_features.extend(human_traj_features_one_agent)
                         self.buffer.extend(buffer_one_agent)
-
+                 # 如果序号是 0，就终止
+                if idx == 0:
+                    print("Processed first agent, exiting the program.")
+                    sys.exit()  # 结束整个程序    
+                       
     def save_buffer_data(self, episode_idx, driving_style=''):
         # get max and min values
         max_feature = np.full(IRL.feature_num, -np.inf)

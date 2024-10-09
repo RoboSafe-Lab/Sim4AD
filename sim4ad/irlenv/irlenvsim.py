@@ -10,6 +10,7 @@ from simulator.state_action import State
 from simulator.simulator_util import compute_distance_markings
 
 import json
+import os
 
 class IRLEnv:
     forward_simulation_time = 5  # time_horizon
@@ -304,13 +305,18 @@ class IRLEnv:
         return thw_front, thw_rear
 
     def log_error_to_file(self,error_data, file_path="error_log.json"):
-        """
-        :param error_data: 记录错误信息的字典
-        :param file_path: 保存错误信息的文件路径
-        """
-        # 读取现有的错误日志文件内容
-        with open(file_path, 'r') as file:
-            error_log = json.load(file)
+        # 如果文件不存在，则创建并初始化为空列表
+        if not os.path.exists(file_path):
+            with open(file_path, 'w') as file:
+                json.dump([], file)
+
+        # 尝试读取现有的错误日志文件内容
+        try:
+            with open(file_path, 'r') as file:
+                error_log = json.load(file)
+        except json.JSONDecodeError:
+        # 如果文件为空或者格式错误，初始化为一个空列表
+            error_log = []
 
         # 添加新的错误信息
         error_log.append(error_data)

@@ -283,7 +283,7 @@ class HumanLikeVehicle(IDMVehicle):
 
     def act(self, step: Optional[int] = None, dt: Optional[float] = 0.033366700033366704):
         if self.planned_trajectory is not None:
-            self.action = {'steering': self.steering_control(step, self.planned_trajectory),
+            self.action = {'steering': self.steering_control(step, dt, self.planned_trajectory),
                            'acceleration': self.velocity_control(step, dt, self.planned_trajectory)}
         elif self.IDM:
             super(HumanLikeVehicle, self).act()

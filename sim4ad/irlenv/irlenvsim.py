@@ -366,7 +366,9 @@ class IRLEnv:
                 "ego_lateral_speeds[1:]": ego_lateral_speeds[1:].tolist(),  # 当前和上一个时间步的横向速度
                 "ego_lateral_speeds[:-1]": ego_lateral_speeds[:-1].tolist(),
                 "ego_lat_accs": ego_lateral_accs.tolist(),  # 横向加速度数组
-                "final_lat_acc": ego_lat_acc  # 最后的横向加速度值
+                "final_lat_acc": ego_lat_acc,  # 最后的横向加速度值
+                "agent_ID": self.ego.UUID,
+                "time": self.reset_time
             }
             self.log_error_to_file(error_data)  # 将错误信息保存到文件
             return None  # 跳过存储这个特征

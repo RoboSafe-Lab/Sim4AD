@@ -10,7 +10,7 @@ from sim4ad.path_utils import write_common_property, get_common_property
 
 import sys
 class IRL:
-    feature_num = 7
+    feature_num = 10
     n_iters = 200
     beta1 = 0.9
     beta2 = 0.999

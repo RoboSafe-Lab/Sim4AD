@@ -283,14 +283,14 @@ class HumanLikeVehicle(IDMVehicle):
 
     def act(self, step: Optional[int] = None, dt: Optional[float] = 0.033366700033366704):
         if self.planned_trajectory is not None:
-            self.action = {'steering': self.steering_control(step, self.planned_trajectory),
+            self.action = {'steering': self.steering_control(step, dt, self.planned_trajectory),
                            'acceleration': self.velocity_control(step, dt, self.planned_trajectory)}
         elif self.IDM:
             super(HumanLikeVehicle, self).act()
         else:
             return
 
-    def steering_control(self, step: int, trajectory: Optional[np.ndarray] = None) -> np.ndarray:
+    def steering_control(self, step: int, dt: Optional[float] = None, trajectory: Optional[np.ndarray] = None) -> np.ndarray:
         """
         Steer the vehicle to follow the given trajectory.
 
@@ -301,13 +301,15 @@ class HumanLikeVehicle(IDMVehicle):
 
         :param step: the index
         :param trajectory: the trajectory to follow
+        :param dt
         :return: a steering wheel angle command [rad]
         """
         target_coords = trajectory[step]
         # transform to frenet coordinate system
         target_coords = utils.local2frenet(point=target_coords, reference_line=self.lane.midline)
         # Lateral position control
-        lateral_velocity_command = self.KP_LATERAL * (target_coords[1] - self.d)
+        # lateral_velocity_command = self.KP_LATERAL * (target_coords[1] - self.d)
+        lateral_velocity_command = (target_coords[1] - self.d) / dt
 
         # Lateral velocity to heading
         speed = np.sqrt(self.velocity[0] ** 2 + self.velocity[1] ** 2)
@@ -316,7 +318,8 @@ class HumanLikeVehicle(IDMVehicle):
 
         lane_heading = self.lane.get_heading_at(self.s)
         # Heading control
-        heading_rate_command = self.KP_HEADING * utils.wrap_to_pi(heading_ref + lane_heading - self.heading)
+        # heading_rate_command = self.KP_HEADING * utils.wrap_to_pi(heading_ref + lane_heading - self.heading)
+        heading_rate_command = utils.wrap_to_pi(heading_ref + lane_heading - self.heading) / dt
 
         # Heading rate to steering angle
         steering_angle = np.arctan(self.LENGTH / utils.not_zero(speed) * heading_rate_command)

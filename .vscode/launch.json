@@ -3,11 +3,11 @@
     "configurations": [
         {
             "name": "Python: Current File",
-            "type": "debugpy",
+            "type": "python",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args": ["--clustering", "True", "--driving_style", "Aggressive"]
+            "args": ["--clustering", "True", "--driving_style", "Aggressive","--map","appershofen","--episode_idx","0"]
         }
     ]
 }

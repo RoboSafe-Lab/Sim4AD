@@ -341,13 +341,13 @@ def parse_args() -> argparse.Namespace:
 
     # defined for preprocessing
     parser.add_argument('--clustering', '-c',
-                        default=False,
+                        default=True,
                         help="whether using clustered data",
                         type=bool)
 
     # defined for training IRL
     parser.add_argument('--driving_style', '-d',
-                        default='All',
+                        default='Aggressive',
                         help="which clustered driving style is used: Aggressive, Cautious, Normal, All",
                         type=str)
 

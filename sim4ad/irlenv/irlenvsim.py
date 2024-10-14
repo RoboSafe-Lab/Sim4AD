@@ -344,14 +344,15 @@ class IRLEnv:
             error_data = {
                 "time": self.time,
                 "delta_t": self.delta_t,
-                "ego_long_speeds[1:]": ego_long_speeds[1:].tolist(),  # 当前和上一个时间步的纵向速度
-                "ego_long_speeds[:-1]": ego_long_speeds[:-1].tolist(),
-                "ego_long_accs": ego_long_accs.tolist(),  # 纵向加速度数组
+                #"ego_long_speeds[1:]": ego_long_speeds[1:].tolist(),  # 当前和上一个时间步的纵向速度
+                #"ego_long_speeds[:-1]": ego_long_speeds[:-1].tolist(),
+                #"ego_long_accs": ego_long_accs.tolist(),  # 纵向加速度数组
                 "final_long_acc": ego_long_acc,   # 最后的纵向加速度值
-                "ego_lateral_speeds[1:]": ego_lateral_speeds[1:].tolist(),  # 当前和上一个时间步的横向速度
-                "ego_lateral_speeds[:-1]": ego_lateral_speeds[:-1].tolist(),
-                "ego_lat_accs": ego_lateral_accs.tolist(),  # 横向加速度数组
+                #"ego_lateral_speeds[1:]": ego_lateral_speeds[1:].tolist(),  # 当前和上一个时间步的横向速度
+                #"ego_lateral_speeds[:-1]": ego_lateral_speeds[:-1].tolist(),
+                #"ego_lat_accs": ego_lateral_accs.tolist(),  # 横向加速度数组
                 "final_lat_acc": ego_lat_acc,  # 最后的横向加速度值
+                "final_long_jerk": ego_long_jerk,
                 "agent_ID": self.ego.UUID,
                 "time": self.reset_time
             }

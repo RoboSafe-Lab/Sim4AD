@@ -177,10 +177,10 @@ class IRLEnv:
             self.time += 1
             self.run_step += 1
             #xiugai
-            potential_features = self._features()
-            if potential_features is not None:
-                features = self._features()
-                trajectory_features.append(features)
+            #potential_features = self._features()
+            #if potential_features is not None:
+            features = self._features()
+            trajectory_features.append(features)
 
             # show the forward simulation
             if debug and self.time % 5 == 0:
@@ -304,26 +304,11 @@ class IRLEnv:
 
         return thw_front, thw_rear
 
-    def log_error_to_file(self,error_data, file_path="error_log.json"):
-        # 如果文件不存在，则创建并初始化为空列表
-        if not os.path.exists(file_path):
-            with open(file_path, 'w') as file:
-                json.dump([], file)
-
-        # 尝试读取现有的错误日志文件内容
-        try:
-            with open(file_path, 'r') as file:
-                error_log = json.load(file)
-        except json.JSONDecodeError:
-        # 如果文件为空或者格式错误，初始化为一个空列表
-            error_log = []
-
-        # 添加新的错误信息
-        error_log.append(error_data)
-
-        # 将更新后的日志内容写回文件
-        with open(file_path, 'w') as file:
-            json.dump(error_log, file, indent=4)
+    def log_error_to_file(self, error_data, file_path="error_log.json"):
+        # open and record error data
+        with open(file_path, 'a') as file:
+            file.write(json.dumps(error_data, indent=4))
+            file.write("\n")  # next line
 
         print(f"错误信息已记录到 {file_path}")
 
@@ -370,8 +355,12 @@ class IRLEnv:
                 "agent_ID": self.ego.UUID,
                 "time": self.reset_time
             }
-            self.log_error_to_file(error_data)  # 将错误信息保存到文件
-            return None  # 跳过存储这个特征
+            self.log_error_to_file(error_data)
+            # if error,get max value
+            ego_long_acc = np.clip(ego_long_acc, None, LONG_ACC_MAX)
+            ego_lat_acc = np.clip(ego_lat_acc, None, LAT_ACC_MAX)
+            ego_long_jerk = np.clip(ego_long_jerk, None, LONG_JERK_MAX)
+            
 
         # time headway front (thw_front) and time headway behind (thw_rear)
         thw_front, thw_rear = self._get_thw()

@@ -137,9 +137,9 @@ class Vehicle(Loggable):
             self.action['acceleration'] = -1.0*self.velocity
 
         speed = np.sqrt(self.velocity[0] ** 2 + self.velocity[1] ** 2)
-        if speed > self.MAX_VELOCITY:
-            self.action['acceleration'] = np.array([min(self.action['acceleration'][0], 1.0*(self.MAX_VELOCITY - speed)),
-                                                    self.action['acceleration'][1]])
+        #if speed > self.MAX_VELOCITY:
+            #self.action['acceleration'] = np.array([min(self.action['acceleration'][0], 1.0*(self.MAX_VELOCITY - speed)),
+                                                    #self.action['acceleration'][1]])
 
         # update position
         rotation_matrix = np.array([

@@ -320,7 +320,7 @@ class IRLEnv:
         # range
         LONG_ACC_MAX = 10.0  #  m/s^2
         LAT_ACC_MAX = 5.0   #  m/s^2 
-        LONG_JERK_MAX = 10.0 #  m/s^3
+        #LONG_JERK_MAX = 10.0 #  m/s^3
 
         # ego motion
         ego_long_speeds = np.array(self.vehicle.velocity_history)[:, 0] if self.time >= 3 else [0]
@@ -339,7 +339,7 @@ class IRLEnv:
         ego_long_jerk = abs(ego_long_jerks[-1])
 
         # check feature if valid
-        if ego_long_acc > LONG_ACC_MAX or ego_lat_acc > LAT_ACC_MAX or ego_long_jerk > LONG_JERK_MAX:
+        if ego_long_acc > LONG_ACC_MAX or ego_lat_acc > LAT_ACC_MAX:
         # 记录异常信息
             error_data = {
                 "time": self.time,

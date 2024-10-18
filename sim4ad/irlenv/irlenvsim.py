@@ -350,7 +350,7 @@ class IRLEnv:
         features = np.array([ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk, thw_front, thw_rear,
                              d_centerline, lane_deviation_rate, left_lane_available, right_lane_available])
 
-        # normalize features using exponential
+        # normalize features using maxmin_normalization
         normalized_features = self.feature_normalization(features)
         # add ego likeness for monitoring
         normalized_features = np.append(normalized_features, ego_likeness)

@@ -410,13 +410,13 @@ class IRLEnv:
         for l in lane_section.all_lanes:
             if current_lane_id > 0:
                 # Right-side lanes: check for left lane (id - 1) and right lane (id + 1)
-                if l.id == current_lane_id - 1:
+                if l.id == current_lane_id - 1 and l.id != 1:
                     left_lane_available = True
                 if l.id == current_lane_id + 1:
                     right_lane_available = True
             elif current_lane_id < 0:
                 # Left-side lanes: check for left lane (id + 1) and right lane (id - 1)
-                if l.id == current_lane_id + 1:
+                if l.id == current_lane_id + 1 and l.id != -1:
                     left_lane_available = True
                 if l.id == current_lane_id - 1:
                     right_lane_available = True

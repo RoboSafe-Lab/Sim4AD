@@ -99,11 +99,13 @@ class IRL:
                 results = pool.map(self.get_feature_one_agent, agents.items())
             if self.save_buffer:
                 for res in results:
-                    if res is not None:
+                    if res is not None and res[0] is not None and res[1] is not None:
                         self.human_traj_features.extend(res[0])
                         self.buffer.extend(res[1])
         else:
             for aid, agent in agents.items():
+                if aid != 'f17d1ad1-aeea-404e-b90e-b1a3ae8cebc2':
+                    continue
                 human_traj_features_one_agent, buffer_one_agent = self.get_feature_one_agent((aid, agent))
                 if self.save_buffer:
                     if human_traj_features_one_agent is not None and buffer_one_agent is not None:

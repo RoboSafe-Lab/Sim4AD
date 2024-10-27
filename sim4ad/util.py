@@ -335,7 +335,7 @@ def parse_args() -> argparse.Namespace:
                         help="name of the map to be processed",
                         type=str)
     parser.add_argument('--episode_idx', '-e',
-                        default=4,
+                        default=0,
                         help="the index of the episode",
                         type=int)
 
@@ -347,7 +347,7 @@ def parse_args() -> argparse.Namespace:
 
     # defined for training IRL
     parser.add_argument('--driving_style', '-d',
-                        default='Cautious',
+                        default='All',
                         help="which clustered driving style is used: Aggressive, Cautious, Normal, All",
                         type=str)
 

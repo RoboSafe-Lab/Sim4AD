@@ -57,6 +57,8 @@ class IRL:
         for inx, t in enumerate(agent.time):
             # if the agents is reaching its life end, continue, because the planned trajectory is not complete and few
             # points exist
+            #if t -598.198>0.001 or t-598.198<-0.001:
+                #continue
             if agent.time[-1] - t < 1:
                 continue
             logger.info(f"Simulation time: {t}")
@@ -104,8 +106,8 @@ class IRL:
                         self.buffer.extend(res[1])
         else:
             for aid, agent in agents.items():
-                if aid != 'f17d1ad1-aeea-404e-b90e-b1a3ae8cebc2':
-                    continue
+                #if aid != 'f17d1ad1-aeea-404e-b90e-b1a3ae8cebc2':
+                    #continue
                 human_traj_features_one_agent, buffer_one_agent = self.get_feature_one_agent((aid, agent))
                 if self.save_buffer:
                     if human_traj_features_one_agent is not None and buffer_one_agent is not None:
@@ -149,7 +151,9 @@ class IRL:
 
                 # calculate probability of each trajectory
                 rewards = [traj[0] for traj in scene_trajs]
-                probs = [np.exp(reward) for reward in rewards]
+                # data overflow method
+                max_reward = np.max(rewards)
+                probs = [np.exp(reward-max_reward) for reward in rewards]
                 probs = probs / np.sum(probs)
 
                 # calculate feature expectation with respect to the weights

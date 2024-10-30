@@ -178,9 +178,11 @@ class ExtractObservationAction:
         key = 'All'
         if self._driving_style != 'All':
             key = 'clustered'
-
+        i=1
         for episode in self._episodes:
+            logger.info(f"Processing episode ID:{i},{episode}")
             for aid, agent in episode.agents.items():
+                logger.info(f"Processing agent ID: {aid}")
                 if aid in REMOVED_AGENTS:
                     # # print the position and the map
                     # print(aid)
@@ -197,9 +199,12 @@ class ExtractObservationAction:
                 agent_mdp_values = self.extract_mdp(episode, aid, agent)
 
                 if agent_mdp_values is None:
+                    logger.warning(f"No MDP values extracted for agent {aid} in episode {episode}")
                     continue
 
                 self._clustered_demonstrations[key].append(agent_mdp_values)
+            logger.info(f"Episode {i} processing completed.")
+            i=i+1
 
         self.save_trajectory()
 

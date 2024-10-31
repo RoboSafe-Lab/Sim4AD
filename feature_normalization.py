@@ -79,9 +79,16 @@ def extract_features(inx, t, agent, episode) -> Optional[List]:
     # lane availability features
     center = np.array([float(agent.x_vec[inx]), float(agent.y_vec[inx])])
     heading = agent.psi_vec[inx]
-    scenario_map = Map.parse_from_opendrive(episode.map_file)
-    lane = scenario_map.best_lane_at(center, heading)
-    left_lane_available, right_lane_available = IRLEnv.check_adjacent_lanes(lane)
+    #scenario_map = Map.parse_from_opendrive(episode.map_file)
+    #lane = scenario_map.best_lane_at(center, heading)
+    #left_lane_available, right_lane_available = IRLEnv.check_adjacent_lanes(lane)
+    lane = agent.lane_id_vec[inx]
+    if lane == 2 or lane == -2:
+        left_lane_available = False
+        right_lane_available = True
+    else:
+        left_lane_available = True
+        right_lane_available = True   
 
     # feature array
     features = [ego_speed, ego_long_acc, ego_lat_acc, ego_long_jerk, thw_front, thw_rear, d_centerline,

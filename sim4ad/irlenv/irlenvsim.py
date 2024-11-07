@@ -412,13 +412,13 @@ class IRLEnv:
                 # Right-side lanes: check for left lane (id - 1) and right lane (id + 1)
                 if l.id == current_lane_id - 1 and l.id != 1:
                     left_lane_available = True
-                if l.id == current_lane_id + 1:
+                if l.id == current_lane_id + 1 and l.id != 5:
                     right_lane_available = True
             elif current_lane_id < 0:
                 # Left-side lanes: check for left lane (id + 1) and right lane (id - 1)
                 if l.id == current_lane_id + 1 and l.id != -1:
                     left_lane_available = True
-                if l.id == current_lane_id - 1:
+                if l.id == current_lane_id - 1 and l.id != -5:
                     right_lane_available = True
 
         return left_lane_available, right_lane_available

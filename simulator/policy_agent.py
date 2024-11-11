@@ -144,7 +144,7 @@ class PolicyAgent:
     def check_adjacent_lanes(self):
         state = self.state_trajectory[-1]
         current_lane_id = state.lane.id
-        lane_section = state.line.lane_section
+        lane_section = state.lane.lane_section
 
         # Initialize availability of adjacent lanes
         left_lane_available = False

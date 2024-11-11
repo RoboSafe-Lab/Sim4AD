@@ -855,9 +855,16 @@ class Sim4ADSimulation:
             self._handle_none_lane(agent, off_road, debug_info)
 
         done = collision or off_road or truncated or reached_goal
+        """
         info = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated,
                 "ego_speed": None, "ego_long_acc": None, "ego_lat_acc": None, "ego_long_jerk": None,
                 "thw_front": None, "thw_rear": None, "nearest_distance_lane_marking": None
+                }
+        """
+        info = {"reached_goal": reached_goal, "collision": collision, "off_road": off_road, "truncated": truncated,
+                "ego_speed": None, "ego_long_acc": None, "ego_lat_acc": None, "ego_long_jerk": None,
+                "thw_front": None, "thw_rear": None, "d_centerline": None, "lane_deviation_rate":None, 
+                "left_lane_available":None, "right_lane_available":None
                 }
         if not done:
             observation = self._build_observation(state, nearby_agents_features, distance_left_lane_marking,
@@ -896,7 +903,7 @@ class Sim4ADSimulation:
         obs = normalize_states(obs, params["state_mean"],  params["state_std"])
 
         return obs
-
+    
     def _update_info(self, agent, nearby_vehicles, state, observation, done, info):
         ax, ay = agent.compute_current_lat_lon_acceleration()
         long_jerk = agent.compute_current_long_jerk()
@@ -904,10 +911,29 @@ class Sim4ADSimulation:
                                                 episode_id=None, add=False)
         thw_front, thw_rear = thw[PNA.CENTER_IN_FRONT], thw[PNA.CENTER_BEHIND]
 
-        # _, d = utils.local2frenet(state.position, state.lane.midline)
-        # d_centerline = abs(d)
-        distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=state)
-        nearest_distance_lane_marking = min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
+        _, d = utils.local2frenet(state.position, state.lane.midline)
+        d_centerline = abs(d)
+
+        # lane deviation rate
+        lane_deviation_rate = 0.0
+        if len(agent.state_trajectory) > 1:
+            previous_position = agent.state_trajectory[-2].position
+            _, d_prev = utils.local2frenet(previous_position, state.lane.midline)
+            d_centerline_previous = abs(d_prev)
+            lane_deviation_rate = abs(d_centerline - d_centerline_previous) / (agent.state_trajectory[-1].time - agent.state_trajectory[-2].time)
+
+        # lane availability features
+        left_lane_available, right_lane_available = agent.check_adjacent_lanes()
+        """
+        if state.lane.id == 2 or state.lane.id == -2:
+            left_lane_available = False
+            right_lane_available = True
+        else if state.lane.id == 4 or state.lane.id == -4 :
+            left_lane_available = True
+            right_lane_available = False  
+        """
+        #distance_left_lane_marking, distance_right_lane_marking = compute_distance_markings(state=state)
+        #nearest_distance_lane_marking = min(abs(distance_left_lane_marking), abs(distance_right_lane_marking))
 
         info.update({
             "ego_velocity": state.velocity,
@@ -916,7 +942,11 @@ class Sim4ADSimulation:
             "ego_long_jerk": long_jerk,
             "thw_front": thw_front,
             "thw_rear": thw_rear,
-            "nearest_distance_lane_marking": nearest_distance_lane_marking,
+            "d_centerline": d_centerline,
+            "lane_deviation_rate": lane_deviation_rate,
+            "left_lane_available": left_lane_available,
+            "right_lane_available": right_lane_available
+
         })
 
         return info

@@ -140,6 +140,33 @@ class PolicyAgent:
 
         self.__long_jerk.append(long_jerk)
         return long_jerk
+    
+    def check_adjacent_lanes(self):
+        state = self.state_trajectory[-1]
+        current_lane_id = state.lane.id
+        lane_section = state.line.lane_section
+
+        # Initialize availability of adjacent lanes
+        left_lane_available = False
+        right_lane_available = False
+
+        # Search through all lanes in the lane section
+        for l in lane_section.all_lanes:
+            if current_lane_id > 0:
+                # Right-side lanes: check for left lane (id - 1) and right lane (id + 1)
+                if l.id == current_lane_id - 1 and l.id != 1:
+                    left_lane_available = True
+                if l.id == current_lane_id + 1 and l.id != 5:
+                    right_lane_available = True
+            elif current_lane_id < 0:
+                # Left-side lanes: check for left lane (id + 1) and right lane (id - 1)
+                if l.id == current_lane_id + 1 and l.id != -1:
+                    left_lane_available = True
+                if l.id == current_lane_id - 1 and l.id != -5:
+                    right_lane_available = True
+
+        return left_lane_available, right_lane_available
+
 
     @property
     def agent_id(self) -> str:

@@ -28,14 +28,18 @@ def get_reward(terminated, truncated, info, irl_weights=None):
         long_acc = np.exp(-1 / abs(info["ego_long_acc"])) if info["ego_long_acc"] else 0
         lat_acc = np.exp(-1 / abs(info["ego_lat_acc"])) if info["ego_lat_acc"] else 0
         long_jerk = np.exp(-1 / abs(info["ego_long_jerk"])) if info["ego_long_jerk"] else 0
-        thw_front = np.exp(-abs(info["thw_front"]))
-        thw_rear = np.exp(-abs(info["thw_rear"]))
+        thw_front = np.exp(-abs(info["thw_front"])) if info["thw_front"] else 1
+        thw_rear = np.exp(-abs(info["thw_rear"]))   if info["thw_rear"] else 1
+        d_centerline = np.exp(-1 / abs(info["d_centerline"])) if info["d_centerline"] else 0
         # d_centerline = np.exp(-1 / abs(info["d_centerline"])) if info["d_centerline"] else 0
-        nearest_distance_lane_marking = np.exp(-1 / abs(info["nearest_distance_lane_marking"])) \
-            if info["nearest_distance_lane_marking"] else 0
-
+        #nearest_distance_lane_marking = np.exp(-1 / abs(info["nearest_distance_lane_marking"])) \
+            #if info["nearest_distance_lane_marking"] else 0
+        lane_deviation_rate = np.exp(-1 / abs(info["lane_deviation_rate"])) if info["lane_deviation_rate"] else 0
+        left_lane_available =  info["left_lane_available"] 
+        right_lane_available = info["right_lane_available"] 
+        
         features = np.array([speed, long_acc, lat_acc, long_jerk,
-                             thw_front, thw_rear, nearest_distance_lane_marking])
+                             thw_front, thw_rear, d_centerline, lane_deviation_rate, left_lane_available, right_lane_available])
 
         assert all([0 <= f <= 1 for f in features]), "Features should be between 0 and 1."
 

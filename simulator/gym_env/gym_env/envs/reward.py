@@ -37,9 +37,12 @@ def get_reward(terminated, truncated, info, irl_weights=None):
         lane_deviation_rate = np.exp(-1 / abs(info["lane_deviation_rate"])) if info["lane_deviation_rate"] else 0
         left_lane_available =  info["left_lane_available"] 
         right_lane_available = info["right_lane_available"] 
-        
+
         features = np.array([speed, long_acc, lat_acc, long_jerk,
                              thw_front, thw_rear, d_centerline, lane_deviation_rate, left_lane_available, right_lane_available])
+        for i, value in enumerate(features):
+            if value is None:
+                print(f"Warning: Feature at index {i} is None.")
 
         assert all([0 <= f <= 1 for f in features]), "Features should be between 0 and 1."
 

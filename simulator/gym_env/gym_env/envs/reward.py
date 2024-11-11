@@ -37,7 +37,7 @@ def get_reward(terminated, truncated, info, irl_weights=None):
         lane_deviation_rate = np.exp(-1 / abs(info["lane_deviation_rate"])) if info["lane_deviation_rate"] else 0
         left_lane_available =  info["left_lane_available"] 
         right_lane_available = info["right_lane_available"] 
-
+        print(f"the second check: {left_lane_available}, the second check: {right_lane_available}")
         features = np.array([speed, long_acc, lat_acc, long_jerk,
                              thw_front, thw_rear, d_centerline, lane_deviation_rate, left_lane_available, right_lane_available])
         for i, value in enumerate(features):

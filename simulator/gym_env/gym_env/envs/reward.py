@@ -35,8 +35,8 @@ def get_reward(terminated, truncated, info, irl_weights=None):
         #nearest_distance_lane_marking = np.exp(-1 / abs(info["nearest_distance_lane_marking"])) \
             #if info["nearest_distance_lane_marking"] else 0
         lane_deviation_rate = np.exp(-1 / abs(info["lane_deviation_rate"])) if info["lane_deviation_rate"] else 0
-        left_lane_available =  info["left_lane_available"] 
-        right_lane_available = info["right_lane_available"] 
+        left_lane_available =  info["left_lane_available"] if info["left_lane_available"] else 0
+        right_lane_available = info["right_lane_available"] if info["right_lane_available"] else 0
         print(f"the second check: {left_lane_available}, the second check: {right_lane_available}")
         features = np.array([speed, long_acc, lat_acc, long_jerk,
                              thw_front, thw_rear, d_centerline, lane_deviation_rate, left_lane_available, right_lane_available])

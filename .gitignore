@@ -139,3 +139,7 @@ scripts/experiments/data/*/
 
 docs/build/
 sim4ad/common_elements.json
+
+# Results and WandB logging files
+results/
+wandb/

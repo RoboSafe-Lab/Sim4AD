@@ -439,7 +439,13 @@ class Sim4ADSimulation:
             if soft_reset and (agent_id == self.__agent_evaluated):
                 obs = copy.deepcopy(obs_)
                 self.last_stored_obs = copy.deepcopy(obs_)
+                print("Before deepcopy:")
+                print("info_['left_lane_available']:", info_["left_lane_available"])
+                print("info_['right_lane_available']:", info_["right_lane_available"])
                 info = copy.deepcopy(info_)
+                print("After deepcopy:")
+                print("info['left_lane_available']:", info["left_lane_available"])
+                print("info['right_lane_available']:", info["right_lane_available"])
                 self.last_stored_info = copy.deepcopy(info_)
 
         # Remove any agents that couldn't be added due to collisions at spawn.

@@ -23,7 +23,7 @@ def episode_split(episode, clustering):
 
 def feature_extraction_irl(episode, agents=None, driving_style=''):
     """Extracting the features for IRL in the dataset"""
-    irl_instance = IRL(episode=episode, multiprocessing=True, num_processes=2,
+    irl_instance = IRL(episode=episode, multiprocessing=True, num_processes=12,
                        save_buffer=True, save_training_log=False)
     # compute features
     irl_instance.get_simulated_features(agents)

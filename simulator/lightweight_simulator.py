@@ -930,7 +930,7 @@ class Sim4ADSimulation:
 
         # lane availability features
         left_lane_available, right_lane_available = agent.check_adjacent_lanes()
-        print(f"left_lane_available: {left_lane_available}, right_lane_available: {right_lane_available}")
+        #print(f"left_lane_available: {left_lane_available}, right_lane_available: {right_lane_available}")
         """
         if state.lane.id == 2 or state.lane.id == -2:
             left_lane_available = False

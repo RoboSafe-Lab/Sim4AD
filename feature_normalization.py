@@ -68,7 +68,8 @@ def extract_features(inx, t, agent, episode) -> Optional[List]:
     d_centerline = abs(d)
 
     lane_deviation_rate = 0.0
-    if len(agent.distance_left_lane_marking) > 1:
+    #if len(agent.distance_left_lane_marking) > 1:
+    if inx >0:
         d = (agent.distance_left_lane_marking[inx - 1] - agent.distance_right_lane_marking[inx - 1]) / 2
         d_centerline_previous = abs(d)
         lane_deviation_rate = abs(d_centerline - d_centerline_previous) / agent.delta_t

@@ -182,6 +182,8 @@ class ExtractObservationAction:
         for episode in self._episodes:
             logger.info(f"Processing episode ID:{i},{episode}")
             for aid, agent in episode.agents.items():
+                #if aid != "5a0669a8-ba83-432d-abb4-0bd945c606a2":
+                    #continue 
                 logger.info(f"Processing agent ID: {aid}")
                 if aid in REMOVED_AGENTS:
                     # # print the position and the map

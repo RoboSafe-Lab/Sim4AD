@@ -214,7 +214,7 @@ class EvaluationFeaturesExtractor:
             real_vel_x = self.__real_speeds[agent_id]["vx_s"]
             real_vel_y = self.__real_speeds[agent_id]["vy_s"]
             real_speed = np.sqrt(np.array(real_vel_x) ** 2 + np.array(real_vel_y) ** 2)
-            simulated_speed = np.array([state.speed for state in features["states"]])
+            simulated_speed = np.array([state.velocity for state in features["states"]])
 
             real_speeds.extend(real_speed)
             simulated_speeds.extend(simulated_speed)

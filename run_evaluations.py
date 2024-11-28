@@ -44,8 +44,8 @@ EVAL_POLICIES = {
     PolicyType.OFFLINERL: {
         "Aggressive": "results/offlineRL/Aggressive_checkpoint.pt",
         "Normal": "results/offlineRL/Normal_checkpoint.pt",
-        "Cautious": "results/offlineRL/Cautious_checkpoint.pt",
-        "All": "results/offlineRL/All_checkpoint.pt"},
+        "Cautious": "results/offlineRL/Cautious_checkpoint.pt"},
+        #"All": "results/offlineRL/All_checkpoint.pt"},
     PolicyType.BC: {
         "Aggressive": "bc-all-obs-5_pi_cluster_Aggressive",
         "Normal": "bc-all-obs-5_pi_cluster_Normal",
@@ -56,20 +56,20 @@ EVAL_POLICIES = {
 
 class EvaluationType(Enum):
     # !!! Make sure that the values of the enums below are all different across evaluation types!!!
-    DIVERSITY = {"spawn_method": "dataset_all", "clusters": ["Normal", "Cautious", "Aggressive", "All"]}
-    HUMAN_LIKENESS = {"spawn_method": "dataset_all", "clusters": ["All"]}
+    DIVERSITY = {"spawn_method": "dataset_all", "clusters": ["Normal"]}
+    HUMAN_LIKENESS = {"spawn_method": "dataset_all", "clusters": ["Normal"]}
     GENERALIZATION = "generalization"  # TODO
 
 
 @dataclass
 class EvalConfig:
     """ PARAMETERS FOR THE EVALUATION """
-    policies_to_evaluate: str = "sac_irl_reward-sac_basic_reward-bc"  # e.g., "sac_basic_reward-sac_irl_reward-offlinerl-bc"
+    policies_to_evaluate: str = "offlinerl"  # e.g., "sac_basic_reward-sac_irl_reward-offlinerl-bc"
     evaluation_to_run = f"{EvaluationType.DIVERSITY.name}-{EvaluationType.HUMAN_LIKENESS.name}"
 
     env_name: str = "SimulatorEnv-v0"
     test_map: str = "appershofen"
-    generalization_map: str = "brunn"
+    generalization_map: str = "appershofen"
     seed: int = 15648  # todo: change this?
 
     state_normalization: bool = True
@@ -131,7 +131,7 @@ def begin_evaluation(simulation_agents, evaluation_episodes):
 def main():
     # TODO: if visualisation is true, `simulation_length` should be low (in trajectory_extractor.py) to avoid long
     #  waiting time
-    VISUALIZATION = False  # Set to True if you want to visualize the simulation while saving the trajectories
+    VISUALIZATION = True  # Set to True if you want to visualize the simulation while saving the trajectories
     policies_to_evaluate = EvalConfig.policies_to_evaluate.split("-")
     evaluation_methods = EvalConfig.evaluation_to_run.split("-")
 

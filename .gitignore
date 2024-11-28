@@ -141,5 +141,9 @@ docs/build/
 sim4ad/common_elements.json
 
 # Results and WandB logging files
-results/
+results/Aggressivetraining_log.pkl
+results/Normaltraining_log.pkl
+results/alltraining_log.pkl
+results/Cautioustraining_log.pkl
+
 wandb/

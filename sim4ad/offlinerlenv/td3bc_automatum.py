@@ -9,6 +9,8 @@ from loguru import logger
 from tqdm import tqdm
 
 import gymnasium as gym
+import sys
+sys.path.append('/users/yx3006/Sim4AD/simulator/gym_env')
 import gym_env
 import numpy as np
 import pyrallis

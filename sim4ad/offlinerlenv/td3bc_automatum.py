@@ -41,7 +41,7 @@ class TrainConfig:
     seed: int = 0  # Sets Gym, PyTorch and Numpy seeds
     eval_freq: int = 10  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
-    max_timesteps: int = 2000  # Max time steps to run environment
+    max_timesteps: int = 5000  # Max time steps to run environment
     checkpoints_path: Optional[str] = 'results/offlineRL'  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
     # TD3
@@ -344,6 +344,7 @@ class TD3_BC:
             target_q2 = self.critic_2_target(next_state, next_action)
             target_q = torch.min(target_q1, target_q2)
             target_q = reward + not_done * self.discount * target_q
+            #print(f"reward: {reward}")
 
         # Get current Q estimates
         current_q1 = self.critic_1(state, action)
@@ -367,9 +368,9 @@ class TD3_BC:
             # Compute actor loss
             pi = self.actor(state)
             q = self.critic_1(state, pi)
+            q_ = self.critic_1(state,action)
             # using detach to prevent lmbda from affecting q
-            lmbda = self.alpha / q.abs().mean().detach()
-
+            lmbda = self.alpha / q_.abs().mean().detach()
             actor_loss = -lmbda * q.mean() + F.mse_loss(pi, action)
             log_dict["actor_loss"] = actor_loss.item()
             # Optimize the actor

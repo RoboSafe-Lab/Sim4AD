@@ -41,7 +41,7 @@ class TrajectoryExtractor:
         #     done = self.sim.step(return_done=True)
         # logger.info("All agents have been used. Terminating simulation.")
 
-        simulation_length = 10  # seconds
+        simulation_length = 60  # seconds
         for _ in tqdm(range(int(np.floor(simulation_length / self.sim.dt)))):
             done = self.sim.step(return_done=True)
             if done:

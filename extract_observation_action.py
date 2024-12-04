@@ -12,7 +12,7 @@ from sim4ad.path_utils import write_common_property
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE, REMOVED_AGENTS
 from sim4ad.irlenv.irlenvsim import IRLEnv
 from loguru import logger
-from preprocessing import load_clustering
+import json
 # import matplotlib
 # matplotlib.use('TkAgg')
 # import matplotlib.pyplot as plt
@@ -174,13 +174,21 @@ class ExtractObservationAction:
 
         return normalized_features
 
+    def load_clustering(file_path: str):
+        # Open the JSON file for reading
+        with open(file_path, 'r') as file:
+            # Load its content and make a new Python dictionary out of it
+            clustering = json.load(file)
+
+        return clustering
+
     def extract_demonstrations(self):
         """Extract observations"""
         key = 'All'
         if self._driving_style != 'All':
             key = 'clustered'
         i=1
-        if_clustering = load_clustering(f"scenarios/configs/appershofen_drivingStyle.json")
+        if_clustering = self.load_clustering(f"scenarios/configs/appershofen_drivingStyle.json")
         for episode in self._episodes:
             logger.info(f"Processing episode ID:{i},{episode}")
             for aid, agent in episode.agents.items():

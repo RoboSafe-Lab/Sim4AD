@@ -12,6 +12,7 @@ from sim4ad.path_utils import write_common_property
 from sim4ad.common_constants import MISSING_NEARBY_AGENT_VALUE, REMOVED_AGENTS
 from sim4ad.irlenv.irlenvsim import IRLEnv
 from loguru import logger
+from preprocessing import load_clustering
 # import matplotlib
 # matplotlib.use('TkAgg')
 # import matplotlib.pyplot as plt
@@ -179,6 +180,7 @@ class ExtractObservationAction:
         if self._driving_style != 'All':
             key = 'clustered'
         i=1
+        if_clustering = load_clustering(f"scenarios/configs/appershofen_drivingStyle.json")
         for episode in self._episodes:
             logger.info(f"Processing episode ID:{i},{episode}")
             for aid, agent in episode.agents.items():
@@ -200,6 +202,26 @@ class ExtractObservationAction:
                     # changed velocity
                 agent_mdp_values = self.extract_mdp(episode, aid, agent)
 
+                #if_clustering = load_clustering(f"scenarios/configs/appershofen_drivingStyle.json")
+                drivingstyle = if_clustering[episode + '/' + aid]
+                if drivingstyle == "Normal" :
+                     # inilize
+                    if not hasattr(self, 'normal_agents_mdp'):
+                        self.normal_agents_mdp = {}  
+                    self.normal_agents_mdp[aid] = agent_mdp_values
+
+                elif drivingstyle == "Aggressive" :
+                     # inilize
+                    if not hasattr(self, 'aggressive_agents_mdp'):
+                        self.aggressive_agents_mdp = {}  
+                    self.aggressive_agents_mdp[aid] = agent_mdp_values
+                
+                elif drivingstyle == "Cautious" :
+                     # inilize
+                    if not hasattr(self, 'cautious_agents_mdp'):
+                        self.cautious_agents_mdp = {}  
+                    self.cautious_agents_mdp[aid] = agent_mdp_values
+
                 if agent_mdp_values is None:
                     logger.warning(f"No MDP values extracted for agent {aid} in episode {episode}")
                     continue
@@ -209,6 +231,9 @@ class ExtractObservationAction:
             i=i+1
 
         self.save_trajectory()
+        self.save_normal_agents_mdp()
+        self.save_cautious_agents_mdp()
+        self.save_aggressive_agents_mdp()
 
     def load_reward_weights(self):
         """Loading reward weights theta derived from IRL"""
@@ -240,3 +265,31 @@ class ExtractObservationAction:
         # Saving the demonstration data to a file
         with open(folder_path + "/" + self._driving_style + self._map_name + "_demonstration.pkl", "wb") as file:
             pickle.dump(self._clustered_demonstrations, file)
+    
+    def save_normal_agents_mdp(self):
+        """Save the normal agents' MDP data"""
+        folder_path = 'scenarios/data/' + self._split
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
+        with open(folder_path + "/" + self._driving_style + self._map_name + "normal_agents_mdp.pkl", "wb") as file:
+            pickle.dump(self.normal_agents_mdp, file)
+
+    def save_aggressive_agents_mdp(self):
+        """Save the aggressive agents' MDP data"""
+        folder_path = 'scenarios/data/' + self._split
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
+        with open(folder_path + "/" + self._driving_style + self._map_name + "aggressive_agents_mdp.pkl", "wb") as file:
+            pickle.dump(self.aggressive_agents_mdp, file)
+            
+    def save_cautious_agents_mdp(self):
+        """Save the cautious agents' MDP data"""
+        folder_path = 'scenarios/data/' + self._split
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
+        with open(folder_path + "/" + self._driving_style + self._map_name + "cautious_agents_mdp.pkl", "wb") as file:
+            pickle.dump(self.cautious_agents_mdp, file)
+            

@@ -87,6 +87,9 @@ def extract_features(inx, t, agent, episode) -> Optional[List]:
     if lane == 2 or lane == -2:
         left_lane_available = False
         right_lane_available = True
+    elif lane == 4 or lane == -4:
+        left_lane_available = True
+        right_lane_available = False   
     else:
         left_lane_available = True
         right_lane_available = True   

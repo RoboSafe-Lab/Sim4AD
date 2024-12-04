@@ -174,7 +174,7 @@ class ExtractObservationAction:
 
         return normalized_features
 
-    def load_clustering(file_path: str):
+    def load_clustering(self,file_path: str):
         # Open the JSON file for reading
         with open(file_path, 'r') as file:
             # Load its content and make a new Python dictionary out of it

@@ -736,7 +736,7 @@ def train(config: TrainConfig):
         averaged_log_dict = {key: sum(values) / len(values) for key, values in iteration_log_dict.items()}
         wandb.log(averaged_log_dict, step=trainer.total_it)
 
-        # Evaluate episode
+        # Evaluate episode modify
         if (t + 1) % config.eval_freq == 0:
             logger.info(f'evaluate at time step: {t + 1}')
             # evaluate the policy

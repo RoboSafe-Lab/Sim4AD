@@ -212,6 +212,10 @@ class ExtractObservationAction:
 
                 #if_clustering = load_clustering(f"scenarios/configs/appershofen_drivingStyle.json")
                 drivingstyle = if_clustering[episode.config.recording_id + '/' + aid]
+                if agent_mdp_values is None:
+                    logger.warning(f"No MDP values extracted for agent {aid} in episode {episode}")
+                    continue
+
                 if drivingstyle == "Normal" :
                      # inilize
                     if not hasattr(self, 'normal_agents_mdp'):
@@ -229,10 +233,6 @@ class ExtractObservationAction:
                     if not hasattr(self, 'cautious_agents_mdp'):
                         self.cautious_agents_mdp = {}  
                     self.cautious_agents_mdp[aid] = agent_mdp_values
-
-                if agent_mdp_values is None:
-                    logger.warning(f"No MDP values extracted for agent {aid} in episode {episode}")
-                    continue
 
                 self._clustered_demonstrations[key].append(agent_mdp_values)
             logger.info(f"Episode {i} processing completed.")

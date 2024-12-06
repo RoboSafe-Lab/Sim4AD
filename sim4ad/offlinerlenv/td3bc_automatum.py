@@ -9,8 +9,8 @@ from loguru import logger
 from tqdm import tqdm
 
 import gymnasium as gym
-import sys
-sys.path.append('/users/yx3006/Sim4AD/simulator/gym_env')
+#import sys
+#sys.path.append('/users/yx3006/Sim4AD/simulator/gym_env')
 import gym_env
 import numpy as np
 import pyrallis
@@ -43,7 +43,7 @@ class TrainConfig:
     seed: int = 0  # Sets Gym, PyTorch and Numpy seeds
     eval_freq: int = 10  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
-    max_timesteps: int = 5000  # Max time steps to run environment
+    max_timesteps: int = 3000  # Max time steps to run environment
     checkpoints_path: Optional[str] = 'results/offlineRL'  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
     # TD3

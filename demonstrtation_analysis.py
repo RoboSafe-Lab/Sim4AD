@@ -25,10 +25,12 @@ def plot_histograms(data):
             plt.show()
         elif key == 'rewards':
             # reward scaling and normalization
-            value = (value - np.mean(value)) / np.std(value)
-
             print(f'max value of reward is: {max(value)}')
             print(f'min value of reward is: {min(value)}')
+            value = (value - np.mean(value)) / np.std(value)
+
+            #print(f'max value of reward is: {max(value)}')
+            #print(f'min value of reward is: {min(value)}')
             print(f'mean value of reward is: {np.mean(value)}')
             print(f'std value of reward is: {np.std(value)}')
             #countd

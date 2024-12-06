@@ -239,9 +239,12 @@ class ExtractObservationAction:
             i=i+1
 
         self.save_trajectory()
-        self.save_normal_agents_mdp()
-        self.save_cautious_agents_mdp()
-        self.save_aggressive_agents_mdp()
+        if hasattr(self, 'normal_agents_mdp'):
+            self.save_normal_agents_mdp() 
+        if hasattr(self, 'cautious_agents_mdp'):
+            self.save_cautious_agents_mdp()
+        if hasattr(self, 'aggressive_agents_mdp'):
+            self.save_aggressive_agents_mdp()
 
     def load_reward_weights(self):
         """Loading reward weights theta derived from IRL"""

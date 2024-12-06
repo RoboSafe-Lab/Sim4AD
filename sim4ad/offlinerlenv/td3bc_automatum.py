@@ -337,7 +337,7 @@ class TD3_BC:
             # Combine the noise into a single tensor
             noise = torch.stack((noise_acc, noise_yaw), dim=1)
 
-            next_action = (self.actor_target(next_state) + noise).clamp(
+            next_action = (self.actor_target(next_state)).clamp(
                 -self.max_action, self.max_action
             )
 
@@ -345,7 +345,7 @@ class TD3_BC:
             target_q1 = self.critic_1_target(next_state, next_action)
             target_q2 = self.critic_2_target(next_state, next_action)
             target_q = torch.min(target_q1, target_q2)
-            target_q = reward + not_done * self.discount * target_q
+            target_q = 0 + not_done * self.discount * target_q
             #print(f"reward: {reward}")
 
         # Get current Q estimates

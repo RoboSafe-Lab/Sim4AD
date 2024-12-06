@@ -216,12 +216,15 @@ class ExtractObservationAction:
                     logger.warning(f"No MDP values extracted for agent {aid} in episode {episode}")
                     continue
 
-                if drivingstyle == "Normal" :
+                if drivingstyle == "Normal":
+                    self._clustered_demonstrations[key].append(agent_mdp_values)
+                    """
                      # inilize
                     if not hasattr(self, 'normal_agents_mdp'):
                         self.normal_agents_mdp = {}  
                     self.normal_agents_mdp[aid] = agent_mdp_values
-
+                    """
+                """
                 elif drivingstyle == "Aggressive" :
                      # inilize
                     if not hasattr(self, 'aggressive_agents_mdp'):
@@ -233,8 +236,7 @@ class ExtractObservationAction:
                     if not hasattr(self, 'cautious_agents_mdp'):
                         self.cautious_agents_mdp = {}  
                     self.cautious_agents_mdp[aid] = agent_mdp_values
-
-                self._clustered_demonstrations[key].append(agent_mdp_values)
+                """          
             logger.info(f"Episode {i} processing completed.")
             i=i+1
 

@@ -354,6 +354,8 @@ class TD3_BC:
 
         # Compute critic loss
         critic_loss = F.mse_loss(current_q1, target_q) + F.mse_loss(current_q2, target_q)
+        log_dict["critic_loss_1"] = F.mse_loss(current_q1, target_q)
+        log_dict["critic_loss_2"] = F.mse_loss(current_q2, target_q)
         log_dict["current_q1"] = current_q1.mean().item()
         log_dict["current_q2"] = current_q2.mean().item()
         log_dict["target_q"] = target_q.mean().item()

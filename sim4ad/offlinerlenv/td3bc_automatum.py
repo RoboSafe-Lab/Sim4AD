@@ -337,7 +337,7 @@ class TD3_BC:
             # Combine the noise into a single tensor
             noise = torch.stack((noise_acc, noise_yaw), dim=1)
 
-            next_action = (self.actor_target(next_state)).clamp(
+            next_action = (self.actor_target(next_state)+ noise).clamp(
                 -self.max_action, self.max_action
             )
 
@@ -345,7 +345,7 @@ class TD3_BC:
             target_q1 = self.critic_1_target(next_state, next_action)
             target_q2 = self.critic_2_target(next_state, next_action)
             target_q = torch.min(target_q1, target_q2)
-            target_q = 0 + not_done * self.discount * target_q
+            target_q = reward + not_done * self.discount * target_q
             #print(f"reward: {reward}")
 
         # Get current Q estimates
@@ -354,6 +354,9 @@ class TD3_BC:
 
         # Compute critic loss
         critic_loss = F.mse_loss(current_q1, target_q) + F.mse_loss(current_q2, target_q)
+        log_dict["current_q1"] = current_q1.mean().item()
+        log_dict["current_q2"] = current_q2.mean().item()
+        log_dict["target_q"] = target_q.mean().item()
         log_dict["critic_loss"] = critic_loss.item()
         # Optimize the critic
         self.critic_1_optimizer.zero_grad()
@@ -373,7 +376,11 @@ class TD3_BC:
             q_ = self.critic_1(state,action)
             # using detach to prevent lmbda from affecting q
             lmbda = self.alpha / q_.abs().mean().detach()
-            actor_loss = -lmbda * q.mean() + F.mse_loss(pi, action)
+            action_distance = F.mse_loss(pi, action)
+            actor_loss = -lmbda * q.mean() + action_distance
+            log_dict["q"] = q.mean().item()
+            log_dict["q_"] = q_.abs().mean().item()
+            log_dict["action_distance"] = action_distance
             log_dict["actor_loss"] = actor_loss.item()
             # Optimize the actor
             self.actor_optimizer.zero_grad()

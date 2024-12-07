@@ -322,7 +322,14 @@ class TD3_BC:
         self.device = device
         self.grad_clip = grad_clip
 
-    def train(self, batch: TensorBatch) -> Dict[str, float]:
+    def save_q_distributions(self, current_q1, current_q2, target_q):
+        with open("q_distributions.txt", "a") as f:
+            f.write(f"current_q1: {current_q1.mean().item()}, current_q2: {current_q2.mean().item()}, target_q: {target_q.mean().item()}\n")
+            f.write(f"current_q1 values: {current_q1.cpu().numpy()}\n")
+            f.write(f"current_q2 values: {current_q2.cpu().numpy()}\n")
+            f.write(f"target_q values: {target_q.cpu().numpy()}\n")
+
+    def train(self, batch: TensorBatch, count: bool) -> Dict[str, float]:
         log_dict = {}
 
         state, action, reward, next_state, done = batch
@@ -360,6 +367,11 @@ class TD3_BC:
         log_dict["current_q2"] = current_q2.mean().item()
         log_dict["target_q"] = target_q.mean().item()
         log_dict["critic_loss"] = critic_loss.item()
+        if not count:
+            if critic_loss.item() > 100 :
+            # Get current Q estimates
+                self.save_q_distributions(current_q1, current_q2, target_q)
+                count = True           
         # Optimize the critic
         self.critic_1_optimizer.zero_grad()
         self.critic_2_optimizer.zero_grad()
@@ -727,11 +739,12 @@ def train(config: TrainConfig):
     logger.info("Training on data from each agent separately!")
     evaluations = []
     for t in tqdm(range(int(config.max_timesteps))):
+        count = False
         iteration_log_dict = {}
         for replay_buffer in replay_buffers:
             batch = replay_buffer.sample(config.batch_size)
             batch = [b.to(config.device) for b in batch]
-            log_dict = trainer.train(batch)
+            log_dict = trainer.train(batch, count)
 
             # Accumulate logs from this batch into the iteration log dictionary
             for key, value in log_dict.items():

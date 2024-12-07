@@ -325,9 +325,9 @@ class TD3_BC:
     def save_q_distributions(self, current_q1, current_q2, target_q):
         with open("q_distributions.txt", "a") as f:
             f.write(f"current_q1: {current_q1.mean().item()}, current_q2: {current_q2.mean().item()}, target_q: {target_q.mean().item()}\n")
-            f.write(f"current_q1 values: {current_q1.cpu().numpy()}\n")
-            f.write(f"current_q2 values: {current_q2.cpu().numpy()}\n")
-            f.write(f"target_q values: {target_q.cpu().numpy()}\n")
+            f.write(f"current_q1 values: {current_q1.detach().cpu().numpy()}\n")
+            f.write(f"current_q2 values: {current_q2.cpu().detach().numpy()}\n")
+            f.write(f"target_q values: {target_q.cpu().detach().numpy()}\n")
 
     def train(self, batch: TensorBatch, count: bool) -> Dict[str, float]:
         log_dict = {}

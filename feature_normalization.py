@@ -69,10 +69,19 @@ def extract_features(inx, t, agent, episode) -> Optional[List]:
 
     lane_deviation_rate = 0.0
     #if len(agent.distance_left_lane_marking) > 1:
+    lane = agent.lane_id_vec[inx]
     if inx >0:
-        d = (agent.distance_left_lane_marking[inx - 1] - agent.distance_right_lane_marking[inx - 1]) / 2
-        d_centerline_previous = abs(d)
-        lane_deviation_rate = abs(d_centerline - d_centerline_previous) / agent.delta_t
+        lane_previous = agent.lane_id_vec[inx-1]
+        if lane_previous == lane :
+            d = (agent.distance_left_lane_marking[inx - 1] - agent.distance_right_lane_marking[inx - 1]) / 2
+            d_centerline_previous = abs(d)
+            lane_deviation_rate = abs(d_centerline - d_centerline_previous) / agent.delta_t
+        else:
+            d = (agent.distance_left_lane_marking[inx - 1] - agent.distance_right_lane_marking[inx - 1]) / 2
+            d_centerline_previous = abs(d)
+            d_lane_previous = (agent.distance_left_lane_marking[inx - 1] + agent.distance_right_lane_marking[inx - 1]) / 2
+            d_lane = (agent.distance_left_lane_marking[inx] + agent.distance_right_lane_marking[inx]) / 2
+            lane_deviation_rate = (d_lane_previous - d_centerline_previous + d_lane - d_centerline) / agent.delta_t
 
     # nearest_distance_lane_marking = min(abs(agent.distance_left_lane_marking[inx]),
     #                                     abs(agent.distance_right_lane_marking[inx]))
@@ -83,7 +92,7 @@ def extract_features(inx, t, agent, episode) -> Optional[List]:
     #scenario_map = Map.parse_from_opendrive(episode.map_file)
     #lane = scenario_map.best_lane_at(center, heading)
     #left_lane_available, right_lane_available = IRLEnv.check_adjacent_lanes(lane)
-    lane = agent.lane_id_vec[inx]
+    #lane = agent.lane_id_vec[inx]
     if lane == 2 or lane == -2:
         left_lane_available = False
         right_lane_available = True

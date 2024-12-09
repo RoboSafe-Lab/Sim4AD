@@ -295,7 +295,7 @@ class TD3_BC:
             noise_clip_yaw_rate: float = 0.03,
             policy_freq: int = 2,
             alpha: float = 2.5,
-            grad_clip: float = 2.0,
+            grad_clip: float = 1.0,
             device: str = TrainConfig.device
     ):
         self.actor = actor.to(device)
@@ -321,14 +321,14 @@ class TD3_BC:
         self.total_it = 0
         self.device = device
         self.grad_clip = grad_clip
-
+    """
     def save_q_distributions(self, current_q1, current_q2, target_q):
         with open("q_distributions.txt", "a") as f:
             f.write(f"current_q1: {current_q1.mean().item()}, current_q2: {current_q2.mean().item()}, target_q: {target_q.mean().item()}\n")
             f.write(f"current_q1 values: {current_q1.detach().cpu().numpy()}\n")
             f.write(f"current_q2 values: {current_q2.cpu().detach().numpy()}\n")
             f.write(f"target_q values: {target_q.cpu().detach().numpy()}\n")
-
+    """
     def train(self, batch: TensorBatch, count: bool) -> Dict[str, float]:
         log_dict = {}
 
@@ -365,11 +365,13 @@ class TD3_BC:
         log_dict["current_q2"] = current_q2.mean().item()
         log_dict["target_q"] = target_q.mean().item()
         log_dict["critic_loss"] = critic_loss.item()
+        """
         if not count:
             if critic_loss.item() > 100 :
             # Get current Q estimates
                 self.save_q_distributions(current_q1, current_q2, target_q)
-                count = True           
+                count = True 
+        """          
         # Optimize the critic
         self.critic_1_optimizer.zero_grad()
         self.critic_2_optimizer.zero_grad()
@@ -377,6 +379,18 @@ class TD3_BC:
         # Gradient clipping
         torch.nn.utils.clip_grad_norm_(self.critic_1.parameters(), self.grad_clip)
         torch.nn.utils.clip_grad_norm_(self.critic_2.parameters(), self.grad_clip)
+        #record gradient
+        grad_norm_after = {
+            'critic_1_avg_grad_norm': torch.mean(torch.stack([p.grad.norm() for p in self.critic_1.parameters()])).item(),
+            'critic_2_avg_grad_norm': torch.mean(torch.stack([p.grad.norm() for p in self.critic_2.parameters()])).item()
+        }
+        log_dict["critic_1_grad"] = grad_norm_after['critic_1_avg_grad_norm']
+        log_dict["critic_2_grad"] = grad_norm_after['critic_2_avg_grad_norm']
+
+        #grad_norm_after = {name: p.grad.norm().item() for name, p in self.critic_1.named_parameters()}
+        # Log the gradient norms
+        for name in grad_norm_after:
+            log_dict[f'{name}_grad_norm_after'] = grad_norm_after[name]
         self.critic_1_optimizer.step()
         self.critic_2_optimizer.step()
 
@@ -592,9 +606,9 @@ def initialize_model(state_dim, action_dim, max_action, config):
     actor_optimizer = torch.optim.Adam(actor.parameters(), lr=1e-4)
 
     critic_1 = Critic(state_dim, action_dim).to(config.device)
-    critic_1_optimizer = torch.optim.Adam(critic_1.parameters(), lr=1e-4)
+    critic_1_optimizer = torch.optim.Adam(critic_1.parameters(), lr=3e-4)
     critic_2 = Critic(state_dim, action_dim).to(config.device)
-    critic_2_optimizer = torch.optim.Adam(critic_2.parameters(), lr=1e-4)
+    critic_2_optimizer = torch.optim.Adam(critic_2.parameters(), lr=3e-4)
 
     kwargs = {
         "max_action": max_action,

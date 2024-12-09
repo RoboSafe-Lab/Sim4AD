@@ -289,10 +289,10 @@ class TD3_BC:
             critic_2_optimizer: torch.optim.Optimizer,
             discount: float = 0.99,
             tau: float = 0.005,
-            policy_noise_acc: float = 0.1,
-            policy_noise_yaw_rate: float = 0.005,
-            noise_clip_acc: float = 0.2,
-            noise_clip_yaw_rate: float = 0.01,
+            policy_noise_acc: float = 0.5,
+            policy_noise_yaw_rate: float = 0.01,
+            noise_clip_acc: float = 0.8,
+            noise_clip_yaw_rate: float = 0.03,
             policy_freq: int = 2,
             alpha: float = 2.5,
             grad_clip: float = 2.0,
@@ -347,8 +347,6 @@ class TD3_BC:
             next_action = (self.actor_target(next_state)+ noise).clamp(
                 -self.max_action, self.max_action
             )
-
-            # Compute the target Q value
             target_q1 = self.critic_1_target(next_state, next_action)
             target_q2 = self.critic_2_target(next_state, next_action)
             target_q = torch.min(target_q1, target_q2)
@@ -390,11 +388,10 @@ class TD3_BC:
             q_ = self.critic_1(state,action)
             # using detach to prevent lmbda from affecting q
             lmbda = self.alpha / q_.abs().mean().detach()
-            action_distance = F.mse_loss(pi, action)
-            actor_loss = -lmbda * q.mean() + action_distance
+            actor_loss = -lmbda * q.mean() + F.mse_loss(pi, action)
             log_dict["q"] = q.mean().item()
             log_dict["q_"] = q_.abs().mean().item()
-            log_dict["action_distance"] = action_distance
+            #log_dict["action_distance"] = action_distance
             log_dict["actor_loss"] = actor_loss.item()
             # Optimize the actor
             self.actor_optimizer.zero_grad()
@@ -592,12 +589,12 @@ def get_normalisation_parameters(driving_style: str, map_name: str):
 
 def initialize_model(state_dim, action_dim, max_action, config):
     actor = Actor(state_dim, action_dim, max_action).to(config.device)
-    actor_optimizer = torch.optim.Adam(actor.parameters(), lr=3e-4)
+    actor_optimizer = torch.optim.Adam(actor.parameters(), lr=1e-4)
 
     critic_1 = Critic(state_dim, action_dim).to(config.device)
-    critic_1_optimizer = torch.optim.Adam(critic_1.parameters(), lr=3e-4)
+    critic_1_optimizer = torch.optim.Adam(critic_1.parameters(), lr=1e-4)
     critic_2 = Critic(state_dim, action_dim).to(config.device)
-    critic_2_optimizer = torch.optim.Adam(critic_2.parameters(), lr=3e-4)
+    critic_2_optimizer = torch.optim.Adam(critic_2.parameters(), lr=1e-4)
 
     kwargs = {
         "max_action": max_action,

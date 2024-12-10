@@ -294,7 +294,7 @@ class TD3_BC:
             noise_clip_acc: float = 0.8,
             noise_clip_yaw_rate: float = 0.03,
             policy_freq: int = 2,
-            alpha: float = 2.5,
+            alpha: float = 1.0,
             grad_clip: float = 1.0,
             device: str = TrainConfig.device
     ):

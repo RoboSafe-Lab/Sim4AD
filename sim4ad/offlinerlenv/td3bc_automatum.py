@@ -372,6 +372,17 @@ class TD3_BC:
                 self.save_q_distributions(current_q1, current_q2, target_q)
                 count = True 
         """          
+        #L2
+        lambda_l2 = 1e-4  # 可以根据需要调整大小
+        l2_reg = torch.tensor(0., device=self.device)
+        # 将critic_1和critic_2的参数都纳入正则化范围
+        for param in self.critic_1.parameters():
+            l2_reg += torch.sum(param.pow(2))
+        for param in self.critic_2.parameters():
+            l2_reg += torch.sum(param.pow(2))
+
+        critic_loss = critic_loss + lambda_l2 * l2_reg
+
         # Optimize the critic
         self.critic_1_optimizer.zero_grad()
         self.critic_2_optimizer.zero_grad()

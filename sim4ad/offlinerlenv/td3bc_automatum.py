@@ -41,7 +41,7 @@ class TrainConfig:
 
     # TD3 + BC training-specific parameters
     seed: int = 0  # Sets Gym, PyTorch and Numpy seeds
-    eval_freq: int = 10  # How often (time steps) we evaluate
+    eval_freq: int = 100  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
     max_timesteps: int = 3000  # Max time steps to run environment
     checkpoints_path: Optional[str] = 'results/offlineRL'  # Save path
@@ -98,7 +98,7 @@ def normalize_states(states: np.ndarray, mean: np.ndarray, std: np.ndarray):
 def normalized_rewards(rewards: np.ndarray, mean: float, std: float):
     for i in range(rewards.shape[0]):
         rewards[i] = (rewards[i] - mean) / std
-        rewards[i] = np.tanh(rewards[i])
+        #rewards[i] = np.tanh(rewards[i])
     return rewards
 
 
@@ -606,9 +606,9 @@ def initialize_model(state_dim, action_dim, max_action, config):
     actor_optimizer = torch.optim.Adam(actor.parameters(), lr=1e-4)
 
     critic_1 = Critic(state_dim, action_dim).to(config.device)
-    critic_1_optimizer = torch.optim.Adam(critic_1.parameters(), lr=3e-4)
+    critic_1_optimizer = torch.optim.Adam(critic_1.parameters(), lr=1e-4,weight_decay=1e-5)
     critic_2 = Critic(state_dim, action_dim).to(config.device)
-    critic_2_optimizer = torch.optim.Adam(critic_2.parameters(), lr=3e-4)
+    critic_2_optimizer = torch.optim.Adam(critic_2.parameters(), lr=1e-4,weight_decay=1e-5)
 
     kwargs = {
         "max_action": max_action,

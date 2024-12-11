@@ -27,15 +27,16 @@ def plot_histograms(data):
             # reward scaling and normalization
             print(f'max value of reward is: {max(value)}')
             print(f'min value of reward is: {min(value)}')
-            value = (value - np.mean(value)) / np.std(value)
-
-            #print(f'max value of reward is: {max(value)}')
-            #print(f'min value of reward is: {min(value)}')
             print(f'mean value of reward is: {np.mean(value)}')
             print(f'std value of reward is: {np.std(value)}')
+            value = (value - np.mean(value)) / np.std(value)
+            #value = np.tanh(value)
+            #print(f'max value of reward is: {max(value)}')
+            #print(f'min value of reward is: {min(value)}')
             #countd
-            threshold = -30  # 设置异常值判断的阈值
-            anomalous_indices = [i for i, r in enumerate(value) if r < threshold]
+            threshold_1 = -10.1   # 设置异常值判断的阈值
+            threshold_2 = 10.1
+            anomalous_indices = [i for i, r in enumerate(value) if r > threshold_2 ]
             print(f"Number of anomalous rewards: {len(anomalous_indices)}")
             # 计算并打印异常值的比例
             total_rewards = len(value)  # 总奖励数

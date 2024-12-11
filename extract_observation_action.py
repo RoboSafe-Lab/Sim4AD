@@ -254,6 +254,7 @@ class ExtractObservationAction:
             data = pickle.load(file)
         # 获取最后的 theta 值
         theta = data['theta'][-1]
+        theta[0] = 1
         if len(theta) >= 3:
             theta[2] = -1
         return theta    

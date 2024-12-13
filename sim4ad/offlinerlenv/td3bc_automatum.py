@@ -551,7 +551,7 @@ def load_demonstration_data(driving_style: str, map_name: str, dataset_split=Non
         logger.info(f'Loading {driving_style} demonstrations in all data splits for normalization.')
         all_demonstrations = {'All': [], 'clustered': []}
         for dataset_split in ['test', 'train']:
-            with open(f'scenarios/data/{dataset_split}/{driving_style}{map_name}_demonstration.pkl', 'rb') as file:
+            with open(f'scenarios/data/{dataset_split}/Normal{map_name}_demonstration.pkl', 'rb') as file:
                 demonstration = pickle.load(file)
                 all_demonstrations['All'].extend(demonstration.get('All', []))
                 all_demonstrations['clustered'].extend(demonstration.get('clustered', []))

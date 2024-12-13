@@ -213,8 +213,132 @@ def evaluate(evaluation_seeds, actor, eval_env, device):
     wandb.log({"charts/eval_return": np.mean(all_test_rets)})
     actor.train()
     return np.mean(all_test_rets)
+"""
+def load_td3bc_checkpoint(checkpoint_path, actor, qf1, qf2, qf1_target, qf2_target, device):
+    # load checkpoint.pt
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    
+    #  'actor', 'critic1', 'critic2'
+    if 'actor' in checkpoint:
+        actor.load_state_dict(checkpoint['actor'])
+        logging.info("Loaded actor weights from TD3+BC checkpoint.")
+    else:
+        raise KeyError("Checkpoint does not contain 'actor' key.")
+    
+    if 'critic1' in checkpoint and 'critic2' in checkpoint:
+        qf1.load_state_dict(checkpoint['critic1'])
+        qf2.load_state_dict(checkpoint['critic2'])
+        logging.info("Loaded critic weights from TD3+BC checkpoint.")
+    else:
+        raise KeyError("Checkpoint does not contain 'critic1' and 'critic2' keys.")
+    qf1_target.load_state_dict(qf1.state_dict())
+    qf2_target.load_state_dict(qf2.state_dict())
+    logging.info("target network follow")
+"""
+
+import torch
+import logging
+
+def load_td3bc_to_sac(checkpoint_path, sac_actor, qf1, qf2):
+    """
+     TD3+BC load Actor and Critic to SAC Actor and Soft Q Networks。
+
+    Args:
+        checkpoint_path (str): TD3+BC 
+        sac_actor (SACActor): SAC 的 Actor
+        qf1 (SoftQNetwork): SAC Soft Q Network 1
+        qf2 (SoftQNetwork): SAC Soft Q Network 2
+    """
+    # load
+    td3bc_checkpoint = torch.load(checkpoint_path, map_location='cpu') 
+
+    if 'actor' in td3bc_checkpoint:
+        td3bc_actor_state_dict = td3bc_checkpoint['actor']
+        sac_actor_state_dict = sac_actor.state_dict()
+
+        # TD3+BC net.0 net.2  SAC  fc1 fc2
+        mapping_actor = {
+            'net.0.weight': 'fc1.weight',
+            'net.0.bias': 'fc1.bias',
+            'net.2.weight': 'fc2.weight',
+            'net.2.bias': 'fc2.bias',
+        }
+
+        for td3_key, sac_key in mapping_actor.items():
+            if td3_key in td3bc_actor_state_dict and sac_key in sac_actor_state_dict:
+                sac_actor_state_dict[sac_key] = td3bc_actor_state_dict[td3_key]
+                logging.info(f"Loaded {td3_key} into {sac_key}")
+            else:
+                logging.warning(f"Key '{td3_key}' or '{sac_key}' not found in state_dict.")
+
+        sac_actor.load_state_dict(sac_actor_state_dict)
+    else:
+        raise KeyError("Checkpoint does not contain 'actor' key.")
+
+    #  Critic
+    if 'critic_1' in td3bc_checkpoint and 'critic_2' in td3bc_checkpoint:
+        # TD3+BC net.0, net.2, net.4  SAC  fc1, fc2, fc3
+        mapping_critic = {
+            'net.0.weight': 'fc1.weight',
+            'net.0.bias': 'fc1.bias',
+            'net.2.weight': 'fc2.weight',
+            'net.2.bias': 'fc2.bias',
+            'net.4.weight': 'fc3.weight',
+            'net.4.bias': 'fc3.bias',
+        }
+
+        #  critic_1 to qf1
+        td3bc_critic1_state_dict = td3bc_checkpoint['critic_1']
+        sac_qf1_state_dict = qf1.state_dict()
+
+        for td3_key, sac_key in mapping_critic.items():
+            if td3_key in td3bc_critic1_state_dict and sac_key in sac_qf1_state_dict:
+                sac_qf1_state_dict[sac_key] = td3bc_critic1_state_dict[td3_key]
+                logging.info(f"Loaded {td3_key} into qf1.{sac_key}")
+            else:
+                logging.warning(f"Key '{td3_key}' or 'qf1.{sac_key}' not found in state_dict.")
+
+        # state_dict  qf1
+        qf1.load_state_dict(sac_qf1_state_dict)
+
+        # critic_2  qf2
+        td3bc_critic2_state_dict = td3bc_checkpoint['critic_2']
+        sac_qf2_state_dict = qf2.state_dict()
+
+        for td3_key, sac_key in mapping_critic.items():
+            if td3_key in td3bc_critic2_state_dict and sac_key in sac_qf2_state_dict:
+                sac_qf2_state_dict[sac_key] = td3bc_critic2_state_dict[td3_key]
+                logging.info(f"Loaded {td3_key} into qf2.{sac_key}")
+            else:
+                logging.warning(f"Key '{td3_key}' or 'qf2.{sac_key}' not found in state_dict.")
+
+        #  state_dict qf2
+        qf2.load_state_dict(sac_qf2_state_dict)
+    else:
+        raise KeyError("Checkpoint does not contain both 'critic_1' and 'critic_2' keys.")
+
+
+def print_checkpoint_keys(checkpoint_path):
+
+    checkpoint = torch.load(checkpoint_path, map_location='cpu')  
+
+    print("Checkpoint Keys:")
+    for key in checkpoint.keys():
+        print(f"- {key}")
+
+    for key in ['actor', 'critic_1', 'critic_2']:
+        if key in checkpoint:
+            print(f"\nKeys in '{key}':")
+            state_dict = checkpoint[key]
+            for sub_key in state_dict.keys():
+                print(f"  - {sub_key}")
+        else:
+            print(f"\nWarning: '{key}' not found in the checkpoint.")
 
 def main():
+    
+    CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Normal_checkpoint.pt" # load td3+bc checkpoint
+    #print_checkpoint_keys(CHECKPOINT_PATH)
     args = tyro.cli(Args)
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     import wandb
@@ -274,6 +398,15 @@ def main():
         handle_timeout_termination=False,
     )
     start_time = time.time()
+
+    try:
+        load_td3bc_to_sac(CHECKPOINT_PATH, actor, qf1, qf2)
+    except KeyError as e:
+        logging.error(f"defeat: {e}")
+    
+    # update target network
+    qf1_target.load_state_dict(qf1.state_dict())
+    qf2_target.load_state_dict(qf2.state_dict())
 
     # TRY NOT TO MODIFY: start the game
     obs, _ = env.reset(seed=args.seed)

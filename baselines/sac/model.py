@@ -337,7 +337,7 @@ def print_checkpoint_keys(checkpoint_path):
 
 def main():
     
-    CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Normal_checkpoint.pt" # load td3+bc checkpoint
+    #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Normal_checkpoint.pt" # load td3+bc checkpoint
     CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Normal_checkpoint.pt"
     #print_checkpoint_keys(CHECKPOINT_PATH)
     args = tyro.cli(Args)

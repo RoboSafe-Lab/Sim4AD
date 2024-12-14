@@ -75,7 +75,7 @@ class Args:
     hidden_layer_dim = 256
     """the hidden layer dimension of (all) the networks"""
 
-    cluster: str = "All"
+    cluster: str = "Normal"
     """the clustering method to use. Options include 'All', 'Aggressive', 'Normal', 'Cautious'"""
 
     normalize_state: bool = True
@@ -102,7 +102,7 @@ def make_env(env_id, seed, run_name, args, evaluation=False, normalisation: bool
         state_mean, state_std, reward_mean, reward_std = get_normalisation_parameters(driving_style=env.unwrapped.driving_style,
                                                                                       map_name=env.unwrapped.map_name)
         env = wrap_env(env, state_mean=state_mean, state_std=state_std, reward_mean=reward_mean, reward_std=reward_std,
-                       reward_normalization=True)
+                       reward_normalization=False)
 
     env = gym.wrappers.RecordEpisodeStatistics(env)
     env.action_space.seed(seed)

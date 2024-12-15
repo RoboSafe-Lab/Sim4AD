@@ -251,14 +251,8 @@ class ExtractObservationAction:
     def load_reward_weights(self):
         """Loading reward weights theta derived from IRL"""
         with open('results/' + self._driving_style + 'training_log.pkl', 'rb') as file:
-            data = pickle.load(file)
-        # 获取最后的 theta 值
-        theta = data['theta'][-1]
-        theta[0] = 1
-        if len(theta) >= 3:
-            theta[2] = -1
-        return theta    
-        #return data['theta'][-1]
+            data = pickle.load(file)  
+        return data['theta'][-1]
 
     @staticmethod
     def load_feature_normalization():

@@ -51,7 +51,7 @@ if __name__ == "__main__":
         return sum(total_rewards) / num_episodes
 
 
-    env = gym.make(config['env'], dataset_split="test")
+    env = gym.make(config['env'], dataset_split="test", spawn_method="dataset_one")
 
     model = SACActor(env, device=device).to(device)
     model.load_state_dict(torch.load("best_model_sac_SimulatorEnv-v0__model__1__1721400747.pth"))

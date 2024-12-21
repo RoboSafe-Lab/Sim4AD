@@ -116,6 +116,8 @@ class Sim4ADSimulation:
         self.normalise_obs = normalise_observation
         self.normalisation_parameters = {}
         if self.normalise_obs:
+            if not self.__driving_style_policies:
+                self.__driving_style_policies = {"Normal": None}  # add clustering just use Normal Now
             assert self.__driving_style_policies, "Normalisation of observations is only supported with driving style " \
                                                   "policies"
             for driving_style in self.__driving_style_policies:
@@ -285,7 +287,7 @@ class Sim4ADSimulation:
 
     def full_reset(self):
         """ Remove all agents and reset internal state of simulation. """
-        self.__time = self.__initial_time
+        #self.__time = self.__initial_time
         self.__state = {}
         self.__agents = {}
         self.__agents_to_add = deepcopy(self.__episode_agents)
@@ -325,6 +327,62 @@ class Sim4ADSimulation:
 
         return initial_obs, info
 
+    def soft_reset_multi(self):
+        """
+        initilize episode, and return intial observation and agent id
+        like soft_reset, return all agent。
+        """
+        self.full_reset()
+        # Update vehicles and generate initial observations
+        obs_all, info_all = self.__update_vehicles_multi(soft_reset=True)  # obs is one agent, modify __update_vehicles return all agents obs
+        # 修改 __update_vehicles(): 在soft_reset为True时，现在返回所有当前存活的agent的obs和info
+
+        # all agent obs and info
+        #obs_all, info_all, agent_ids = self._get_all_agents_obs_info()
+        
+        # obs_all: List[np.array], info_all: List[dict], agent_ids: List[str]
+        return obs_all, info_all
+
+    def step_multi(self, actions_dict: Dict[str, np.ndarray]):
+        """
+        give all agents action and a step simulation
+        return (next_obs_all, rewards_all, terminated_all, truncated_all, info_all)
+        其中:
+          - next_obs_all: List[np.array], every agent next time observation
+          - rewards_all: List[float]
+          - terminated_all: List[bool] 
+          - truncated_all: List[bool] 
+          - info_all: List[dict] 
+        """
+        # first update vehicles state（new agent appear or new agent disappear）
+        # in __update_vehicles get this
+        self.__update_vehicles_multi()
+        # actions_dict give every agent。if agent.policy='rl', use actions_dict value
+        # modify __take_actions(), actions_dict，
+        # policy='rl' agent，use actions_dict[agent_id]as action
+        self.__take_actions_multi(actions_dict)
+        
+        # agent info
+        next_obs_all, info_all = self._get_all_agents_obs_info(self.__agents)
+
+        # 根据info判断terminated和truncated（info中有collision, off_road, truncated, reached_goal）
+        #agent reward
+        terminated_all = {}
+        truncated_all = {}
+        
+        for aid in info_all.keys():
+            collision = info_all[aid]["collision"]
+            off_road = info_all[aid]["off_road"]
+            reached_goal = info_all[aid]["reached_goal"]
+            trunc = info_all[aid]["truncated"] or collision or off_road
+            term = reached_goal
+
+            #terminated_all.append(term)
+            #truncated_all.append(trunc)
+            terminated_all[aid] = term
+            truncated_all[aid] = trunc
+        return next_obs_all, terminated_all, truncated_all, info_all
+
     def step(self, action: Tuple[float, float] = None, return_done: bool = False):
         """
         Advance simulation by one time step.
@@ -353,12 +411,12 @@ class Sim4ADSimulation:
 
         :param soft_reset: If True, get the new observation for the agent being evaluated.
         """
-
+        """
         if soft_reset and self.__agent_evaluated is not None and self.__agent_evaluated not in self.__dead_agents:
             # We called env.reset() even though the agent is still alive. Do nothing
             assert self.last_stored_obs is not None, "Last stored observation is None"
             return self.last_stored_obs, self.last_stored_info
-
+        """ 
         self.__remove_dead_agents()
 
         # SELECT AGENTS TO ADD
@@ -453,6 +511,70 @@ class Sim4ADSimulation:
 
         return obs, info
 
+    def __update_vehicles_multi(self, soft_reset: bool = False):
+        """
+        根据当前时间增删车辆。当soft_reset=True表示reset过程，此时返回所有已生成agents的初始obs和info。
+        当soft_reset=False（正常step）时，即便有新车辆生成，也会返回当前所有agents的obs和info。
+        这样无论是reset还是step，都能获取完整的观测信息。
+        """
+
+        # 移除已死亡车辆
+        self.__remove_dead_multi_agents()
+
+        # 如果使用dataset_all或dataset_one且policy_type不是rl，当无车可添加时更换episode
+        if self.__spawn_method in ["dataset_all", "dataset_one"] and self.__policy_type != "rl":
+            if len(self.__agents_to_add) == 0:
+                self.__change_episode()
+
+        add_agents = {}
+
+        if self.__spawn_method == "dataset_all":
+            # 根据数据集时间窗口选择要加入的车辆
+            for agent_id, agent in self.__agents_to_add.items():
+                if (self.__time - agent.time[0]) >= 0 and (agent.time[-1] - self.time) >= 0:
+                    if agent_id not in self.__agents:
+                        # 所有车辆使用相同policy进行训练
+                        policy_to_use = self.__policy_type
+                        add_agents[agent_id] = (agent, policy_to_use)
+
+        elif self.__spawn_method == "random":
+            # 随机生成车辆
+            if self.__time == self.__initial_time:
+                self.__spawn_features, self.__possible_vehicle_dimensions = self._get_spawn_positions()
+            if random.random() < self.SPAWN_PROBABILITY:
+                agent_to_spawn = self._get_vehicle_to_spawn()
+                add_agents[agent_to_spawn.UUID] = (agent_to_spawn, self.__policy_type)
+
+        elif self.__spawn_method == "dataset_one":
+            # dataset_one模式下，如无agent可用则更换episode
+            if len(self.__agents_to_add) == 0:
+                self.__change_episode()
+
+            for agent_id, agent in self.__episode_agents.items():
+                if (self.__time - agent.time[0]) >= 0 and (agent.time[-1] - self.time) >= 0:
+                    if agent_id not in self.__agents:
+                        add_agents[agent_id] = (agent, self.__policy_type)
+        else:
+            raise ValueError(f"Spawn method {self.__spawn_method} not found.")
+
+        obs_all = None
+        info_all = None
+        # 添加新agent
+        for agent_id, (agent, policy) in add_agents.items():
+            self._add_agent(agent=agent, policy=policy)
+        if not soft_reset and add_agents:
+            common_keys = set(add_agents.keys()) & set(self.__agents.keys())
+            common_agents = {key: self.__agents[key] for key in common_keys}
+                
+            obs_all, info_all = self._get_all_agents_obs_info(common_agents)
+        if soft_reset:
+            obs_all, info_all = self._get_all_agents_obs_info(self.__agents)
+            return obs_all, info_all
+
+        # 再次移除可能添加失败的agent
+        self.__remove_dead_multi_agents()
+        return None, None
+
     def __remove_dead_agents(self):
         # REMOVE DEAD AGENTS
         for agent_id, death_cause in self.__dead_agents.items():
@@ -465,6 +587,15 @@ class Sim4ADSimulation:
             self.__agent_evaluated = None
 
         self.__dead_agents = {}
+    
+    def __remove_dead_multi_agents(self):
+        # REMOVE DEAD AGENTS only if agent reaches goal
+        for agent_id, death_cause in list(self.__dead_agents.items()):
+            if death_cause == DeathCause.GOAL_REACHED:
+                self.remove_agent(agent_id, death_cause)
+                logger.debug(f"Agent {agent_id} has been removed from the simulation for {death_cause} at t={self.time}.")
+                self.__dead_agents.pop(agent_id)
+
 
     def _get_vehicle_to_spawn(self):
 
@@ -547,6 +678,45 @@ class Sim4ADSimulation:
 
         return possible_lanes, vehicle_dimensions
 
+    def __take_actions_multi(self, actions_dict: Dict[str, np.ndarray]):
+        """
+        类似__take_actions(), for all agent使用外部提供的actions.
+        all agent policy='rl'。
+        """
+        new_frame = {}
+        for agent_id, agent in self.__agents.items():
+            if agent is None:
+                continue
+            if agent_id == '1219c199-7fb6-4339-be29-9b628b9675d9':
+                print("stop")
+            # 从actions_dict get this agent action
+            action_arr = actions_dict.get(agent_id, np.zeros(2,))  # 默认动作为0
+            # 动作为(acceleration, yaw_rate)
+            from simulator.state_action import Action
+            action = Action(acceleration=action_arr[0], yaw_rate=action_arr[1])
+            new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
+
+            goal_reached, truncated = self.__check_goal_and_termination(agent, new_state, agent_id)
+            if new_state.lane is None:
+                self.__dead_agents[agent_id] = DeathCause.OFF_ROAD
+            elif truncated:
+                self.__dead_agents[agent_id] = DeathCause.TRUNCATED
+            elif goal_reached:
+                self.__dead_agents[agent_id] = DeathCause.GOAL_REACHED
+
+            new_frame[agent_id] = new_state
+            agent.add_action(action)
+            agent.add_state(new_state)
+
+        new_frame["time"] = self.__time + self.__dt
+        self.__simulation_history.append(new_frame)
+        self.__state = new_frame
+        self.__time += self.__dt
+
+        # remove dead agent
+        #self.__remove_dead_agents()
+
+
     def __take_actions(self, ego_action: Tuple[float, float] = None):
         """
         Advance all agents by one time step.
@@ -561,7 +731,8 @@ class Sim4ADSimulation:
         for agent_id, agent in self.__agents.items():
             if agent is None and agent_id not in self.__dead_agents:
                 continue
-
+            if agent_id == '1219c199-7fb6-4339-be29-9b628b9675d9':
+                print("stop")
             assert len(agent.observation_trajectory) == len(agent.action_trajectory) + 1 == len(agent.state_trajectory)
 
             if agent.policy == "follow_dataset":
@@ -715,6 +886,34 @@ class Sim4ADSimulation:
         agent.idm.activate(v0=speed)
         self.__agents[self.__agent_evaluated].add_interference(agent_id=vehicle_in_front["agent_id"])
 
+    def _get_all_agents_obs_info(self, agents: Dict):
+        """
+        获取所有当前活跃agent的obs和info,并返回它们的ID列表
+        类似于原先的_get_current_observations,但现在对所有agent处理,并返回列表形式.
+        """
+        obs_all = {}
+        info_all = {}
+
+
+        for agent_id, agent in agents.items():
+            if agent is None:
+                continue
+            if agent_id == '1219c199-7fb6-4339-be29-9b628b9675d9':
+                print("stop")
+            obs, info = self._get_observation(agent=agent, state=self.__state[agent_id])
+            #if obs is not None:
+
+            if agent_id not in obs_all:
+                obs_all[agent_id] = []
+            if agent_id not in info_all:
+                info_all[agent_id] = []
+
+            obs_all[agent_id] = obs
+            info_all[agent_id] = info
+
+
+        return obs_all, info_all
+
     def _get_current_observations(self, return_obs_for_aid: str = None):
         """
         :param return_obs_for_aid: id of the agent for which we want to return the observation
@@ -760,7 +959,7 @@ class Sim4ADSimulation:
         #     [speed * np.cos(beta + current_state.heading),
         #      speed * np.sin(beta + current_state.heading)]
         # )
-        #
+        #update_vehilces
         # center = np.array([current_state.position.x, current_state.position.y]) + d_position * self.__dt
         # d_theta = speed * np.tan(action.yaw_rate) * np.cos(beta) / agent.meta.wheelbase
         # d_theta = np.clip(d_theta, - agent.meta.max_angular_vel, agent.meta.max_angular_vel)
@@ -902,7 +1101,8 @@ class Sim4ADSimulation:
 
     def normalise_observation(self, obs, agent):
 
-        driving_style = self.get_driving_style_vehicle(agent.agent_id)
+        #driving_style = self.get_driving_style_vehicle(agent.agent_id) #zan shi zhushi dui agent clustering de huo qu
+        driving_style = 'Normal'
         params = self.normalisation_parameters[driving_style]
 
         obs = np.array(obs).reshape(1, -1)

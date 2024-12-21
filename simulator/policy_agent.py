@@ -130,7 +130,11 @@ class PolicyAgent:
         Compute the longitudinal jerk at the current timestep.
         :return: long jerk
         """
-
+        if len(self.__long_acc) < 2 or len(self._state_trajectory) < 2:
+        # data less no jerk，return 0
+            return 0.0
+        if len(self.__long_acc) != len(self._state_trajectory):
+            print("stop")
         assert len(self.__long_acc) == len(self._state_trajectory)
 
         long_jerk = 0

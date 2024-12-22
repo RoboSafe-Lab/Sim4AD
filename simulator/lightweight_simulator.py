@@ -689,10 +689,11 @@ class Sim4ADSimulation:
                 continue
             # 从actions_dict get this agent action
             action_arr = actions_dict.get(agent_id, np.zeros(2,))  # 默认动作为0
-            action_ar = action_arr[0]
+            if action_arr.ndim > 1:
+                action_arr = action_arr[0]
             # 动作为(acceleration, yaw_rate)
             from simulator.state_action import Action
-            action = Action(acceleration=action_ar[0], yaw_rate=action_ar[1])
+            action = Action(acceleration=action_arr[0], yaw_rate=action_arr[1])
             new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
 
             goal_reached, truncated = self.__check_goal_and_termination(agent, new_state, agent_id)

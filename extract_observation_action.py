@@ -215,11 +215,12 @@ class ExtractObservationAction:
                 if agent_mdp_values is None:
                     logger.warning(f"No MDP values extracted for agent {aid} in episode {episode}")
                     continue
-
-                if drivingstyle == "Normal":
+                
+                if drivingstyle == "Normal" :
                     self._clustered_demonstrations[key].append(agent_mdp_values)
-                    """
-                     # inilize
+                if drivingstyle != "Normal" and agent_mdp_values.rewards < -2.238178014 :
+                    self._clustered_demonstrations[key].append(agent_mdp_values)
+                    """                     # inilize
                     if not hasattr(self, 'normal_agents_mdp'):
                         self.normal_agents_mdp = {}  
                     self.normal_agents_mdp[aid] = agent_mdp_values

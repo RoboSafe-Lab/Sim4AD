@@ -687,13 +687,12 @@ class Sim4ADSimulation:
         for agent_id, agent in self.__agents.items():
             if agent is None:
                 continue
-            if agent_id == '1219c199-7fb6-4339-be29-9b628b9675d9':
-                print("stop")
             # 从actions_dict get this agent action
             action_arr = actions_dict.get(agent_id, np.zeros(2,))  # 默认动作为0
+            action_ar = action_arr[0]
             # 动作为(acceleration, yaw_rate)
             from simulator.state_action import Action
-            action = Action(acceleration=action_arr[0], yaw_rate=action_arr[1])
+            action = Action(acceleration=action_ar[0], yaw_rate=action_ar[1])
             new_state = self._next_state(agent, current_state=self.__state[agent_id], action=action)
 
             goal_reached, truncated = self.__check_goal_and_termination(agent, new_state, agent_id)
@@ -731,8 +730,6 @@ class Sim4ADSimulation:
         for agent_id, agent in self.__agents.items():
             if agent is None and agent_id not in self.__dead_agents:
                 continue
-            if agent_id == '1219c199-7fb6-4339-be29-9b628b9675d9':
-                print("stop")
             assert len(agent.observation_trajectory) == len(agent.action_trajectory) + 1 == len(agent.state_trajectory)
 
             if agent.policy == "follow_dataset":
@@ -898,8 +895,6 @@ class Sim4ADSimulation:
         for agent_id, agent in agents.items():
             if agent is None:
                 continue
-            if agent_id == '1219c199-7fb6-4339-be29-9b628b9675d9':
-                print("stop")
             obs, info = self._get_observation(agent=agent, state=self.__state[agent_id])
             #if obs is not None:
 

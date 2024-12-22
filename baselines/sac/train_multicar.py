@@ -134,7 +134,8 @@ def evaluate_multi(env, actor, device, n_eval_episodes=1):
     returns = []
     for _ in range(n_eval_episodes):
         obs_dict = env.reset()
-        episode_rewards = {agent_id:0.0 for agent_id in env.agents}
+        #episode_rewards = {agent_id:0.0 for agent_id in env.agents}
+        episode_rewards = {}
         done_all = False
         while not done_all:
             actions_dict = {}
@@ -143,8 +144,12 @@ def evaluate_multi(env, actor, device, n_eval_episodes=1):
                 actions_dict[agent_id] = action
             next_obs_dict, rewards_dict, dones_dict, infos_dict = env.step(actions_dict)
 
-            for agent_id in obs_dict:
-                episode_rewards[agent_id] += rewards_dict[agent_id]
+            #for agent_id in obs_dict:
+            for agent_id, reward in rewards_dict.items():
+                if agent_id not in episode_rewards:
+                    episode_rewards[agent_id] = 0.0
+                #episode_rewards[agent_id] += rewards_dict[agent_id]
+                episode_rewards[agent_id] += reward
 
             done_all = dones_dict["__any__"]
             obs_dict = {agent_id: next_obs_dict[agent_id] for agent_id in next_obs_dict if not dones_dict[agent_id]}

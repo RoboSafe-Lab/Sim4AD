@@ -146,7 +146,7 @@ def evaluate_multi(env, actor, device, n_eval_episodes=1):
             for agent_id in obs_dict:
                 episode_rewards[agent_id] += rewards_dict[agent_id]
 
-            done_all = dones_dict["__all__"]
+            done_all = dones_dict["__any__"]
             obs_dict = {agent_id: next_obs_dict[agent_id] for agent_id in next_obs_dict if not dones_dict[agent_id]}
         # sum return, all agent average:
         returns.append(np.mean(list(episode_rewards.values())))

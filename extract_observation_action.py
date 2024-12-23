@@ -217,14 +217,14 @@ class ExtractObservationAction:
                     continue
 
                 if drivingstyle == "Normal":
-                    self._clustered_demonstrations[key].append(agent_mdp_values)
-                    """
+                    #self._clustered_demonstrations[key].append(agent_mdp_values)
+                    
                      # inilize
                     if not hasattr(self, 'normal_agents_mdp'):
                         self.normal_agents_mdp = {}  
                     self.normal_agents_mdp[aid] = agent_mdp_values
-                    """
-                """
+                    
+                
                 elif drivingstyle == "Aggressive" :
                      # inilize
                     if not hasattr(self, 'aggressive_agents_mdp'):
@@ -236,7 +236,7 @@ class ExtractObservationAction:
                     if not hasattr(self, 'cautious_agents_mdp'):
                         self.cautious_agents_mdp = {}  
                     self.cautious_agents_mdp[aid] = agent_mdp_values
-                """          
+                         
             logger.info(f"Episode {i} processing completed.")
             i=i+1
 
@@ -271,7 +271,7 @@ class ExtractObservationAction:
 
     def save_trajectory(self):
         """Save a list of trajectories, and each trajectory include (state, action) pair"""
-        folder_path = 'scenarios/data/' + self._split
+        folder_path = 'scenarios/data_double/' + self._split
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
@@ -281,7 +281,7 @@ class ExtractObservationAction:
     
     def save_normal_agents_mdp(self):
         """Save the normal agents' MDP data"""
-        folder_path = 'scenarios/data/' + self._split
+        folder_path = 'scenarios/data_double/' + self._split
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
@@ -290,7 +290,7 @@ class ExtractObservationAction:
 
     def save_aggressive_agents_mdp(self):
         """Save the aggressive agents' MDP data"""
-        folder_path = 'scenarios/data/' + self._split
+        folder_path = 'scenarios/data_double/' + self._split
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
@@ -299,7 +299,7 @@ class ExtractObservationAction:
             
     def save_cautious_agents_mdp(self):
         """Save the cautious agents' MDP data"""
-        folder_path = 'scenarios/data/' + self._split
+        folder_path = 'scenarios/data_double/' + self._split
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 

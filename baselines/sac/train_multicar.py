@@ -33,10 +33,10 @@ class Args:
     capture_video: bool = False
 
     total_timesteps: int = 1000000
-    buffer_size: int = int(1e6)
+    buffer_size: int = int(3e5)
     gamma: float = 0.99
     tau: float = 0.005
-    batch_size: int = 256
+    batch_size: int = 128
     learning_starts: int = 5e3
     policy_lr: float = 3e-4
     q_lr: float = 1e-3

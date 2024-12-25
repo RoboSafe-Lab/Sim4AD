@@ -216,7 +216,7 @@ class ExtractObservationAction:
                     logger.warning(f"No MDP values extracted for agent {aid} in episode {episode}")
                     continue
 
-                if drivingstyle == "Cautious":
+                if drivingstyle == "Aggressive":
                     self._clustered_demonstrations[key].append(agent_mdp_values)
                     """
                      # inilize
@@ -271,7 +271,7 @@ class ExtractObservationAction:
 
     def save_trajectory(self):
         """Save a list of trajectories, and each trajectory include (state, action) pair"""
-        folder_path = 'scenarios/data_cautious/' + self._split
+        folder_path = 'scenarios/data_aggressive/' + self._split
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 

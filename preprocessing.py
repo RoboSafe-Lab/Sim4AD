@@ -20,7 +20,7 @@ def main():
 
     # creat two dicts, one for training and one for testing
     data_splits = ['train', 'test', 'valid']
-    driving_styles = ['Cautious']
+    driving_styles = ['Aggressive']
     for driving_style in driving_styles:
         if driving_style != 'All':
             logger.info(f'{driving_style} reward weights are loaded')

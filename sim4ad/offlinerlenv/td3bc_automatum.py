@@ -37,7 +37,7 @@ class TrainConfig:
     spawn_method: str = "dataset_one" # whether to use the gym env
     # need to be changed according to the policy to be trained
     map_name: str = "appershofen"
-    driving_style: str = "Normal"
+    driving_style: str = "Cautious"
 
     # TD3 + BC training-specific parameters
     seed: int = 0  # Sets Gym, PyTorch and Numpy seeds

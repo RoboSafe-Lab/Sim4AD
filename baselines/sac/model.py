@@ -75,7 +75,7 @@ class Args:
     hidden_layer_dim = 256
     """the hidden layer dimension of (all) the networks"""
 
-    cluster: str = "Cautious"
+    cluster: str = "Normal"
     """the clustering method to use. Options include 'All', 'Aggressive', 'Normal', 'Cautious'"""
 
     normalize_state: bool = True
@@ -400,12 +400,12 @@ def main():
         handle_timeout_termination=False,
     )
     start_time = time.time()
-
+    """
     try:
         load_td3bc_to_sac(CHECKPOINT_PATH, actor, qf1, qf2)
     except KeyError as e:
         logging.error(f"defeat: {e}")
-    
+    """
     # update target network
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())

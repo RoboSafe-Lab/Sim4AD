@@ -75,7 +75,7 @@ class Args:
     hidden_layer_dim = 256
     """the hidden layer dimension of (all) the networks"""
 
-    cluster: str = "Normal"
+    cluster: str = "Cautious"
     """the clustering method to use. Options include 'All', 'Aggressive', 'Normal', 'Cautious'"""
 
     normalize_state: bool = True

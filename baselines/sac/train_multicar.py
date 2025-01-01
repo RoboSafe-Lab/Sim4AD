@@ -50,7 +50,7 @@ class Args:
 
     # MultiCarEnv related?
     spawn_method: str = "dataset_all"  # or "random"
-    clustering: str = "Normal"
+    clustering: str = "Cautious"
     episode_names = []   
     max_steps: int = 1000
 

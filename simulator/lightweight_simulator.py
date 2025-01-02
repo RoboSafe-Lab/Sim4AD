@@ -1098,7 +1098,7 @@ class Sim4ADSimulation:
     def normalise_observation(self, obs, agent):
 
         #driving_style = self.get_driving_style_vehicle(agent.agent_id) #zan shi zhushi dui agent clustering de huo qu
-        driving_style = 'Normal'
+        driving_style = 'Cautious'
         params = self.normalisation_parameters[driving_style]
 
         obs = np.array(obs).reshape(1, -1)

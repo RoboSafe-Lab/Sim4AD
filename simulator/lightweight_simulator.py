@@ -117,7 +117,7 @@ class Sim4ADSimulation:
         self.normalisation_parameters = {}
         if self.normalise_obs:
             if not self.__driving_style_policies:
-                self.__driving_style_policies = {"Normal": None}  # add clustering just use Normal Now
+                self.__driving_style_policies = {"Cautious": None}  # add clustering just use Normal Now
             assert self.__driving_style_policies, "Normalisation of observations is only supported with driving style " \
                                                   "policies"
             for driving_style in self.__driving_style_policies:

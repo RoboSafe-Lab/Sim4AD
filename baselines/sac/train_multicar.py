@@ -454,22 +454,22 @@ def main():
                         target_param.data.copy_(args.tau * param.data + (1 - args.tau)*target_param.data)
 
 
-            if iteration % 5 == 0 and global_step > args.learning_starts:
-                wandb.log({
-                    "losses/qf_loss": qf_loss.item()/2,
-                    "losses/qf1_loss": qf1_loss.item(),
-                    "losses/qf2_loss": qf2_loss.item(),
-                    "alpha": alpha,
-                }, step=global_step)
+      
+        wandb.log({
+            "losses/qf_loss": qf_loss.item()/2,
+            "losses/qf1_loss": qf1_loss.item(),
+            "losses/qf2_loss": qf2_loss.item(),
+            "alpha": alpha,
+        }, step=global_step)
 
-            # eval
-            if iteration % 50 == 0 and global_step > args.learning_starts:
-                eval_return = evaluate_multi(eval_env, actor, device, n_eval_episodes=1)
-                wandb.log({"charts/eval_return": eval_return}, step=global_step)
-                if eval_return > best_eval:
-                    logging.info("model with better return is found")
-                    best_eval = eval_return
-                    torch.save(actor.state_dict(), f"best_model_sac_multi.pth")
+        # eval
+        if iteration % 10 == 0 :
+            eval_return = evaluate_multi(eval_env, actor, device, n_eval_episodes=1)
+            wandb.log({"charts/eval_return": eval_return}, step=global_step)
+            if eval_return > best_eval:
+                logging.info("model with better return is found")
+                best_eval = eval_return
+                torch.save(actor.state_dict(), f"best_model_sac_multi.pth")
 
     env.close()
     eval_env.close()

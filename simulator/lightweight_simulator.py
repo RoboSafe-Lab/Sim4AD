@@ -199,9 +199,9 @@ class Sim4ADSimulation:
             raise ValueError(f"Spawn method {self.__spawn_method} not found.")
 
         self.__agents[new_agent.agent_id] = new_agent
-
+    
         if self.__spawn_method == "dataset_all":
-            self.__agents_to_add.pop(new_agent.agent_id)
+            #self.__agents_to_add.pop(new_agent.agent_id)
             if self.__pbar:
                 self.__pbar.update(1)
         elif self.__spawn_method == "dataset_one" and new_agent.agent_id == self.__agent_evaluated:
@@ -287,7 +287,7 @@ class Sim4ADSimulation:
 
     def full_reset(self):
         """ Remove all agents and reset internal state of simulation. """
-        #self.__time = self.__initial_time
+        self.__time = self.__initial_time
         self.__state = {}
         self.__agents = {}
         self.__agents_to_add = deepcopy(self.__episode_agents)
@@ -332,9 +332,17 @@ class Sim4ADSimulation:
         initilize episode, and return intial observation and agent id
         like soft_reset, return all agent。
         """
-        self.full_reset()
+        #self.full_reset()
+        self.__simulation_history = []
+        obs_all, info_all = None, None
+        if len(self.__agents_to_add.keys()) > 0:
         # Update vehicles and generate initial observations
-        obs_all, info_all = self.__update_vehicles_multi(soft_reset=True)  # obs is one agent, modify __update_vehicles return all agents obs
+            obs_all, info_all = self.__update_vehicles_multi(soft_reset=True)  # obs is one agent, modify __update_vehicles return all agents obs
+        if abs(self.time - self.__end_time) < 0.1 :
+
+                self.__change_episode()
+
+                obs_all, info_all = self.__update_vehicles_multi(soft_reset=True)
         # 修改 __update_vehicles(): 在soft_reset为True时，现在返回所有当前存活的agent的obs和info
 
         # all agent obs and info
@@ -497,13 +505,7 @@ class Sim4ADSimulation:
             if soft_reset and (agent_id == self.__agent_evaluated):
                 obs = copy.deepcopy(obs_)
                 self.last_stored_obs = copy.deepcopy(obs_)
-                print("Before deepcopy:")
-                print("info_['left_lane_available']:", info_["left_lane_available"])
-                print("info_['right_lane_available']:", info_["right_lane_available"])
                 info = copy.deepcopy(info_)
-                print("After deepcopy:")
-                print("info['left_lane_available']:", info["left_lane_available"])
-                print("info['right_lane_available']:", info["right_lane_available"])
                 self.last_stored_info = copy.deepcopy(info_)
 
         # Remove any agents that couldn't be added due to collisions at spawn.
@@ -520,11 +522,6 @@ class Sim4ADSimulation:
 
         # 移除已死亡车辆
         self.__remove_dead_multi_agents()
-
-        # 如果使用dataset_all或dataset_one且policy_type不是rl，当无车可添加时更换episode
-        if self.__spawn_method in ["dataset_all", "dataset_one"] and self.__policy_type != "rl":
-            if len(self.__agents_to_add) == 0:
-                self.__change_episode()
 
         add_agents = {}
 
@@ -595,7 +592,9 @@ class Sim4ADSimulation:
                 self.remove_agent(agent_id, death_cause)
                 logger.debug(f"Agent {agent_id} has been removed from the simulation for {death_cause} at t={self.time}.")
                 self.__dead_agents.pop(agent_id)
-
+        if self.__dead_agents:
+            self.__agents = {}
+        self.__dead_agents = {}
 
     def _get_vehicle_to_spawn(self):
 
@@ -1279,6 +1278,7 @@ class Sim4ADSimulation:
             self.__episode_agents.pop("88849c8f-5765-4898-8833-88589b72b0bd")
 
         self.__initial_time = episode.frames[0].time
+        self.__end_time = episode.frames[-1].time
         self.__time = self.__initial_time
         self.__state = {}
         self.__agents = {}

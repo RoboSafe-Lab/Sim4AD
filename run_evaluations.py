@@ -32,11 +32,15 @@ Add for each cluster the path to the model that vehicles in that cluster should 
 """
 EVAL_POLICIES = {
     PolicyType.SAC_BASIC_REWARD: {
-        "Aggressive": "best_model_sac_Aggressive_irlFalse_SimulatorEnv-v0__model__1__1724203527.pth",
+        #"Aggressive": "best_model_sac_Aggressive_irlFalse_SimulatorEnv-v0__model__1__1724203527.pth",
+        #"Aggressive": "best_model_sac_Aggressive_irlFalse_SimulatorEnv-v0__model__1__1735322548.pth",
+        "Aggressive": "best_model_sac_Aggressive_irlFalse_SimulatorEnv-v0__model__1__1735480317.pth",
         #"Normal": "best_model_sac_Normal_irlFalse_SimulatorEnv-v0__model__1__1734188839.pth",
         "Normal": "best_model_sac_multi_MultiAgentSAC__1__1734876090.pth",
-        "Cautious": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1724207833.pth",
-        "All": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1724207833.pth"},
+       # "Normal": "best_model_sac_Normal_irlFalse_SimulatorEnv-v0__model__1__1735479265.pth",
+        #"Cautious": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1724207833.pth",
+        "Cautious": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1735479606.pth"},
+        #"All": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1724207833.pth"},
     PolicyType.SAC_IRL_REWARD: {
         "Aggressive": "best_model_sac_Aggressive_irlTrue_SimulatorEnv-v0__model__1__1724161974.pth",
         "Normal": "best_model_sac_Normal_irlTrue_SimulatorEnv-v0__model__1__1724161974.pth",
@@ -57,15 +61,15 @@ EVAL_POLICIES = {
 
 class EvaluationType(Enum):
     # !!! Make sure that the values of the enums below are all different across evaluation types!!!
-    DIVERSITY = {"spawn_method": "dataset_all", "clusters": ["Normal"]}
-    HUMAN_LIKENESS = {"spawn_method": "dataset_all", "clusters": ["Normal"]}
+    DIVERSITY = {"spawn_method": "dataset_all", "clusters": ["Aggressive"]}
+    HUMAN_LIKENESS = {"spawn_method": "dataset_all", "clusters": ["Aggressive"]}
     GENERALIZATION = "generalization"  # TODO
 
 
 @dataclass
 class EvalConfig:
     """ PARAMETERS FOR THE EVALUATION """
-    policies_to_evaluate: str = "OFFLINERL"  # e.g., "sac_basic_reward-sac_irl_reward-offlinerl-bc"
+    policies_to_evaluate: str = "SAC_BASIC_REWARD"  # e.g., "sac_basic_reward-sac_irl_reward-offlinerl-bc"
     evaluation_to_run = f"{EvaluationType.DIVERSITY.name}-{EvaluationType.HUMAN_LIKENESS.name}"
 
     env_name: str = "SimulatorEnv-v0"

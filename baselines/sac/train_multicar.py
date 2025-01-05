@@ -298,7 +298,7 @@ def main():
         evaluation=True
     )
 
-    obs_dict = env.reset()
+    #obs_dict = env.reset()
     # get observation/ action
     # agents have obs_dim act_dim same
     obs_dim = env._observation_space.shape[0]  # PettingZoo 并行: same space for all
@@ -350,100 +350,111 @@ def main():
     episodic_returns = {agent_id:0.0 for agent_id in env.agents}
     episodic_length = 0
 
-    while global_step < args.total_timesteps:
-        actions_dict = {}
-        # all agents 
-        for agent_id, obs in obs_dict.items():
-            if global_step < args.learning_starts:
-                # random
-                action = env.action_space.sample() #here is a problem no sample function
-            else:
-                action = actor.act(obs, deterministic=False)
-            actions_dict[agent_id] = action
+    #while global_step < args.total_timesteps:
+    for iteration in range(3000):
+        logging.info(f"==== Start iteration {iteration} ====")
+        obs_dict = env.reset()
+        is_episodes_done = False
+        env.simulation.reset_done_full_cycle()
+        while not is_episodes_done:
+            actions_dict = {}
+            # all agents 
+            for agent_id, obs in obs_dict.items():
+                if global_step < args.learning_starts:
+                    # random
+                    action = env.action_space.sample() #here is a problem no sample function
+                else:
+                    action = actor.act(obs, deterministic=False)
+                actions_dict[agent_id] = action
 
-        next_obs_dict, rewards_dict, dones_dict, infos_dict = env.step(actions_dict)
-        global_step += 1
-        episodic_length += 1
+            next_obs_dict, rewards_dict, dones_dict, infos_dict = env.step(actions_dict)
+            global_step += 1
+            episodic_length += 1
 
-        # all agent experience save in the same ReplayBuffer
-        for agent_id in obs_dict.keys():
-            done = dones_dict[agent_id]
-            rew = rewards_dict[agent_id]
-            if agent_id not in episodic_returns:
-                episodic_returns[agent_id] = 0.0
-            episodic_returns[agent_id] += rew
-            old_obs = obs_dict[agent_id]
-            action = actions_dict[agent_id]
-            new_obs = next_obs_dict[agent_id] if not done else np.zeros(obs_dim, dtype=np.float32)
-            rb.add(
-                old_obs, new_obs, action, np.array([rew]), np.array([done]),
-                [infos_dict[agent_id]]
-            )
+            # all agent experience save in the same ReplayBuffer
+            for agent_id in obs_dict.keys():
+                done = dones_dict[agent_id]
+                rew = rewards_dict[agent_id]
+                if agent_id not in episodic_returns:
+                    episodic_returns[agent_id] = 0.0
+                episodic_returns[agent_id] += rew
+                old_obs = obs_dict[agent_id]
+                action = actions_dict[agent_id]
+                new_obs = next_obs_dict[agent_id] if not done else np.zeros(obs_dim, dtype=np.float32)
+                rb.add(
+                    old_obs, new_obs, action, np.array([rew]), np.array([done]),
+                    [infos_dict[agent_id]]
+                )
 
-        # remove done的agent
-        obs_dict = {agent_id: next_obs_dict[agent_id] for agent_id in next_obs_dict if not dones_dict[agent_id]}
+            # remove done的agent
+            obs_dict = {agent_id: next_obs_dict[agent_id] for agent_id in next_obs_dict if not dones_dict[agent_id]}
 
-        # if__all__ done，reset
-        if dones_dict["__any__"]:
-            # all agent return
-            mean_return = np.mean(list(episodic_returns.values()))
-            print(f"global_step={global_step}, episodic_return={mean_return}, episodic_length={episodic_length}")
-            wandb.log({"charts/episodic_return": mean_return,
-                       "charts/episodic_length": episodic_length}, step=global_step)
-            episodic_returns = {agent_id:0.0 for agent_id in env.agents}
-            episodic_length = 0
-            obs_dict = env.reset()
+            # if__all__ done，reset
+            if dones_dict["__any__"]:
+                # all agent return
+                mean_return = np.mean(list(episodic_returns.values()))
+                logging.info(f"global_step={global_step}, episodic_return={mean_return}, episodic_length={episodic_length}")
+                wandb.log({"charts/episodic_return": mean_return,
+                        "charts/episodic_length": episodic_length}, step=global_step)
+                episodic_returns = {agent_id:0.0 for agent_id in env.agents}
+                episodic_length = 0
+                # all episodes are tranversed
+                if env.is_done_full_cycle() :
+                    is_episodes_done = True
+                if not env.is_done_full_cycle() :
+                    obs_dict = env.reset()
 
-        # SAC update
-        if global_step > args.learning_starts:
-            data = rb.sample(args.batch_size)
-            # data.observations shape (batch, obs_dim)
-            # data.actions shape (batch, act_dim)
-            with torch.no_grad():
-                next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_observations)
-                qf1_next_target = qf1_target(data.next_observations, next_state_actions)
-                qf2_next_target = qf2_target(data.next_observations, next_state_actions)
-                min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
-                next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * min_qf_next_target.view(-1)
+            # SAC update
+            if global_step > args.learning_starts:
+                data = rb.sample(args.batch_size)
+                # data.observations shape (batch, obs_dim)
+                # data.actions shape (batch, act_dim)
+                with torch.no_grad():
+                    next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_observations)
+                    qf1_next_target = qf1_target(data.next_observations, next_state_actions)
+                    qf2_next_target = qf2_target(data.next_observations, next_state_actions)
+                    min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
+                    next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * min_qf_next_target.view(-1)
 
-            qf1_a_values = qf1(data.observations, data.actions).view(-1)
-            qf2_a_values = qf2(data.observations, data.actions).view(-1)
-            qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
-            qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
-            qf_loss = qf1_loss + qf2_loss
+                qf1_a_values = qf1(data.observations, data.actions).view(-1)
+                qf2_a_values = qf2(data.observations, data.actions).view(-1)
+                qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
+                qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
+                qf_loss = qf1_loss + qf2_loss
 
-            q_optimizer.zero_grad()
-            qf_loss.backward()
-            q_optimizer.step()
+                q_optimizer.zero_grad()
+                qf_loss.backward()
+                q_optimizer.step()
 
-            if global_step % args.policy_frequency == 0:
-                for _ in range(args.policy_frequency):
-                    pi, log_pi, _ = actor.get_action(data.observations)
-                    qf1_pi = qf1(data.observations, pi)
-                    qf2_pi = qf2(data.observations, pi)
-                    min_qf_pi = torch.min(qf1_pi, qf2_pi)
-                    actor_loss = (alpha * log_pi - min_qf_pi).mean()
+                if global_step % args.policy_frequency == 0:
+                    for _ in range(args.policy_frequency):
+                        pi, log_pi, _ = actor.get_action(data.observations)
+                        qf1_pi = qf1(data.observations, pi)
+                        qf2_pi = qf2(data.observations, pi)
+                        min_qf_pi = torch.min(qf1_pi, qf2_pi)
+                        actor_loss = (alpha * log_pi - min_qf_pi).mean()
 
-                    actor_optimizer.zero_grad()
-                    actor_loss.backward()
-                    actor_optimizer.step()
+                        actor_optimizer.zero_grad()
+                        actor_loss.backward()
+                        actor_optimizer.step()
 
-                    if args.autotune:
-                        with torch.no_grad():
-                            _, log_pi, _ = actor.get_action(data.observations)
-                        alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
-                        a_optimizer.zero_grad()
-                        alpha_loss.backward()
-                        a_optimizer.step()
-                        alpha = log_alpha.exp().item()
+                        if args.autotune:
+                            with torch.no_grad():
+                                _, log_pi, _ = actor.get_action(data.observations)
+                            alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
+                            a_optimizer.zero_grad()
+                            alpha_loss.backward()
+                            a_optimizer.step()
+                            alpha = log_alpha.exp().item()
 
-            if global_step % args.target_network_frequency == 0:
-                for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
-                    target_param.data.copy_(args.tau * param.data + (1 - args.tau)*target_param.data)
-                for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
-                    target_param.data.copy_(args.tau * param.data + (1 - args.tau)*target_param.data)
+                if global_step % args.target_network_frequency == 0:
+                    for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
+                        target_param.data.copy_(args.tau * param.data + (1 - args.tau)*target_param.data)
+                    for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
+                        target_param.data.copy_(args.tau * param.data + (1 - args.tau)*target_param.data)
 
-            if global_step % 100 == 0:
+
+            if iteration % 5 == 0 and global_step > args.learning_starts:
                 wandb.log({
                     "losses/qf_loss": qf_loss.item()/2,
                     "losses/qf1_loss": qf1_loss.item(),
@@ -452,12 +463,13 @@ def main():
                 }, step=global_step)
 
             # eval
-            if global_step % 1000 == 0:
+            if iteration % 50 == 0 and global_step > args.learning_starts:
                 eval_return = evaluate_multi(eval_env, actor, device, n_eval_episodes=1)
                 wandb.log({"charts/eval_return": eval_return}, step=global_step)
                 if eval_return > best_eval:
+                    logging.info("model with better return is found")
                     best_eval = eval_return
-                    torch.save(actor.state_dict(), f"best_model_sac_multi_{run_name}.pth")
+                    torch.save(actor.state_dict(), f"best_model_sac_multi.pth")
 
     env.close()
     eval_env.close()

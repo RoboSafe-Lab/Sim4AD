@@ -1244,11 +1244,15 @@ class Sim4ADSimulation:
 
         plt.show()
 
+    def reset_done_full_cycle(self):
+        self.done_full_cycle = False
+        self.will_be_done_next = False
+
     def __load_datasets(self):
 
-        if self.will_be_done_next:
-            self.done_full_cycle = True
-
+        #if self.will_be_done_next:
+            #self.done_full_cycle = True
+        #self.done_full_cycle = False
         if isinstance(self.__all_episode_names, list):
             episode_name = self.__all_episode_names[self.episode_idx]
             self.episode_idx += 1
@@ -1258,6 +1262,9 @@ class Sim4ADSimulation:
         else:
             episode_name = self.__all_episode_names
             self.will_be_done_next = True
+        
+        if self.will_be_done_next:
+            self.done_full_cycle = True
 
         path_to_dataset_folder = get_path_to_automatum_scenario(episode_name)
         dataset = droneDataset(path_to_dataset_folder)

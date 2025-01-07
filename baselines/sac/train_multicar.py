@@ -258,8 +258,8 @@ def print_checkpoint_keys(checkpoint_path):
             print(f"\nWarning: '{key}' not found in the checkpoint.")
 
 def main():
-    CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Cautious_checkpoint.pt" # load td3+bc checkpoint
-    #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Normal_checkpoint.pt"
+    #CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Cautious_checkpoint.pt" # load td3+bc checkpoint
+    CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Normal_checkpoint.pt"
     args = tyro.cli(Args)
     run_name = f"MultiAgentSAC__{args.seed}__{int(time.time())}"
     
@@ -359,6 +359,8 @@ def main():
         while not is_episodes_done:
             actions_dict = {}
             # all agents 
+            if not obs_dict:
+                logging.info("the reset obs_dict is None something error")
             for agent_id, obs in obs_dict.items():
                 if global_step < args.learning_starts:
                     # random
@@ -370,8 +372,7 @@ def main():
             next_obs_dict, rewards_dict, dones_dict, infos_dict = env.step(actions_dict)
             global_step += 1
             episodic_length += 1
-            if global_step % 1000 == 0:
-                logging.info(f"global_step={global_step}, episodic_length={episodic_length}")
+            logging.info(f"global_step={global_step}, episodic_length={episodic_length}, simulation_time={env.current_time()}")
             # all agent experience save in the same ReplayBuffer
             for agent_id in obs_dict.keys():
                 done = dones_dict[agent_id]
@@ -404,8 +405,6 @@ def main():
                     is_episodes_done = True
                 if not env.is_done_full_cycle() :
                     obs_dict = env.reset()
-                    if not obs_dict :
-                        logging.info("the reset obs_dict is None something error")
 
             # SAC update
             if global_step > args.learning_starts:

@@ -1393,6 +1393,10 @@ class Sim4ADSimulation:
     @property
     def simulation_history(self):
         return self.__simulation_history
+    
+    @property
+    def simulation_time(self):
+        return self.__time
 
     def _get_current_episode_id(self):
         # We need -1 because we increment the episode_idx before using it.

@@ -181,3 +181,6 @@ class MultiCarEnv(ParallelEnv):
     def is_done_full_cycle(self):
         """Expose done_full_cycle from the simulation."""
         return self.simulation.done_full_cycle
+    
+    def current_time(self):
+        return self.simulation_time

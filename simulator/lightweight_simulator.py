@@ -566,6 +566,8 @@ class Sim4ADSimulation:
             obs_all, info_all = self._get_all_agents_obs_info(common_agents)
         if soft_reset:
             obs_all, info_all = self._get_all_agents_obs_info(self.__agents)
+            if not obs_all:
+                logger.info(f"the simulation time ={self.__time}")
             return obs_all, info_all
 
         # 再次移除可能添加失败的agent
@@ -1265,7 +1267,7 @@ class Sim4ADSimulation:
         
         if self.will_be_done_next:
             self.done_full_cycle = True
-
+        logging.info(f"Loading episode {self.episode_idx} with name: {episode_name}")
         path_to_dataset_folder = get_path_to_automatum_scenario(episode_name)
         dataset = droneDataset(path_to_dataset_folder)
         dyn_world = dataset.dynWorld

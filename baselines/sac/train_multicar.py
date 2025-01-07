@@ -403,6 +403,8 @@ def main():
                     is_episodes_done = True
                 if not env.is_done_full_cycle() :
                     obs_dict = env.reset()
+                    if not obs_dict :
+                        print("stop")
 
             # SAC update
             if global_step > args.learning_starts:

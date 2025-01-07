@@ -370,7 +370,8 @@ def main():
             next_obs_dict, rewards_dict, dones_dict, infos_dict = env.step(actions_dict)
             global_step += 1
             episodic_length += 1
-
+            if global_step % 1000 == 0:
+                logging.info(f"global_step={global_step}, episodic_length={episodic_length}")
             # all agent experience save in the same ReplayBuffer
             for agent_id in obs_dict.keys():
                 done = dones_dict[agent_id]
@@ -404,7 +405,7 @@ def main():
                 if not env.is_done_full_cycle() :
                     obs_dict = env.reset()
                     if not obs_dict :
-                        print("stop")
+                        logging.info("the reset obs_dict is None something error")
 
             # SAC update
             if global_step > args.learning_starts:

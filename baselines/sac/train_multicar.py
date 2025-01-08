@@ -370,7 +370,8 @@ def main():
             next_obs_dict, rewards_dict, dones_dict, infos_dict = env.step(actions_dict)
             global_step += 1
             episodic_length += 1
-            logging.info(f"global_step_up={global_step}, episodic_length_up={episodic_length}, simulation_time={env.current_time()}")
+            if global_step % 1000 == 0:
+                logging.info(f"global_step_up={global_step}, episodic_length_up={episodic_length}, simulation_time={env.current_time()}")
             # all agent experience save in the same ReplayBuffer
             for agent_id in obs_dict.keys():
                 done = dones_dict[agent_id]

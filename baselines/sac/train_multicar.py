@@ -36,7 +36,7 @@ class Args:
     buffer_size: int = int(1e5)
     gamma: float = 0.99
     tau: float = 0.005
-    batch_size: int = 64
+    batch_size: int = 256
     learning_starts: int = 5e3
     policy_lr: float = 3e-4
     q_lr: float = 1e-3

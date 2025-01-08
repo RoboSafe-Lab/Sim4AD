@@ -335,13 +335,12 @@ class Sim4ADSimulation:
         #self.full_reset()
         self.__simulation_history = []
         obs_all, info_all = None, None
-        if len(self.__agents_to_add.keys()) > 0:
+        if len(self.__agents_to_add.keys()) > 0 and abs(self.time - self.__end_time) > self.__dt:
         # Update vehicles and generate initial observations
             obs_all, info_all = self.__update_vehicles_multi(soft_reset=True)  # obs is one agent, modify __update_vehicles return all agents obs
         if abs(self.time - self.__end_time) <= self.__dt:
-
+                logging.info("The time is up,we will change episode")
                 self.__change_episode()
-
                 obs_all, info_all = self.__update_vehicles_multi(soft_reset=True)
         # 修改 __update_vehicles(): 在soft_reset为True时，现在返回所有当前存活的agent的obs和info
 

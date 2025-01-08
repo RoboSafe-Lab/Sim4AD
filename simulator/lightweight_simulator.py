@@ -338,7 +338,7 @@ class Sim4ADSimulation:
         if len(self.__agents_to_add.keys()) > 0:
         # Update vehicles and generate initial observations
             obs_all, info_all = self.__update_vehicles_multi(soft_reset=True)  # obs is one agent, modify __update_vehicles return all agents obs
-        if abs(self.time - self.__end_time) < 0.1 :
+        if abs(self.time - self.__end_time) <= self.__dt:
 
                 self.__change_episode()
 
@@ -1397,6 +1397,10 @@ class Sim4ADSimulation:
     @property
     def simulation_time(self):
         return self.__time
+    
+    @property
+    def end_time(self):
+        return self.__end_time
 
     def _get_current_episode_id(self):
         # We need -1 because we increment the episode_idx before using it.

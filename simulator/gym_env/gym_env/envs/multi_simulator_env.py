@@ -184,3 +184,9 @@ class MultiCarEnv(ParallelEnv):
     
     def current_time(self):
         return self.simulation.simulation_time
+    
+    def end_time(self):
+        return self.simulation.end_time
+    
+    def step_time(self):
+        return self.simulation.dt

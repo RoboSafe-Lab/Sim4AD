@@ -393,7 +393,7 @@ def main():
 
 
             # if__all__ done，reset
-            if dones_dict["__any__"]:
+            if dones_dict["__any__"] or abs(env.current_time() - env.end_time() <= env.step_time()) :
                 # all agent return
                 mean_return = np.mean(list(episodic_returns.values()))
                 logging.info(f"global_step={global_step}, episodic_return={mean_return}, episodic_length={episodic_length}")

@@ -394,7 +394,16 @@ def main():
             if len(next_obs_dict.keys()) < len(obs_dict.keys()):
                 logging.info("there are something wrong in obs!")
             for agent_id in obs_dict.keys():
-                done = dones_dict[agent_id]
+                #if agent_id not in next_obs_dict.keys():
+                    #continue
+                try :
+                    done = dones_dict[agent_id]
+                except KeyError as e :
+                    logging.info(", ".join(obs_dict.keys()))
+                    logging.info(", ".join(next_obs_dict.keys()))
+                    logging.info(f"simulation_time={env.current_time()}")
+                    logging.info(", ".join(dones_dict.keys()))
+                    
                 rew = rewards_dict[agent_id]
                 if agent_id not in episodic_returns:
                     episodic_returns[agent_id] = 0.0

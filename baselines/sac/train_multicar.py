@@ -140,7 +140,10 @@ def evaluate_multi(env, actor, device, n_eval_episodes=1):
         while not done_all:
             actions_dict = {}
             for agent_id, obs in obs_dict.items():
-                action = actor.act(obs, deterministic=True)
+                if isinstance(actor, nn.DataParallel):
+                    action = actor.module.act(obs, deterministic=True)
+                else:
+                    action = actor.act(obs, deterministic=True)
                 actions_dict[agent_id] = action
             next_obs_dict, rewards_dict, dones_dict, infos_dict = env.step(actions_dict)
 
@@ -258,8 +261,8 @@ def print_checkpoint_keys(checkpoint_path):
             print(f"\nWarning: '{key}' not found in the checkpoint.")
 
 def main():
-    CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Cautious_checkpoint.pt" # load td3+bc checkpoint
-    #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Normal_checkpoint.pt"
+    #CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Cautious_checkpoint.pt" # load td3+bc checkpoint
+    CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Normal_checkpoint.pt"
     args = tyro.cli(Args)
     run_name = f"MultiAgentSAC__{args.seed}__{int(time.time())}"
     
@@ -315,6 +318,20 @@ def main():
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
 
+    try:
+        load_td3bc_to_sac(CHECKPOINT_PATH, actor, qf1, qf2)
+    except KeyError as e:
+        logging.error(f"defeat: {e}")
+        
+        # 使用 DataParallel 封装模型
+    if torch.cuda.device_count() > 1:
+        logging.info(f"use {torch.cuda.device_count()}  GPU for training")
+        actor = nn.DataParallel(actor)
+        qf1 = nn.DataParallel(qf1)
+        qf2 = nn.DataParallel(qf2)
+        qf1_target = nn.DataParallel(qf1_target)
+        qf2_target = nn.DataParallel(qf2_target)
+
     q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.q_lr)
     actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.policy_lr)
 
@@ -335,10 +352,6 @@ def main():
         device=device,
         handle_timeout_termination=False,
     )
-    try:
-        load_td3bc_to_sac(CHECKPOINT_PATH, actor, qf1, qf2)
-    except KeyError as e:
-        logging.error(f"defeat: {e}")
     
     # update target network
     qf1_target.load_state_dict(qf1.state_dict())
@@ -364,7 +377,12 @@ def main():
                     # random
                     action = env.action_space.sample() #here is a problem no sample function
                 else:
-                    action = actor.act(obs, deterministic=False)
+                    #action = actor.act(obs, deterministic=False)
+                    with torch.no_grad():
+                        if torch.cuda.device_count() > 1:
+                            action = actor.module.act(obs, deterministic=False)  # 使用 DataParallel 封装后的模块
+                        else:
+                            action = actor.act(obs, deterministic=False)
                 actions_dict[agent_id] = action
 
             next_obs_dict, rewards_dict, dones_dict, infos_dict = env.step(actions_dict)
@@ -373,6 +391,8 @@ def main():
             if global_step % 1000 == 0:
                 logging.info(f"global_step_up={global_step}, episodic_length_up={episodic_length}, simulation_time={env.current_time()}")
             # all agent experience save in the same ReplayBuffer
+            if len(next_obs_dict.keys()) < len(obs_dict.keys()):
+                logging.info("there are something wrong in obs!")
             for agent_id in obs_dict.keys():
                 done = dones_dict[agent_id]
                 rew = rewards_dict[agent_id]
@@ -414,7 +434,10 @@ def main():
                 # data.observations shape (batch, obs_dim)
                 # data.actions shape (batch, act_dim)
                 with torch.no_grad():
-                    next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_observations)
+                    if torch.cuda.device_count() > 1:
+                        next_state_actions, next_state_log_pi, _ = actor.module.get_action(data.next_observations)
+                    else:
+                        next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_observations)
                     qf1_next_target = qf1_target(data.next_observations, next_state_actions)
                     qf2_next_target = qf2_target(data.next_observations, next_state_actions)
                     min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
@@ -473,7 +496,10 @@ def main():
             if eval_return > best_eval:
                 logging.info("model with better return is found")
                 best_eval = eval_return
-                torch.save(actor.state_dict(), f"best_model_sac_multi.pth")
+                if isinstance(actor, nn.DataParallel):
+                    torch.save(actor.module.state_dict(), f"best_model_sac_multi.pth")
+                else:
+                    torch.save(actor.state_dict(), f"best_model_sac_multi.pth")
 
     env.close()
     eval_env.close()

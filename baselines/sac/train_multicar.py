@@ -442,7 +442,7 @@ def main():
                     obs_dict = env.reset()
 
             # SAC update
-            if global_step > args.learning_starts:
+            if global_step >= 0:
                 update_start = time.time()
                 data = rb.sample(args.batch_size)
                 # data.observations shape (batch, obs_dim)

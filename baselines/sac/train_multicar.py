@@ -363,6 +363,8 @@ def main():
     episodic_returns = {agent_id:0.0 for agent_id in env.agents}
     episodic_length = 0
 
+    env_step_time = 0.0
+    sac_update_time = 0.0
     #while global_step < args.total_timesteps:
     for iteration in range(3000):
         logging.info(f"==== Start iteration {iteration} ====")
@@ -384,8 +386,10 @@ def main():
                         else:
                             action = actor.act(obs, deterministic=False)
                 actions_dict[agent_id] = action
-
+            step_start = time.time()
             next_obs_dict, rewards_dict, dones_dict, infos_dict = env.step(actions_dict)
+            step_end = time.time()
+            env_step_time += (step_end - step_start)
             global_step += 1
             episodic_length += 1
             if global_step % 1000 == 0:
@@ -439,6 +443,7 @@ def main():
 
             # SAC update
             if global_step > args.learning_starts:
+                update_start = time.time()
                 data = rb.sample(args.batch_size)
                 # data.observations shape (batch, obs_dim)
                 # data.actions shape (batch, act_dim)
@@ -488,8 +493,9 @@ def main():
                         target_param.data.copy_(args.tau * param.data + (1 - args.tau)*target_param.data)
                     for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                         target_param.data.copy_(args.tau * param.data + (1 - args.tau)*target_param.data)
-
-
+                if global_step % 500 == 0 and global_step != 0 :
+                    update_end = time.time()
+                    sac_update_time += (update_end - update_start)
       
         wandb.log({
             "losses/qf_loss": qf_loss.item()/2,

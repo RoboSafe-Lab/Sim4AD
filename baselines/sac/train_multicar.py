@@ -493,9 +493,13 @@ def main():
                         target_param.data.copy_(args.tau * param.data + (1 - args.tau)*target_param.data)
                     for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                         target_param.data.copy_(args.tau * param.data + (1 - args.tau)*target_param.data)
-                if global_step % 500 == 0 and global_step != 0 :
-                    update_end = time.time()
-                    sac_update_time += (update_end - update_start)
+                
+                update_end = time.time()
+                sac_update_time += (update_end - update_start)
+                if global_step % 500 == 0 and global_step != 0:
+                    logging.info(f"global_step {global_step} finished.")
+                    logging.info(f" Env step so far: {env_step_time:.2f} seconds")
+                    logging.info(f" SAC update time so far: {sac_update_time:.2f} seconds")
       
         wandb.log({
             "losses/qf_loss": qf_loss.item()/2,

@@ -392,8 +392,8 @@ def main():
             env_step_time += (step_end - step_start)
             global_step += 1
             episodic_length += 1
-            if global_step % 1000 == 0:
-                logging.info(f"global_step_up={global_step}, episodic_length_up={episodic_length}, simulation_time={env.current_time()}")
+            #if global_step % 10000 == 0:
+                #logging.info(f"global_step_up={global_step}, episodic_length_up={episodic_length}, simulation_time={env.current_time()}")
             # all agent experience save in the same ReplayBuffer
             if len(next_obs_dict.keys()) < len(obs_dict.keys()):
                 logging.info("there are something wrong in obs!")
@@ -430,7 +430,7 @@ def main():
             if dones_dict["__any__"] or abs(env.current_time() - env.end_time()) <= env.step_time() :
                 # all agent return
                 mean_return = np.mean(list(episodic_returns.values()))
-                logging.info(f"global_step={global_step}, episodic_return={mean_return}, episodic_length={episodic_length}")
+                #logging.info(f"global_step={global_step}, episodic_return={mean_return}, episodic_length={episodic_length}")
                 wandb.log({"charts/episodic_return": mean_return,
                         "charts/episodic_length": episodic_length}, step=global_step)
                 episodic_returns = {agent_id:0.0 for agent_id in env.agents}
@@ -496,10 +496,10 @@ def main():
                 
                 update_end = time.time()
                 sac_update_time += (update_end - update_start)
-                if global_step % 500 == 0 and global_step != 0:
-                    logging.info(f"global_step {global_step} finished.")
-                    logging.info(f" Env step so far: {env_step_time:.2f} seconds")
-                    logging.info(f" SAC update time so far: {sac_update_time:.2f} seconds")
+                #if global_step % 500 == 0 and global_step != 0:
+                    #logging.info(f"global_step {global_step} finished.")
+                    #logging.info(f" Env step so far: {env_step_time:.2f} seconds")
+                    #logging.info(f" SAC update time so far: {sac_update_time:.2f} seconds")
       
         wandb.log({
             "losses/qf_loss": qf_loss.item()/2,

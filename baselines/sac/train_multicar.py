@@ -366,7 +366,7 @@ def main():
     env_step_time = 0.0
     sac_update_time = 0.0
     #while global_step < args.total_timesteps:
-    for iteration in range(3000):
+    for iteration in range(100):
         logging.info(f"==== Start iteration {iteration} ====")
         obs_dict = env.reset()
         is_episodes_done = False
@@ -385,21 +385,20 @@ def main():
                             action = actor.module.act(obs, deterministic=False)  # 使用 DataParallel 封装后的模块
                         else:
                             action = actor.act(obs, deterministic=False)
-                actions_dict[agent_id] = action
-            step_start = time.time()
+                actions_dict[agent_id] = action     
             next_obs_dict, rewards_dict, dones_dict, infos_dict = env.step(actions_dict)
-            step_end = time.time()
-            env_step_time += (step_end - step_start)
             global_step += 1
             episodic_length += 1
             #if global_step % 10000 == 0:
                 #logging.info(f"global_step_up={global_step}, episodic_length_up={episodic_length}, simulation_time={env.current_time()}")
             # all agent experience save in the same ReplayBuffer
-            if len(next_obs_dict.keys()) < len(obs_dict.keys()):
+            if not next_obs_dict.keys() and len(obs_dict.keys()):
                 logging.info("there are something wrong in obs!")
+                obs_dict = None
+                continue
             for agent_id in obs_dict.keys():
-                #if agent_id not in next_obs_dict.keys():
-                    #continue
+                if agent_id not in next_obs_dict.keys():
+                    continue
                 try :
                     done = dones_dict[agent_id]
                 except KeyError as e :
@@ -422,15 +421,14 @@ def main():
 
             # remove done的agent
             obs_dict = {agent_id: next_obs_dict[agent_id] for agent_id in next_obs_dict if not dones_dict[agent_id]}
-            if not obs_dict:
-                logging.info("the reset obs_dict is None something error")
+
 
 
             # if__all__ done，reset
             if dones_dict["__any__"] or abs(env.current_time() - env.end_time()) <= env.step_time() :
                 # all agent return
                 mean_return = np.mean(list(episodic_returns.values()))
-                #logging.info(f"global_step={global_step}, episodic_return={mean_return}, episodic_length={episodic_length}")
+                logging.info(f"global_step={global_step}, episodic_return={mean_return}, episodic_length={episodic_length}")
                 wandb.log({"charts/episodic_return": mean_return,
                         "charts/episodic_length": episodic_length}, step=global_step)
                 episodic_returns = {agent_id:0.0 for agent_id in env.agents}
@@ -442,8 +440,7 @@ def main():
                     obs_dict = env.reset()
 
             # SAC update
-            if global_step >= 0:
-                update_start = time.time()
+            if global_step >= args.learning_starts:
                 data = rb.sample(args.batch_size)
                 # data.observations shape (batch, obs_dim)
                 # data.actions shape (batch, act_dim)
@@ -494,12 +491,6 @@ def main():
                     for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                         target_param.data.copy_(args.tau * param.data + (1 - args.tau)*target_param.data)
                 
-                update_end = time.time()
-                sac_update_time += (update_end - update_start)
-                #if global_step % 500 == 0 and global_step != 0:
-                    #logging.info(f"global_step {global_step} finished.")
-                    #logging.info(f" Env step so far: {env_step_time:.2f} seconds")
-                    #logging.info(f" SAC update time so far: {sac_update_time:.2f} seconds")
       
         wandb.log({
             "losses/qf_loss": qf_loss.item()/2,
@@ -509,7 +500,7 @@ def main():
         }, step=global_step)
 
         # eval
-        if iteration % 10 == 0 :
+        if iteration % 1 == 0 :
             eval_return = evaluate_multi(eval_env, actor, device, n_eval_episodes=1)
             wandb.log({"charts/eval_return": eval_return}, step=global_step)
             if eval_return > best_eval:

@@ -389,8 +389,8 @@ def main():
             next_obs_dict, rewards_dict, dones_dict, infos_dict = env.step(actions_dict)
             global_step += 1
             episodic_length += 1
-            #if global_step % 10000 == 0:
-                #logging.info(f"global_step_up={global_step}, episodic_length_up={episodic_length}, simulation_time={env.current_time()}")
+            if global_step % 10000 == 0:
+                logging.info(f"global_step_up={global_step}, episodic_length_up={episodic_length}, simulation_time={env.current_time()}")
             # all agent experience save in the same ReplayBuffer
 
             for agent_id in obs_dict.keys():
@@ -425,7 +425,7 @@ def main():
             if dones_dict["__any__"] or abs(env.current_time() - env.end_time()) <= env.step_time() :
                 # all agent return
                 mean_return = np.mean(list(episodic_returns.values()))
-                logging.info(f"global_step={global_step}, episodic_return={mean_return}, episodic_length={episodic_length}")
+                #logging.info(f"global_step={global_step}, episodic_return={mean_return}, episodic_length={episodic_length}")
                 wandb.log({"charts/episodic_return": mean_return,
                         "charts/episodic_length": episodic_length}, step=global_step)
                 episodic_returns = {agent_id:0.0 for agent_id in env.agents}

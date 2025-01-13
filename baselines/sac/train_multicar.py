@@ -392,10 +392,7 @@ def main():
             #if global_step % 10000 == 0:
                 #logging.info(f"global_step_up={global_step}, episodic_length_up={episodic_length}, simulation_time={env.current_time()}")
             # all agent experience save in the same ReplayBuffer
-            if not next_obs_dict.keys() and len(obs_dict.keys()):
-                logging.info("there are something wrong in obs!")
-                obs_dict = None
-                continue
+
             for agent_id in obs_dict.keys():
                 if agent_id not in next_obs_dict.keys():
                     continue

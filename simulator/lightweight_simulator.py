@@ -63,7 +63,9 @@ class Sim4ADSimulation:
             driving_style_policies: A dictionary with the driving styles of the agents in the simulation.
             pbar: If True, show a progress bar when adding agents.
         """
-
+        self.debug = False  #add to record trajectory
+        self.plot_interval_time = 1.0
+        self.last_plot_time = 0.0 
         self.__agents_to_add = None
         self.episode_idx = 0  # Index of the episode we are currently evaluating
         self.__time = None
@@ -371,7 +373,8 @@ class Sim4ADSimulation:
         
         # agent info
         next_obs_all, info_all = self._get_all_agents_obs_info(self.__agents)
-
+        if not next_obs_all :
+            logging.info("the next_obs_all is None_1")
         # 根据info判断terminated和truncated（info中有collision, off_road, truncated, reached_goal）
         #agent reward
         terminated_all = {}
@@ -553,11 +556,14 @@ class Sim4ADSimulation:
         else:
             raise ValueError(f"Spawn method {self.__spawn_method} not found.")
 
-        obs_all = None
-        info_all = None
+        obs_all = None  
+        info_all = None 
         # 添加新agent
         for agent_id, (agent, policy) in add_agents.items():
             self._add_agent(agent=agent, policy=policy)
+        if not self.__agents :
+            logging.info("the self.__agents have no vehicles__1") 
+            logging.info(f"time is={self.__time}")
         if not soft_reset and add_agents:
             common_keys = set(add_agents.keys()) & set(self.__agents.keys())
             common_agents = {key: self.__agents[key] for key in common_keys}
@@ -571,6 +577,8 @@ class Sim4ADSimulation:
 
         # 再次移除可能添加失败的agent
         self.__remove_dead_multi_agents()
+        if not self.__agents :
+            logging.info("the self.__agents have no vehicles__2") 
         return None, None
 
     def __remove_dead_agents(self):
@@ -712,9 +720,65 @@ class Sim4ADSimulation:
         self.__simulation_history.append(new_frame)
         self.__state = new_frame
         self.__time += self.__dt
+        #draw pictures
+        if self.debug and (self.__time - self.last_plot_time >= self.plot_interval_time) :
+            self._plot_current_state()
+            self.last_plot_time = self.__time         
 
         # remove dead agent
         #self.__remove_dead_agents()
+    def _plot_current_state(self):
+        """
+       draw picture now
+        """
+        fig, ax = plt.subplots(figsize=(8, 8))
+    
+        # 1) draw picture
+        plot_map(
+            self.__scenario_map,
+            markings=True,
+            hide_road_bounds_in_junction=True,
+            ax=ax
+        )
+
+        # title with time and current_step
+        ax.set_title(f"Time = {self.__time:.2f}s, satrt={self.__initial_time:.2f}")
+
+        # 2) all agent
+        for agent_id, agent in self.__agents.items():
+            if agent is None:
+                continue
+
+            color = "blue" 
+
+            # position
+            x = agent.state.position.x
+            y = agent.state.position.y
+            ax.plot(x, y, marker='o', markersize=5, color=color)
+
+            #  agent_id
+            ax.text(x, y + 0.2, f"{agent_id}", fontsize=8, color=color)
+
+            bbox = agent.state.bbox.boundary
+            bbox = [*bbox, bbox[0]]  
+            ax.plot(
+                [p[0] for p in bbox],
+                [p[1] for p in bbox],
+                color=color
+            )
+
+            #  agent.state_trajectory ：
+            states = agent.state_trajectory[-10:]  # 20 ci
+            xs = [st.position.x for st in states]
+            ys = [st.position.y for st in states]
+            ax.plot(xs, ys, color=color, linewidth=1)
+
+
+        ax.set_xlabel("X (m)")
+        ax.set_ylabel("Y (m)")
+        
+        plt.axis("equal")
+        plt.show()
 
 
     def __take_actions(self, ego_action: Tuple[float, float] = None):

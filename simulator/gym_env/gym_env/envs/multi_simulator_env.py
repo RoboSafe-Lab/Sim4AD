@@ -127,8 +127,8 @@ class MultiCarEnv(ParallelEnv):
     def step(self, actions: Dict[str, np.ndarray]):
         next_obs_all, terminated_all, truncated_all, info_all = self.simulation.step_multi(actions)
         current_agent_ids = list(next_obs_all.keys())
-        if not current_agent_ids :
-            logging.info("the next_obs_all is none_2")
+        #if not current_agent_ids :
+            #logging.info("the next_obs_all is none_2")
         obs_dict = {}
         rewards_dict = {}
         dones_dict = {}
@@ -170,8 +170,8 @@ class MultiCarEnv(ParallelEnv):
             pass
         else:
             self.agents = alive_agents
-        if not obs_dict :
-            logging.info("the next_obs_dict is not none")
+        #if not obs_dict :
+            #logging.info("the next_obs_dict is not none")
         return obs_dict, rewards_dict, dones_dict, infos_dict
 
 

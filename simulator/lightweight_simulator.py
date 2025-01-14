@@ -373,8 +373,8 @@ class Sim4ADSimulation:
         
         # agent info
         next_obs_all, info_all = self._get_all_agents_obs_info(self.__agents)
-        if not next_obs_all :
-            logging.info("the next_obs_all is None_1")
+        #if not next_obs_all :
+            #logging.info("the next_obs_all is None_1")
         # 根据info判断terminated和truncated（info中有collision, off_road, truncated, reached_goal）
         #agent reward
         terminated_all = {}
@@ -576,7 +576,7 @@ class Sim4ADSimulation:
             return obs_all, info_all
 
         # 再次移除可能添加失败的agent
-        self.__remove_dead_multi_agents()
+        self.__remove_dead_agents()
         if not self.__agents :
             logging.info("the self.__agents have no vehicles__2") 
         return None, None

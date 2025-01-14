@@ -366,7 +366,7 @@ def main():
     env_step_time = 0.0
     sac_update_time = 0.0
     #while global_step < args.total_timesteps:
-    for iteration in range(10):
+    for iteration in range(100):
         logging.info(f"==== Start iteration {iteration} ====")
         obs_dict = env.reset()
         is_episodes_done = False

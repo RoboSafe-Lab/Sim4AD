@@ -506,7 +506,7 @@ def main():
                 if isinstance(actor, nn.DataParallel):
                     torch.save(actor.module.state_dict(), f"best_model_sac_multi.pth")
                 else:
-                    torch.save(actor.state_dict(), f"best_model_sac_multi.pth")
+                    torch.save(actor.state_dict(), f"best_model_sac_multi_1.pth")
 
     env.close()
     eval_env.close()

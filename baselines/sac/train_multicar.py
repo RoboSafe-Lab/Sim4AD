@@ -50,7 +50,7 @@ class Args:
 
     # MultiCarEnv related?
     spawn_method: str = "dataset_all"  # or "random"
-    clustering: str = "Cautious"
+    clustering: str = "Normal"
     episode_names = []   
     max_steps: int = 1000
 
@@ -261,7 +261,7 @@ def print_checkpoint_keys(checkpoint_path):
             print(f"\nWarning: '{key}' not found in the checkpoint.")
 
 def main():
-    CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Cautious_checkpoint.pt" # load td3+bc checkpoint
+    CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Normal_checkpoint.pt" # load td3+bc checkpoint
     #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Normal_checkpoint.pt"
     args = tyro.cli(Args)
     run_name = f"MultiAgentSAC__{args.seed}__{int(time.time())}"

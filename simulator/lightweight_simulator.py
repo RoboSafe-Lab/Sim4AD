@@ -119,7 +119,7 @@ class Sim4ADSimulation:
         self.normalisation_parameters = {}
         if self.normalise_obs:
             if not self.__driving_style_policies:
-                self.__driving_style_policies = {"Cautious": None}  # add clustering just use Normal Now
+                self.__driving_style_policies = {"Normal": None}  # add clustering just use Normal Now
             assert self.__driving_style_policies, "Normalisation of observations is only supported with driving style " \
                                                   "policies"
             for driving_style in self.__driving_style_policies:
@@ -561,9 +561,9 @@ class Sim4ADSimulation:
         # 添加新agent
         for agent_id, (agent, policy) in add_agents.items():
             self._add_agent(agent=agent, policy=policy)
-        if not self.__agents :
-            logging.info("the self.__agents have no vehicles__1") 
-            logging.info(f"time is={self.__time}")
+        #if not self.__agents :
+            #logging.info("the self.__agents have no vehicles__1") 
+            #logging.info(f"time is={self.__time}")
         if not soft_reset and add_agents:
             common_keys = set(add_agents.keys()) & set(self.__agents.keys())
             common_agents = {key: self.__agents[key] for key in common_keys}
@@ -577,8 +577,8 @@ class Sim4ADSimulation:
 
         # 再次移除可能添加失败的agent
         self.__remove_dead_agents()
-        if not self.__agents :
-            logging.info("the self.__agents have no vehicles__2") 
+        #if not self.__agents :
+            #logging.info("the self.__agents have no vehicles__2") 
         return None, None
 
     def __remove_dead_agents(self):
@@ -1162,7 +1162,7 @@ class Sim4ADSimulation:
     def normalise_observation(self, obs, agent):
 
         #driving_style = self.get_driving_style_vehicle(agent.agent_id) #zan shi zhushi dui agent clustering de huo qu
-        driving_style = 'Cautious'
+        driving_style = 'Normal'
         params = self.normalisation_parameters[driving_style]
 
         obs = np.array(obs).reshape(1, -1)

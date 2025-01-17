@@ -50,7 +50,7 @@ class Args:
 
     # MultiCarEnv related?
     spawn_method: str = "dataset_all"  # or "random"
-    clustering: str = "Normal"
+    clustering: str = "Aggressive"
     episode_names = []   
     max_steps: int = 1000
 
@@ -261,8 +261,8 @@ def print_checkpoint_keys(checkpoint_path):
             print(f"\nWarning: '{key}' not found in the checkpoint.")
 
 def main():
-    CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Normal_checkpoint.pt" # load td3+bc checkpoint
-    #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Normal_checkpoint.pt"
+    #CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt" # load td3+bc checkpoint
+    CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt"
     args = tyro.cli(Args)
     run_name = f"MultiAgentSAC__{args.seed}__{int(time.time())}"
     
@@ -425,7 +425,7 @@ def main():
             if dones_dict["__any__"] or abs(env.current_time() - env.end_time()) <= env.step_time() :
                 # all agent return
                 mean_return = np.mean(list(episodic_returns.values()))
-                #logging.info(f"global_step={global_step}, episodic_return={mean_return}, episodic_length={episodic_length}")
+                logging.info(f"global_step={global_step}, episodic_return={mean_return}, episodic_length={episodic_length}")
                 wandb.log({"charts/episodic_return": mean_return,
                         "charts/episodic_length": episodic_length}, step=global_step)
                 episodic_returns = {agent_id:0.0 for agent_id in env.agents}
@@ -438,7 +438,10 @@ def main():
 
             # SAC update
             if global_step >= args.learning_starts:
-                data = rb.sample(args.batch_size)
+                if rb.size() >= args.batch_size:
+                    data = rb.sample(args.batch_size)
+                else:
+                    continue
                 # data.observations shape (batch, obs_dim)
                 # data.actions shape (batch, act_dim)
                 with torch.no_grad():
@@ -506,7 +509,7 @@ def main():
                 if isinstance(actor, nn.DataParallel):
                     torch.save(actor.module.state_dict(), f"best_model_sac_multi.pth")
                 else:
-                    torch.save(actor.state_dict(), f"best_model_sac_multi_normal.pth")
+                    torch.save(actor.state_dict(), f"best_model_sac_multi_aggressive.pth")
 
     env.close()
     eval_env.close()

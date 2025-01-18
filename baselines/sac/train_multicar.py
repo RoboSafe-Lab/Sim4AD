@@ -18,7 +18,7 @@ sys.path.append("D:\IRLcode\Sim4AD")
 from simulator.gym_env.gym_env.envs.multi_simulator_env import MultiCarEnv  # PettingZoo Environment
 from stable_baselines3.common.buffers import ReplayBuffer  # 重用SB3的ReplayBuffer?
 import logging
-
+import psutil
 logging.basicConfig(level=logging.INFO)
 
 @dataclass
@@ -260,9 +260,31 @@ def print_checkpoint_keys(checkpoint_path):
         else:
             print(f"\nWarning: '{key}' not found in the checkpoint.")
 
+def log_memory_usage(global_step, tag=""):
+    import psutil
+
+    process = psutil.Process()
+    mem_info = process.memory_info()
+    rss = mem_info.rss / (1024*1024*1024)  # 物理内存占用，单位GB
+    vms = mem_info.vms / (1024*1024*1024)  # 虚拟内存占用，单位GB
+
+    # GPU内存（如果有可用GPU）
+    if torch.cuda.is_available():
+        allocated = torch.cuda.memory_allocated() / (1024*1024*1024)  # 分配显存，单位GB
+        reserved = torch.cuda.memory_reserved() / (1024*1024*1024)    # 预留显存，单位GB
+    else:
+        allocated = 0
+        reserved = 0
+
+    logging.info(
+        f"[{tag}] step={global_step} | "
+        f"CPU RSS={rss:.2f}GB, VMS={vms:.2f}GB | "
+        f"GPU allocated={allocated:.2f}GB, reserved={reserved:.2f}GB"
+    )
+
 def main():
-    CHECKPOINT_PATH = "/users/cw3005/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt" # load td3+bc checkpoint
-    #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt"
+    #CHECKPOINT_PATH = "/users/cw3005/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt" # load td3+bc checkpoint
+    CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt"
     args = tyro.cli(Args)
     run_name = f"MultiAgentSAC__{args.seed}__{int(time.time())}"
     
@@ -366,9 +388,13 @@ def main():
     env_step_time = 0.0
     sac_update_time = 0.0
     #while global_step < args.total_timesteps:
+    #before iteration log neicun
+    log_memory_usage(global_step, tag="Start training")
+
     for iteration in range(100):
         logging.info(f"==== Start iteration {iteration} ====")
         obs_dict = env.reset()
+        log_memory_usage(global_step, tag="Another iteration")
         is_episodes_done = False
         env.simulation.reset_done_full_cycle()
         while not is_episodes_done:
@@ -389,8 +415,8 @@ def main():
             next_obs_dict, rewards_dict, dones_dict, infos_dict = env.step(actions_dict)
             global_step += 1
             episodic_length += 1
-            if global_step % 10000 == 0:
-                logging.info(f"global_step_up={global_step}, episodic_length_up={episodic_length}, simulation_time={env.current_time()}")
+            if global_step % 5000 == 0:
+                logging.info(f"global_step_up={global_step}, episodic_length_up={episodic_length}, simulation_time={env.current_time()}, replaybuffer={rb.size()}")
             # all agent experience save in the same ReplayBuffer
 
             for agent_id in obs_dict.keys():
@@ -435,9 +461,12 @@ def main():
                     is_episodes_done = True
                 if not env.is_done_full_cycle() :
                     obs_dict = env.reset()
+                    log_memory_usage(global_step, tag="After env.reset()")
 
             # SAC update
             if global_step >= args.learning_starts:
+                if global_step % 5000 == 0:
+                    log_memory_usage(global_step, tag="Before SAC update")
                 if rb.size() >= args.batch_size:
                     data = rb.sample(args.batch_size)
                 else:
@@ -490,7 +519,8 @@ def main():
                         target_param.data.copy_(args.tau * param.data + (1 - args.tau)*target_param.data)
                     for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                         target_param.data.copy_(args.tau * param.data + (1 - args.tau)*target_param.data)
-                
+                if global_step % 5000 == 0:
+                    log_memory_usage(global_step, tag="After SAC update")    
       
         wandb.log({
             "losses/qf_loss": qf_loss.item()/2,
@@ -509,7 +539,7 @@ def main():
                 if isinstance(actor, nn.DataParallel):
                     torch.save(actor.module.state_dict(), f"best_model_sac_multi.pth")
                 else:
-                    torch.save(actor.state_dict(), f"best_model_sac_multi_aggressive.pth")
+                    torch.save(actor.state_dict(), f"best_model_sac_multi_aggressive_2.pth")
 
     env.close()
     eval_env.close()

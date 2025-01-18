@@ -448,8 +448,17 @@ def main():
 
 
             # if__all__ done，reset
-            if dones_dict["__any__"] or abs(env.current_time() - env.end_time()) <= env.step_time() :
-                # all agent return
+            if dones_dict["__any__"] :
+                mean_return = np.mean(list(episodic_returns.values()))
+                logging.info(f"global_step={global_step}, episodic_return={mean_return}, episodic_length={episodic_length}")
+                wandb.log({"charts/episodic_return": mean_return,
+                        "charts/episodic_length": episodic_length}, step=global_step)
+                episodic_returns = {agent_id:0.0 for agent_id in env.agents}
+                episodic_length = 0
+                obs_dict = env.reset()
+                log_memory_usage(global_step, tag="After env.reset()")
+
+            if abs(env.current_time() - env.end_time()) <= env.step_time() :
                 mean_return = np.mean(list(episodic_returns.values()))
                 logging.info(f"global_step={global_step}, episodic_return={mean_return}, episodic_length={episodic_length}")
                 wandb.log({"charts/episodic_return": mean_return,
@@ -462,7 +471,6 @@ def main():
                 if not env.is_done_full_cycle() :
                     obs_dict = env.reset()
                     log_memory_usage(global_step, tag="After env.reset()")
-
             # SAC update
             if global_step >= args.learning_starts:
                 if global_step % 5000 == 0:

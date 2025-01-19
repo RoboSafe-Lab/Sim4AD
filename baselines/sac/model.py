@@ -339,7 +339,7 @@ def print_checkpoint_keys(checkpoint_path):
 def main():
     
     #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt" # load td3+bc checkpoint
-    CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Cautious_checkpoint.pt"
+    CHECKPOINT_PATH = "/users/3005/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt"
     #print_checkpoint_keys(CHECKPOINT_PATH)
     args = tyro.cli(Args)
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
@@ -411,125 +411,134 @@ def main():
     qf2_target.load_state_dict(qf2.state_dict())
 
     # TRY NOT TO MODIFY: start the game
-    obs, _ = env.reset(seed=args.seed)
+    #obs, _ = env.reset(seed=args.seed)
     episodic_return = 0
     episodic_length = 0
     best_eval = -1e6
-    for global_step in range(args.total_timesteps):
-        # ALGO LOGIC: put action logic here
-        if global_step < args.learning_starts:
-            action = env.action_space.sample()
-        else:
-            action = actor.act(torch.Tensor(obs).to(device), device=device)
+    global_step = 0
+    for iteration in range(100):
+        logging.info(f"==== Start iteration {iteration} ====")
+        obs, _ = env.reset(seed=args.seed)
+        is_episodes_done = False
+        env.simulation.reset_done_full_cycle()
+        while not is_episodes_done:
+            # ALGO LOGIC: put action logic here
+            if global_step < args.learning_starts:
+                action = env.action_space.sample()
+            else:
+                action = actor.act(torch.Tensor(obs).to(device), device=device)
 
-        # TRY NOT TO MODIFY: execute the game and log data.
-        next_obs, reward, termination, truncation, info = env.step(action)
-        episodic_return += reward
+            # TRY NOT TO MODIFY: execute the game and log data.
+            next_obs, reward, termination, truncation, info = env.step(action)
+            episodic_return += reward
+            global_step += 1
+            # TRY NOT TO MODIFY: record rewards for plotting purposes
+            # TODO!
+            if termination or truncation:
+                print(f"global_step={global_step}, episodic_return={episodic_return}")
+                wandb.log({"charts/episodic_return": episodic_return,
+                        "charts/episodic_length": episodic_length})
+                episodic_return = 0
+                episodic_length = 0
+            else:
+                episodic_length += 1
 
-        # TRY NOT TO MODIFY: record rewards for plotting purposes
-        # TODO!
-        if termination or truncation:
-            print(f"global_step={global_step}, episodic_return={episodic_return}")
-            wandb.log({"charts/episodic_return": episodic_return,
-                       "charts/episodic_length": episodic_length})
-            episodic_return = 0
-            episodic_length = 0
-        else:
-            episodic_length += 1
+            if termination:
+                # if the environment is done, the next_obs is nan; make it a goal state
+                next_obs = np.ones_like(next_obs) * 2  # TODO: Does it make sense?
+            elif truncation:
+                next_obs = np.ones_like(next_obs) * 3
 
-        if termination:
-            # if the environment is done, the next_obs is nan; make it a goal state
-            next_obs = np.ones_like(next_obs) * 2  # TODO: Does it make sense?
-        elif truncation:
-            next_obs = np.ones_like(next_obs) * 3
+            rb.add(np.array([obs]), np.array([next_obs]), np.array([action]), np.array([reward]), np.array([termination]),
+                [info])
 
-        rb.add(np.array([obs]), np.array([next_obs]), np.array([action]), np.array([reward]), np.array([termination]),
-               [info])
+            # TODO: need to reset env!!!
+            if termination or truncation:
+                obs, _ = env.reset(seed=args.seed)
+            else:
+                # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
+                obs = next_obs
+            if env.is_done_full_cycle() and abs(env.current_time() - env.end_time()) <= env.step_time() :
+                is_episodes_done = True
+                
+            # ALGO LOGIC: training.
+            if global_step > args.learning_starts:
+                data = rb.sample(args.batch_size)
 
-        # TODO: need to reset env!!!
-        if termination or truncation:
-            obs, _ = env.reset(seed=args.seed)
-        else:
-            # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
-            obs = next_obs
+                with torch.no_grad():
+                    # The target Q networks use s' while the current Q networks (below) use s
+                    next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_observations)
+                    qf1_next_target = qf1_target(data.next_observations, next_state_actions)
+                    qf2_next_target = qf2_target(data.next_observations, next_state_actions)
+                    min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
+                    next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (
+                        min_qf_next_target).view(-1)
 
-        # ALGO LOGIC: training.
-        if global_step > args.learning_starts:
-            data = rb.sample(args.batch_size)
+                qf1_a_values = qf1(data.observations, data.actions).view(-1)
+                qf2_a_values = qf2(data.observations, data.actions).view(-1)
+                qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
+                qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
+                qf_loss = qf1_loss + qf2_loss
 
-            with torch.no_grad():
-                # The target Q networks use s' while the current Q networks (below) use s
-                next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_observations)
-                qf1_next_target = qf1_target(data.next_observations, next_state_actions)
-                qf2_next_target = qf2_target(data.next_observations, next_state_actions)
-                min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
-                next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (
-                    min_qf_next_target).view(-1)
+                # optimize the model
+                q_optimizer.zero_grad()
+                qf_loss.backward()
+                q_optimizer.step()
 
-            qf1_a_values = qf1(data.observations, data.actions).view(-1)
-            qf2_a_values = qf2(data.observations, data.actions).view(-1)
-            qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
-            qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
-            qf_loss = qf1_loss + qf2_loss
+                if global_step % args.policy_frequency == 0:  # TD 3 Delayed update support
+                    for _ in range(
+                            args.policy_frequency
+                    ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
+                        pi, log_pi, _ = actor.get_action(data.observations)
+                        qf1_pi = qf1(data.observations, pi)
+                        qf2_pi = qf2(data.observations, pi)
+                        min_qf_pi = torch.min(qf1_pi, qf2_pi)
+                        actor_loss = ((alpha * log_pi) - min_qf_pi).mean()
 
-            # optimize the model
-            q_optimizer.zero_grad()
-            qf_loss.backward()
-            q_optimizer.step()
+                        actor_optimizer.zero_grad()
+                        actor_loss.backward()
+                        actor_optimizer.step()
 
-            if global_step % args.policy_frequency == 0:  # TD 3 Delayed update support
-                for _ in range(
-                        args.policy_frequency
-                ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
-                    pi, log_pi, _ = actor.get_action(data.observations)
-                    qf1_pi = qf1(data.observations, pi)
-                    qf2_pi = qf2(data.observations, pi)
-                    min_qf_pi = torch.min(qf1_pi, qf2_pi)
-                    actor_loss = ((alpha * log_pi) - min_qf_pi).mean()
+                        if args.autotune:
+                            with torch.no_grad():
+                                _, log_pi, _ = actor.get_action(data.observations)
+                            alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
 
-                    actor_optimizer.zero_grad()
-                    actor_loss.backward()
-                    actor_optimizer.step()
+                            a_optimizer.zero_grad()
+                            alpha_loss.backward()
+                            a_optimizer.step()
+                            alpha = log_alpha.exp().item()
 
-                    if args.autotune:
-                        with torch.no_grad():
-                            _, log_pi, _ = actor.get_action(data.observations)
-                        alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
+                # update the target networks
+                if global_step % args.target_network_frequency == 0:
+                    for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
+                        target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+                    for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
+                        target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
 
-                        a_optimizer.zero_grad()
-                        alpha_loss.backward()
-                        a_optimizer.step()
-                        alpha = log_alpha.exp().item()
+        if iteration % 1 == 0:
+            wandb.log({"losses/qf1_values": qf1_a_values.mean().item(),
+                    "losses/qf2_values": qf2_a_values.mean().item(),
+                    "losses/qf1_loss": qf1_loss.item(),
+                    "losses/qf2_loss": qf2_loss.item(),
+                    "losses/qf_loss": qf_loss.item() / 2.0,
+                    "losses/actor_loss": actor_loss.item(),
+                    "losses/alpha": alpha,
+                    "charts/SPS": int(global_step / (time.time() - start_time))})
 
-            # update the target networks
-            if global_step % args.target_network_frequency == 0:
-                for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
-                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
-                for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
-                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+            print("SPS:", int(global_step / (time.time() - start_time)))
+            if args.autotune:
+                wandb.log({"losses/alpha_loss": alpha_loss.item()})
 
-            if global_step % 100 == 0:
-                wandb.log({"losses/qf1_values": qf1_a_values.mean().item(),
-                           "losses/qf2_values": qf2_a_values.mean().item(),
-                           "losses/qf1_loss": qf1_loss.item(),
-                           "losses/qf2_loss": qf2_loss.item(),
-                           "losses/qf_loss": qf_loss.item() / 2.0,
-                           "losses/actor_loss": actor_loss.item(),
-                           "losses/alpha": alpha,
-                           "charts/SPS": int(global_step / (time.time() - start_time))})
-
-                print("SPS:", int(global_step / (time.time() - start_time)))
-                if args.autotune:
-                    wandb.log({"losses/alpha_loss": alpha_loss.item()})
-
-            # Evaluate the agent on 5 different seeds
-            if global_step % 1000 == 0:
-                eval_return = evaluate(args.evaluation_seeds, actor, eval_env, device)
-                if eval_return > best_eval:
-                    best_eval = eval_return
-                    print("Saving new best model")
-                    torch.save(actor.state_dict(),
-                               f"best_model_sac_{args.cluster}_irl{args.use_irl_reward}_{run_name}.pth")
+        # Evaluate the agent on 5 different seeds
+        if iteration % 1 == 0:
+            eval_return = evaluate(args.evaluation_seeds, actor, eval_env, device)
+            if eval_return > best_eval:
+                best_eval = eval_return
+                print("Saving new best model")
+                torch.save(actor.state_dict(),
+                        #f"best_model_sac_{args.cluster}_irl{args.use_irl_reward}_{run_name}.pth")
+                        f"best_model_sac_{args.cluster}_one_agent.pth")
 
     env.close()
     eval_env.close()

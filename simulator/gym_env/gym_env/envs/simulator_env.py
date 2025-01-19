@@ -102,6 +102,19 @@ class SimulatorEnv(gym.Env):
     @property
     def map_name(self):
         return self.simulation.map_name
+    
+    def current_time(self):
+        return self.simulation.simulation_time
+    
+    def end_time(self):
+        return self.simulation.end_time
+
+    def step_time(self):
+        return self.simulation.dt
+
+    def is_done_full_cycle(self):
+        """Expose done_full_cycle from the simulation."""
+        return self.simulation.done_full_cycle
 
     def seed(self, seed=None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)

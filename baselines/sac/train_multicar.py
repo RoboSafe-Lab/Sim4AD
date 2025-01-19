@@ -415,7 +415,7 @@ def main():
             next_obs_dict, rewards_dict, dones_dict, infos_dict = env.step(actions_dict)
             global_step += 1
             episodic_length += 1
-            if global_step % 5000 == 0:
+            if global_step % 10000 == 0:
                 logging.info(f"global_step_up={global_step}, episodic_length_up={episodic_length}, simulation_time={env.current_time()}, replaybuffer={rb.size()}")
             # all agent experience save in the same ReplayBuffer
 
@@ -456,7 +456,7 @@ def main():
                 episodic_returns = {agent_id:0.0 for agent_id in env.agents}
                 episodic_length = 0
                 obs_dict = env.reset()
-                log_memory_usage(global_step, tag="After env.reset()")
+                #log_memory_usage(global_step, tag="After env.reset()")
 
             if abs(env.current_time() - env.end_time()) <= env.step_time() :
                 mean_return = np.mean(list(episodic_returns.values()))
@@ -470,11 +470,9 @@ def main():
                     is_episodes_done = True
                 if not env.is_done_full_cycle() :
                     obs_dict = env.reset()
-                    log_memory_usage(global_step, tag="After env.reset()")
+                    #log_memory_usage(global_step, tag="After env.reset()")
             # SAC update
             if global_step >= args.learning_starts:
-                if global_step % 5000 == 0:
-                    log_memory_usage(global_step, tag="Before SAC update")
                 if rb.size() >= args.batch_size:
                     data = rb.sample(args.batch_size)
                 else:
@@ -526,9 +524,7 @@ def main():
                     for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
                         target_param.data.copy_(args.tau * param.data + (1 - args.tau)*target_param.data)
                     for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
-                        target_param.data.copy_(args.tau * param.data + (1 - args.tau)*target_param.data)
-                if global_step % 5000 == 0:
-                    log_memory_usage(global_step, tag="After SAC update")    
+                        target_param.data.copy_(args.tau * param.data + (1 - args.tau)*target_param.data) 
       
         wandb.log({
             "losses/qf_loss": qf_loss.item()/2,
@@ -547,7 +543,7 @@ def main():
                 if isinstance(actor, nn.DataParallel):
                     torch.save(actor.module.state_dict(), f"best_model_sac_multi.pth")
                 else:
-                    torch.save(actor.state_dict(), f"best_model_sac_multi_aggressive_2.pth")
+                    torch.save(actor.state_dict(), f"best_model_sac_multi_aggressive_all.pth")
 
     env.close()
     eval_env.close()

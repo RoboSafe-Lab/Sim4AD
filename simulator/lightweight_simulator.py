@@ -1357,8 +1357,8 @@ class Sim4ADSimulation:
         self.__state = {}
         self.__agents = {}
         self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
-        if self.clustering != "All":
-            self.__agents_to_add = self.cluster_agents(self.__episode_agents)
+        #if self.clustering != "All":
+        #self.__agents_to_add = self.cluster_agents(self.__episode_agents)
 
         if self.__pbar:
             self.__pbar = tqdm(total=len(self.__episode_agents), desc="Spawning agents")

@@ -276,12 +276,6 @@ def log_memory_usage(global_step, tag=""):
         allocated = 0
         reserved = 0
 
-    logging.info(
-        f"[{tag}] step={global_step} | "
-        f"CPU RSS={rss:.2f}GB, VMS={vms:.2f}GB | "
-        f"GPU allocated={allocated:.2f}GB, reserved={reserved:.2f}GB"s
-    )
-
 def main():
     CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Normal_checkpoint.pt" # load td3+bc checkpoint
     #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt"

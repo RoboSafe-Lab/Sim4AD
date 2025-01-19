@@ -50,7 +50,7 @@ class Args:
 
     # MultiCarEnv related?
     spawn_method: str = "dataset_all"  # or "random"
-    clustering: str = "Cautious"
+    clustering: str = "Normal"
     episode_names = []   
     max_steps: int = 1000
 
@@ -279,11 +279,11 @@ def log_memory_usage(global_step, tag=""):
     logging.info(
         f"[{tag}] step={global_step} | "
         f"CPU RSS={rss:.2f}GB, VMS={vms:.2f}GB | "
-        f"GPU allocated={allocated:.2f}GB, reserved={reserved:.2f}GB"
+        f"GPU allocated={allocated:.2f}GB, reserved={reserved:.2f}GB"s
     )
 
 def main():
-    CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Cautious_checkpoint.pt" # load td3+bc checkpoint
+    CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Normal_checkpoint.pt" # load td3+bc checkpoint
     #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt"
     args = tyro.cli(Args)
     run_name = f"MultiAgentSAC__{args.seed}__{int(time.time())}"
@@ -543,7 +543,7 @@ def main():
                 if isinstance(actor, nn.DataParallel):
                     torch.save(actor.module.state_dict(), f"best_model_sac_multi.pth")
                 else:
-                    torch.save(actor.state_dict(), f"best_model_sac_multi_cautious_all.pth")
+                    torch.save(actor.state_dict(), f"best_model_sac_multi_normal_all.pth")
 
     env.close()
     eval_env.close()

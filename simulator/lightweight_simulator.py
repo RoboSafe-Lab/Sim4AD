@@ -121,7 +121,7 @@ class Sim4ADSimulation:
         self.normalisation_parameters = {}
         if self.normalise_obs:
             if not self.__driving_style_policies:
-                self.__driving_style_policies = {"Aggressive": None}  # add clustering just use Normal Now
+                self.__driving_style_policies = {"Normal": None}  # add clustering just use Normal Now
             assert self.__driving_style_policies, "Normalisation of observations is only supported with driving style " \
                                                   "policies"
             for driving_style in self.__driving_style_policies:
@@ -322,12 +322,14 @@ class Sim4ADSimulation:
             initial_obs, info = self.__update_vehicles(soft_reset=True)
 
         if initial_obs is None:
+            logging.info("we have to change episode because the obs")
+            logging.info(f"Keys in __agents_to_add: {list(self.__agents_to_add.keys())}")
             self.__change_episode()
 
             while len(self.__agents_to_add.keys()) == 0:
                 # Some episodes may not have any actor we want, e.g., when using the Aggressive cluster
                 self.__change_episode()
-
+                logging.info("we have to change episode because the obs_2")
             initial_obs, info = self.__update_vehicles(soft_reset=True)
 
         return initial_obs, info
@@ -1165,7 +1167,7 @@ class Sim4ADSimulation:
     def normalise_observation(self, obs, agent):
 
         #driving_style = self.get_driving_style_vehicle(agent.agent_id) #zan shi zhushi dui agent clustering de huo qu
-        driving_style = 'Aggressive'
+        driving_style = 'Normal'
         params = self.normalisation_parameters[driving_style]
 
         obs = np.array(obs).reshape(1, -1)

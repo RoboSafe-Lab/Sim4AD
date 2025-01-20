@@ -76,7 +76,7 @@ class Args:
     hidden_layer_dim = 256
     """the hidden layer dimension of (all) the networks"""
 
-    cluster: str = "Aggressive"
+    cluster: str = "Normal"
     """the clustering method to use. Options include 'All', 'Aggressive', 'Normal', 'Cautious'"""
 
     normalize_state: bool = True
@@ -339,8 +339,8 @@ def print_checkpoint_keys(checkpoint_path):
 
 def main():
     
-    #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt" # load td3+bc checkpoint
-    CHECKPOINT_PATH = "/users/cw3005/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt"
+    #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Normal_checkpoint.pt" # load td3+bc checkpoint
+    CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Normal_checkpoint.pt"
     #print_checkpoint_keys(CHECKPOINT_PATH)
     args = tyro.cli(Args)
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
@@ -436,7 +436,7 @@ def main():
             # TRY NOT TO MODIFY: record rewards for plotting purposes
             # TODO!
             if termination or truncation:
-                print(f"global_step={global_step}, episodic_return={episodic_return}")
+                logging.info(f"global_step={global_step}, episodic_return={episodic_return}")
                 wandb.log({"charts/episodic_return": episodic_return,
                         "charts/episodic_length": episodic_length})
                 episodic_return = 0
@@ -458,7 +458,7 @@ def main():
             
             # TODO: need to reset env!!!
             if termination or truncation:
-                if not env.agents_to_add and env.is_done_full_cycle():
+                if env.is_done_full_cycle() and not env.agents_to_add:
                     is_episodes_done = True
                 else :
                     obs, _ = env.reset(seed=args.seed)
@@ -534,7 +534,7 @@ def main():
                     "losses/alpha": alpha,
                     "charts/SPS": int(global_step / (time.time() - start_time))})
 
-            print("SPS:", int(global_step / (time.time() - start_time)))
+            logging.info("SPS:", int(global_step / (time.time() - start_time)))
             if args.autotune:
                 wandb.log({"losses/alpha_loss": alpha_loss.item()})
 
@@ -543,7 +543,7 @@ def main():
             eval_return = evaluate(args.evaluation_seeds, actor, eval_env, device)
             if eval_return > best_eval:
                 best_eval = eval_return
-                print("Saving new best model")
+                logging.info("Saving new best model")
                 torch.save(actor.state_dict(),
                         #f"best_model_sac_{args.cluster}_irl{args.use_irl_reward}_{run_name}.pth")
                         f"best_model_sac_{args.cluster}_one_agent.pth")

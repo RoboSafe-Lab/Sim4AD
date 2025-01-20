@@ -111,6 +111,9 @@ class SimulatorEnv(gym.Env):
 
     def step_time(self):
         return self.simulation.dt
+    @property
+    def agents_to_add(self):
+        return self.simulation.agents_in_list
 
     def is_done_full_cycle(self):
         """Expose done_full_cycle from the simulation."""

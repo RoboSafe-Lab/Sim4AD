@@ -20,7 +20,8 @@ import wandb
 import gym_env  # If this fails, install it with `pip install -e .` from \simulator\gym_env
 
 import logging
-
+import sys
+sys.path.append("D:\\IRLcode\\Sim4AD")
 from sim4ad.offlinerlenv.td3bc_automatum import wrap_env, TD3_BC_Loader, get_normalisation_parameters
 
 logging.basicConfig(level=logging.INFO)
@@ -339,7 +340,7 @@ def print_checkpoint_keys(checkpoint_path):
 def main():
     
     #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt" # load td3+bc checkpoint
-    CHECKPOINT_PATH = "/users/3005/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt"
+    CHECKPOINT_PATH = "/users/cw3005/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt"
     #print_checkpoint_keys(CHECKPOINT_PATH)
     args = tyro.cli(Args)
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
@@ -420,7 +421,7 @@ def main():
         logging.info(f"==== Start iteration {iteration} ====")
         obs, _ = env.reset(seed=args.seed)
         is_episodes_done = False
-        env.simulation.reset_done_full_cycle()
+        env.unwrapped.simulation.reset_done_full_cycle()
         while not is_episodes_done:
             # ALGO LOGIC: put action logic here
             if global_step < args.learning_starts:
@@ -452,14 +453,21 @@ def main():
             rb.add(np.array([obs]), np.array([next_obs]), np.array([action]), np.array([reward]), np.array([termination]),
                 [info])
 
+
+            # TODO: need to reset env!!!
+            
             # TODO: need to reset env!!!
             if termination or truncation:
-                obs, _ = env.reset(seed=args.seed)
+                if not env.agents_to_add and env.is_done_full_cycle():
+                    is_episodes_done = True
+                else :
+                    obs, _ = env.reset(seed=args.seed)
+            # TODO: need to reset env!!!
+            #if termination or truncation:
+               # obs, _ = env.reset(seed=args.seed)
             else:
                 # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
                 obs = next_obs
-            if env.is_done_full_cycle() and abs(env.current_time() - env.end_time()) <= env.step_time() :
-                is_episodes_done = True
                 
             # ALGO LOGIC: training.
             if global_step > args.learning_starts:

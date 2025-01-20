@@ -121,7 +121,7 @@ class Sim4ADSimulation:
         self.normalisation_parameters = {}
         if self.normalise_obs:
             if not self.__driving_style_policies:
-                self.__driving_style_policies = {"Cautious": None}  # add clustering just use Normal Now
+                self.__driving_style_policies = {"Aggressive": None}  # add clustering just use Normal Now
             assert self.__driving_style_policies, "Normalisation of observations is only supported with driving style " \
                                                   "policies"
             for driving_style in self.__driving_style_policies:
@@ -1165,7 +1165,7 @@ class Sim4ADSimulation:
     def normalise_observation(self, obs, agent):
 
         #driving_style = self.get_driving_style_vehicle(agent.agent_id) #zan shi zhushi dui agent clustering de huo qu
-        driving_style = 'Cautious'
+        driving_style = 'Aggressive'
         params = self.normalisation_parameters[driving_style]
 
         obs = np.array(obs).reshape(1, -1)
@@ -1358,8 +1358,8 @@ class Sim4ADSimulation:
         self.__state = {}
         self.__agents = {}
         self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
-        #if self.clustering != "All":
-        #self.__agents_to_add = self.cluster_agents(self.__episode_agents)
+        if self.clustering != "All":
+            self.__agents_to_add = self.cluster_agents(self.__episode_agents)
 
         if self.__pbar:
             self.__pbar = tqdm(total=len(self.__episode_agents), desc="Spawning agents")

@@ -259,7 +259,7 @@ def print_checkpoint_keys(checkpoint_path):
                 print(f"  - {sub_key}")
         else:
             print(f"\nWarning: '{key}' not found in the checkpoint.")
-
+"""
 def log_memory_usage(global_step, tag=""):
     import psutil
 
@@ -275,7 +275,7 @@ def log_memory_usage(global_step, tag=""):
     else:
         allocated = 0
         reserved = 0
-
+"""
 def main():
     CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Normal_checkpoint.pt" # load td3+bc checkpoint
     #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt"
@@ -383,12 +383,11 @@ def main():
     sac_update_time = 0.0
     #while global_step < args.total_timesteps:
     #before iteration log neicun
-    log_memory_usage(global_step, tag="Start training")
+   
 
     for iteration in range(100):
         logging.info(f"==== Start iteration {iteration} ====")
         obs_dict = env.reset()
-        log_memory_usage(global_step, tag="Another iteration")
         is_episodes_done = False
         env.simulation.reset_done_full_cycle()
         while not is_episodes_done:

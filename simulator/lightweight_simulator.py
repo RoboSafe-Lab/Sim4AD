@@ -210,6 +210,7 @@ class Sim4ADSimulation:
                 self.__pbar.update(1)
         elif self.__spawn_method == "dataset_one" and new_agent.agent_id == self.__agent_evaluated:
             self.__agents_to_add.pop(new_agent.agent_id)
+            self.agents_in_list = self.__agents_to_add 
             if self.__pbar:
                 self.__pbar.update(1)
         elif self.__spawn_method == "random":
@@ -1357,9 +1358,8 @@ class Sim4ADSimulation:
         self.__state = {}
         self.__agents = {}
         self.__agents_to_add = deepcopy(self.__episode_agents)  # Agents that have not been added to the simulation yet.
-        #if self.clustering != "All":
-        #self.__agents_to_add = self.cluster_agents(self.__episode_agents)
-
+        if self.clustering != "All":
+            self.__agents_to_add = self.cluster_agents(self.__episode_agents)
         if self.__pbar:
             self.__pbar = tqdm(total=len(self.__episode_agents), desc="Spawning agents")
         self.__simulation_history = []  # History of frames (agent_id, State) of the simulation.

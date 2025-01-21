@@ -417,7 +417,7 @@ def main():
     episodic_length = 0
     best_eval = -1e6
     global_step = 0
-    for iteration in range(100):
+    for iteration in range(338):
         logging.info(f"==== Start iteration {iteration} ====")
         obs, _ = env.reset(seed=args.seed)
         is_episodes_done = False

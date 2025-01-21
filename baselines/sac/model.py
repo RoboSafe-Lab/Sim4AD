@@ -76,7 +76,7 @@ class Args:
     hidden_layer_dim = 256
     """the hidden layer dimension of (all) the networks"""
 
-    cluster: str = "Cautious"
+    cluster: str = "Aggressive"
     """the clustering method to use. Options include 'All', 'Aggressive', 'Normal', 'Cautious'"""
 
     normalize_state: bool = True
@@ -340,7 +340,7 @@ def print_checkpoint_keys(checkpoint_path):
 def main():
     
     #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Normal_checkpoint.pt" # load td3+bc checkpoint
-    CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Cautious_checkpoint.pt"
+    CHECKPOINT_PATH = "/users/cw3005/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt"
     #print_checkpoint_keys(CHECKPOINT_PATH)
     args = tyro.cli(Args)
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
@@ -417,7 +417,7 @@ def main():
     episodic_length = 0
     best_eval = -1e6
     global_step = 0
-    for iteration in range(100):
+    for iteration in range(111085):
         logging.info(f"==== Start iteration {iteration} ====")
         obs, _ = env.reset(seed=args.seed)
         is_episodes_done = False

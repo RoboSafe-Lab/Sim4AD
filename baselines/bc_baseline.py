@@ -15,7 +15,8 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 from torch.utils.tensorboard import SummaryWriter
-
+import sys
+sys.path.append(r"D:\IRLcode\Sim4AD")
 from baselines.dataset import AutomatumDataset
 from baselines.bc_model import LSTMModel
 from sim4ad.common_constants import DEFAULT_SCENARIO, DEFAULT_CLUSTER, LSTM_PADDING_VALUE
@@ -194,8 +195,8 @@ class BCBaseline:
                     logger.debug(f"Model saved with loss {epoch_eval_loss}, at epoch {epoch}")
                         
                 # Interrupt training if the loss is not decreasing in the last 'stop_after' epochs
-                stop_after = 20  # epochs
-                if epoch > 80 and all(
+                stop_after = 100  # epochs
+                if epoch > 500 and all(
                         self.eval_losses[-1] >= self.eval_losses[-i] for i in range(1, stop_after)):
                     logger.debug(f"Interrupting training at epoch {epoch} due to no decrease in loss in past {stop_after} epochs")
                     early_stopping = True

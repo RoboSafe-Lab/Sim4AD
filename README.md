@@ -10,7 +10,6 @@ We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first instal
 - Run `preprocessing.py` for data generation for BC and offline RL. `feature_normalization.pkl` and `XXXtraining_log.pkl` 
 are needed for preprocessing.
 - 
-## todo: need to preprocess all of the sriving style groups. You need to pass the --driving_style_idx argument from 0 to 2
 
 ### IRL to infer reward functions
 - Run `training_irl.py` to train the feature weights for each driving style and construct a separate linear reward function for each style.

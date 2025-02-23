@@ -298,6 +298,32 @@ class EvaluationFeaturesExtractor:
         assert 0 <= jsd <= 1, f"JSD is {jsd}"
 
         return jsd
+    @staticmethod
+    def compute_hellinger_distance(simulated_values, real_values):
+        """
+        Compute the Hellinger distance between two distributions given their simulated and real values.
+        """
+        # Compute the histograms of the distributions
+        nr_bins = 10
+        simulated_hist, _ = np.histogram(simulated_values, bins=nr_bins, density=True)
+        real_hist, _ = np.histogram(real_values, bins=nr_bins, density=True)
+
+        # Normalize histograms
+        simulated_hist = simulated_hist + 1e-6
+        real_hist = real_hist + 1e-6
+
+        simulated_hist = simulated_hist / np.sum(simulated_hist)
+        real_hist = real_hist / np.sum(real_hist)
+
+        # Compute the Hellinger distance
+        hellinger_distance = (1 / np.sqrt(2)) * np.sqrt(
+            np.sum((np.sqrt(simulated_hist) - np.sqrt(real_hist)) ** 2)
+        )
+
+        assert 0 <= hellinger_distance <= 1, f"Hellinger Distance is {hellinger_distance}"
+
+        return hellinger_distance
+
 
     def compute_out_of_road_rate(self):
         """
@@ -311,6 +337,13 @@ class EvaluationFeaturesExtractor:
         off_road_rate = len(out_of_road_agents) / len(self.__agents)
 
         return off_road_rate
+    
+    def compute_reach_goal_rate(self):
+
+        reach_goal_agents = [(aid, agent) for (aid, agent) in self.__agents.items() if
+                              agent["death_cause"] == DeathCause.GOAL_REACHED.value]
+        reach_goal_rate = len(reach_goal_agents) / len(self.__agents)
+        return reach_goal_rate
 
     def compute_collision_rate(self):
         """
@@ -451,7 +484,7 @@ class EvaluationFeaturesExtractor:
         """plot criticality distribution for diversity analysis"""
         all_simulated_ittcs, all_real_ittcs, all_simulated_tths, all_real_tths = self.compute_all_ittc_tth(cluster=cluster)
 
-        self.plot_distogram(label='iTTC (1/s)', real_data=all_real_ittcs, simulated_data=all_simulated_ittcs)
+        self.plot_distogram_2(label='iTTC (1/s)', real_data=all_real_ittcs, simulated_data=all_simulated_ittcs)
         self.plot_distogram(label='THW (s)', real_data=all_real_tths, simulated_data=all_simulated_tths)
 
         plt.show()
@@ -462,24 +495,57 @@ class EvaluationFeaturesExtractor:
         self.plot_distogram(label='Distance (m)', real_data=real_closest_dis, simulated_data=simulated_closest_dis)
 
         plt.show()
+    
+    def plot_distogram_2(self, label, real_data=None, simulated_data=None):
+                # Plot histograms and PDFs for real and simulated data
+        plt.figure(figsize=(6, 4))
+        
+        # Plot real data
+        if real_data is not None:
+            plt.hist(real_data, bins=30, density=True, alpha=0.6, color='#2171B5', label=f'Real {label}')#qian blue #2171B5
+
+        # Plot simulated data
+        if simulated_data is not None:
+            plt.hist(simulated_data, bins=30, density=True, alpha=0.6, color='#FF6F61', label=f'Simulated {label}')#qian cheng #E67E22 #qianlv #66BB6A #qian hong #FF6F61 
+
+        if simulated_data is not None and real_data is not None:
+            jsd = self.compute_jsd(simulated_data, real_data)
+            hellinger = self.compute_hellinger_distance(simulated_data, real_data)
+            #plt.text(0.58, 0.77, f'JSD: {jsd:.4f}\nHellinger Distance: {hellinger:.4f}', transform=plt.gca().transAxes,
+                    # verticalalignment='top', bbox=dict(facecolor='white', alpha=0.5))
+            plt.text(0.57, 0.77, f'JSD: {jsd:.4f}\nHellinger Distance: {hellinger:.4f}', 
+                    transform=plt.gca().transAxes,
+                    verticalalignment='top', 
+                    bbox=dict(facecolor='white', alpha=0.8, edgecolor='gray', linewidth=0.8),
+                    linespacing=1.5)
+        plt.xlabel(label)
+        plt.xlim(0,0.5)
+        plt.ylabel('Normalized PDF')
+        plt.legend()
+        plt.grid(True, which='both', axis='both', color='black', linestyle='--', linewidth=0.5)
 
     def plot_distogram(self, label, real_data=None, simulated_data=None):
         # Plot histograms and PDFs for real and simulated data
         plt.figure(figsize=(6, 4))
-
+        
         # Plot real data
         if real_data is not None:
-            plt.hist(real_data, bins=30, density=True, alpha=0.6, color='blue', label=f'Real {label}')
+            plt.hist(real_data, bins=30, density=True, alpha=0.6, color='#2171B5', label=f'Real {label}')#blue 2171B5
 
         # Plot simulated data
         if simulated_data is not None:
-            plt.hist(simulated_data, bins=30, density=True, alpha=0.6, color='orange', label=f'Simulated {label}')
+            plt.hist(simulated_data, bins=30, density=True, alpha=0.6, color='#FF6F61', label=f'Simulated {label}')#orange E67E22 #green 66BB6A #pink FF6F61
 
         if simulated_data is not None and real_data is not None:
             jsd = self.compute_jsd(simulated_data, real_data)
-            plt.text(0.02, 0.95, f'JSD: {jsd:.4f}', transform=plt.gca().transAxes,
-                     verticalalignment='top', bbox=dict(facecolor='white', alpha=0.5))
-
+            hellinger = self.compute_hellinger_distance(simulated_data, real_data)
+            #plt.text(0.58, 0.77, f'JSD: {jsd:.4f}\nHellinger Distance: {hellinger:.4f}', transform=plt.gca().transAxes,
+                    # verticalalignment='top', bbox=dict(facecolor='white', alpha=0.5))
+            plt.text(0.57, 0.77, f'JSD: {jsd:.4f}\nHellinger Distance: {hellinger:.4f}', 
+                    transform=plt.gca().transAxes,
+                    verticalalignment='top', 
+                    bbox=dict(facecolor='white', alpha=0.8, edgecolor='gray', linewidth=0.8),
+                    linespacing=1.5)
         plt.xlabel(label)
         plt.ylabel('Normalized PDF')
         plt.legend()

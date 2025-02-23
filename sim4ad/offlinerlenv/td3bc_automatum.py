@@ -614,12 +614,12 @@ def get_normalisation_parameters(driving_style: str, map_name: str):
 
 def initialize_model(state_dim, action_dim, max_action, config):
     actor = Actor(state_dim, action_dim, max_action).to(config.device)
-    actor_optimizer = torch.optim.Adam(actor.parameters(), lr=1e-4)
+    actor_optimizer = torch.optim.Adam(actor.parameters(), lr=3e-4)
 
     critic_1 = Critic(state_dim, action_dim).to(config.device)
-    critic_1_optimizer = torch.optim.Adam(critic_1.parameters(), lr=1e-4,weight_decay=1e-4)
+    critic_1_optimizer = torch.optim.Adam(critic_1.parameters(), lr=3e-4,weight_decay=1e-4)
     critic_2 = Critic(state_dim, action_dim).to(config.device)
-    critic_2_optimizer = torch.optim.Adam(critic_2.parameters(), lr=1e-4,weight_decay=1e-4)
+    critic_2_optimizer = torch.optim.Adam(critic_2.parameters(), lr=3e-4,weight_decay=1e-4)
 
     kwargs = {
         "max_action": max_action,

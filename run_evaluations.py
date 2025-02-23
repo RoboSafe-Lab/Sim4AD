@@ -2,7 +2,7 @@ import pickle
 from dataclasses import dataclass, field
 from typing import List
 from loguru import logger
-
+import logging
 import gymnasium as gym
 from enum import Enum
 import os
@@ -32,14 +32,14 @@ Add for each cluster the path to the model that vehicles in that cluster should 
 """
 EVAL_POLICIES = {
     PolicyType.SAC_BASIC_REWARD: {
-        #"Aggressive": "best_model_sac_Aggressive_irlFalse_SimulatorEnv-v0__model__1__1724203527.pth",
+        #"Aggressive": "best_model_sac_Aggressive_irlFal4se_SimulatorEnv-v0__model__1__1724203527.pth",
         #"Aggressive": "best_model_sac_Aggressive_irlFalse_SimulatorEnv-v0__model__1__1735322548.pth",
-        "Aggressive": "best_model_sac_Aggressive_irlFalse_SimulatorEnv-v0__model__1__1735480317.pth",
+        "Aggressive": "best_model_sac_multi_normal_all.pth",
         #"Normal": "best_model_sac_Normal_irlFalse_SimulatorEnv-v0__model__1__1734188839.pth",
-        "Normal": "best_model_sac_multi_MultiAgentSAC__1__1734876090.pth",
+        "Normal": "best_model_sac_multi_normal_all.pth",
        # "Normal": "best_model_sac_Normal_irlFalse_SimulatorEnv-v0__model__1__1735479265.pth",
         #"Cautious": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1724207833.pth",
-        "Cautious": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1735479606.pth"},
+        "Cautious": "best_model_sac_multi_normal_all.pth"},
         #"All": "best_model_sac_Cautious_irlFalse_SimulatorEnv-v0__model__1__1724207833.pth"},
     PolicyType.SAC_IRL_REWARD: {
         "Aggressive": "best_model_sac_Aggressive_irlTrue_SimulatorEnv-v0__model__1__1724161974.pth",
@@ -48,21 +48,21 @@ EVAL_POLICIES = {
         "All": "best_model_sac_All_irlTrue_SimulatorEnv-v0__model__1__1724161974.pth"},
     PolicyType.OFFLINERL: {
         "Aggressive": "results/offlineRL/Aggressive_checkpoint.pt",
-        "Normal": "results/offlineRL/Normal_checkpoint.pt",
-        "Cautious": "results/offlineRL/Cautious_checkpoint.pt"},
+        "Normal": "results/offlineRL/Aggressive_checkpoint.pt",
+        "Cautious": "results/offlineRL/Aggressive_checkpoint.pt"},
         #"All": "results/offlineRL/All_checkpoint.pt"},
     PolicyType.BC: {
-        "Aggressive": "bc-all-obs-5_pi_cluster_Aggressive",
-        "Normal": "bc-all-obs-5_pi_cluster_Normal",
-        "Cautious": "bc-all-obs-5_pi_cluster_Cautious",
-        "All": "bc-all-obs-5_pi_cluster_All"}
+        "Aggressive":"bc-all-obs-5_pi_cluster_Aggressive", 
+        "Normal": "bc-all-obs-5_pi_cluster_Aggressive",
+        "Cautious": "bc-all-obs-5_pi_cluster_Aggressive"}
+       # "All": "bc-all-obs-5_pi_cluster_All"}
 }
 
 
 class EvaluationType(Enum):
     # !!! Make sure that the values of the enums below are all different across evaluation types!!!
-    DIVERSITY = {"spawn_method": "dataset_all", "clusters": ["Aggressive"]}
-    HUMAN_LIKENESS = {"spawn_method": "dataset_all", "clusters": ["Aggressive"]}
+    DIVERSITY = {"spawn_method": "dataset_all", "clusters": ["Normal"]}
+    HUMAN_LIKENESS = {"spawn_method": "dataset_all", "clusters": ["Normal"]}
     GENERALIZATION = "generalization"  # TODO
 
 
@@ -81,7 +81,7 @@ class EvalConfig:
     reward_normalization: bool = True  # only used if state_normalization is True
 
     ### DO NOT CHANGE THE FOLLOWING PARAMETERS -- They are set automatically based on the evaluation performed ###
-    dataset_split: str = "test"  # Set depending on the type of evaluation done
+    dataset_split: str = "train"  # Set depending on the type of evaluation done
     spawn_method: str = None  # Set depending on the type of evaluation done
     use_irl_reward: bool = None  # Set depending on the type of evaluation done
     device: str = field(default_factory=lambda: torch.device("cuda" if torch.cuda.is_available() else "cpu"))
@@ -114,7 +114,8 @@ def load_policy(policy_type: PolicyType, env: gym.Env, device, eval_configs: Eva
 
     elif policy_type == PolicyType.SAC_BASIC_REWARD or policy_type == PolicyType.SAC_IRL_REWARD:
         actor = SACActor(env, device=device).to(device)
-        actor.load_state_dict(torch.load(model_path))
+        #actor.load_state_dict(torch.load(model_path))
+        actor.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
         actor.eval()
         return actor
 
@@ -131,6 +132,13 @@ def begin_evaluation(simulation_agents, evaluation_episodes):
     evaluator.plot_criticality_distribution()
     evaluator.plot_speed_distribution()
     evaluator.plot_closest_dis_distribution()
+    collision_rate = evaluator.compute_collision_rate()
+    out_of_road_rate = evaluator.compute_out_of_road_rate()
+    reach_goal_rate = evaluator.compute_reach_goal_rate()
+
+    logging.info(f"Collision Rate: {collision_rate:.4f}")
+    logging.info(f"Out of Road Rate: {out_of_road_rate:.4f}")
+    logging.info(f"Reach Goal Rate: {reach_goal_rate:.4f}")
 
 
 def main():
@@ -193,7 +201,7 @@ def main():
                                                         driving_style_model_paths=driving_style_model_paths)
                         simulation_agents = evaluator.simulation(visualization=VISUALIZATION)
 
-                        # Create the directory if it does not exist
+                        # Create the directory if it does nost exist
                         os.makedirs(os.path.dirname(output_dir), exist_ok=True)
                         with open(output_dir, "wb") as f:
                             pickle.dump(simulation_agents, f)

@@ -69,7 +69,7 @@ class PolicyAgent:
         if isinstance(self.policy, SAC):
             (acceleration, delta), _ = self.policy.predict(obs, deterministic=True)
         elif isinstance(self.policy, BC):
-            acceleration, delta = self.policy(history)[0].tolist()
+            acceleration, delta = self.policy(history)[0][0].tolist()
         else:
             acceleration, delta = self.policy.act(obs, device=self.device, deterministic=True)
 

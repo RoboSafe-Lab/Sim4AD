@@ -63,7 +63,7 @@ def plot_weight_comparison(categories):
     # plot the weights comparison for different driving styles
     weights = {}
     # features = ['speed', 'long_acc', 'lat_acc', 'long_jerk', 'thw_front', 'thw_rear', 'induced_deceleration']
-    features = ['speed', 'long_acc', 'lat_acc', 'long_jerk', 'thw_front', 'thw_rear', 'd_centerline','l_deviation_rate','left_available','right_available']
+    features = ['speed', 'long_acc', 'lat_acc', 'long_jerk', 'thw_front', 'thw_rear', 'd_centerline','d_centerline_rate','left_availability','right_availability']
     for category in categories:
         training_log = load_training_log(category)
         for key, value in training_log.items():
@@ -77,17 +77,17 @@ def plot_weight_comparison(categories):
 
     # Create bars
     fig, ax = plt.subplots()
-    rects1 = ax.bar(x - 1.5 * width, weights['Normal'], width, label='Normal', color='red')
-    rects2 = ax.bar(x - 0.5 * width, weights['Aggressive'], width, label='Aggressive', color='green')
-    rects3 = ax.bar(x + 0.5 * width, weights['Cautious'], width, label='Cautious', color='blue')
-    rects4 = ax.bar(x + 1.5 * width, weights['All'], width, label='All', color='purple')
+    rects1 = ax.bar(x - 1.5 * width, weights['Normal'], width, label='Normal', color='#E67E22',alpha=0.7)
+    rects2 = ax.bar(x - 0.5 * width, weights['Aggressive'], width, label='Aggressive', color='#FF6F61',alpha=0.7)
+    rects3 = ax.bar(x + 0.5 * width, weights['Cautious'], width, label='Cautious', color='#66BB6A',alpha=0.7)
+    #rects4 = ax.bar(x + 1.5 * width, weights['All'], width, label='All', color='purple')
 
     # Add some text for labels, title and custom x-axis tick labels, etc.
     ax.set_xlabel('Features')
     ax.set_ylabel('Weights')
     ax.set_title('Weights for different driving styles')
     ax.set_xticks(x)
-    ax.set_xticklabels(features, rotation=10)
+    ax.set_xticklabels(features, rotation=15)
     ax.legend()
     ax.grid(True, which='both', axis='y', linestyle='--', linewidth=0.5, color='gray')
     # Show the plot
@@ -95,7 +95,7 @@ def plot_weight_comparison(categories):
 
 
 def main():
-    categories = ['Normal', 'Aggressive', 'Cautious', 'All']
+    categories = ['Normal', 'Aggressive', 'Cautious']
     plot_weight_comparison(categories)
     plot_training_process(categories[0])
 

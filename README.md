@@ -27,10 +27,10 @@ are needed for preprocessing.
 - /simulator: which contains the lightweigth simulator and the RL simulator
 
 
-### Useful commands to run the code are the following:
-- `python3 evaluation/evaluation_methods.py` to evaluate the baselines 
-- `baselines/bc_baseline.py` to train the BC baseline
-- `baselines/rl.py` to train the SAC baseline
+### Other commands to run the code are the following:
+- `demonstrtation_analysis.py`,'reward_analysis.py" to draw the reward distribution 
+- `run_evaluations.py` to deploy the policy and visualize the effects of the training. The script supports two modes:'dataset one' and 'dataset all'. 
+- `irl_training_analysis.py` to visualize the reward function weights obtained from IRL training.
 - `simulator/lightweight_simulator.py` to run the lightweight simulator. Useful parameters to 
 set (at the bottom of the file) are `spawn_method` = which is "dataset_one" for micro analysis 
 and "dataset_all" for macro analysis, `policy_type` = which is "bc-all-obs-5_pi" for BC, "sac_5_rl" for SAC (after training it as above),

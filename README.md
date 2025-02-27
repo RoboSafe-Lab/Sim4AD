@@ -7,7 +7,7 @@ This repository is the PyTorch implementation of our paper titled "HAD-Gen: Huma
   <img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/Human-likeness.png" width="48%" />
 </div>
 * Compared with baselines, the policies we trained has the strongest generalization ability and can adapt to new real-world scenarios.
-<img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/Generalibility.png" width="90%" />
+<img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/Generalibility.png" width="80%" />
 
 ## Method
 ### The HAD-Gen framework

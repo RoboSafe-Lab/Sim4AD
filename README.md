@@ -4,6 +4,7 @@ This repository is the PyTorch implementation of our paper titled "HAD-Gen: Huma
 * Our method HAD-Gen can controllably generate human-like and diverse scenarios and can be used for AVs testing and validation.
   ![diversity]
   <img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/Diversity.png" width="48%" />
+  <img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/Diversity.png" width="48%" />
 ### Requirements
 We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first install the Python utility to interface the data
 `pip3 install openautomatumdronedata`.

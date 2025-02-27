@@ -1,5 +1,5 @@
 # HAD-Gen: Human-like and Diverse scenario generation 
-This repository is the PyTorch implementation of our paper titled "HAD-Gen: Human-like and Diverse Agent Behavior Modeling for Controllable Scenario Generation".
+This repository is the implementation of our paper titled "HAD-Gen: Human-like and Diverse Agent Behavior Modeling for Controllable Scenario Generation".
 ### Requirements
 We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first install the Python utility to interface the data
 `pip3 install openautomatumdronedata`.

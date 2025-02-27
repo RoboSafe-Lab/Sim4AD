@@ -29,7 +29,7 @@ We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first instal
 - Run `feature_normalization.py` for mean and standard deviation calculation of features in order to normalize features
 - Run `preprocessing.py` for data generation for BC and offline RL. `feature_normalization.pkl` and `XXXtraining_log.pkl` 
 are needed for preprocessing.
-- 
+  
 ### Evaluation folders:
 - /baselines: contains the code for the baselines
 - /evaluation: contains the  code for the metrics (and their unit tests), scoring, evaluation and plotting.

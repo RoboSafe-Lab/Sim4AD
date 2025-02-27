@@ -30,8 +30,6 @@ We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first instal
 - Run `preprocessing.py` for data generation for BC and offline RL. `feature_normalization.pkl` and `XXXtraining_log.pkl` 
 are needed for preprocessing.
 - 
-## todo: need to preprocess all of the sriving style groups. You need to pass the --driving_style_idx argument from 0 to 2
-
 ### Evaluation folders:
 - /baselines: contains the code for the baselines
 - /evaluation: contains the  code for the metrics (and their unit tests), scoring, evaluation and plotting.

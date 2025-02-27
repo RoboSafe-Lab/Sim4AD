@@ -2,6 +2,7 @@
 This repository is the PyTorch implementation of our paper titled "HAD-Gen: Human-like and Diverse Agent Behavior Modeling for Controllable Scenario Generation".
 ## Results
 * Our method HAD-Gen can controllably generate human-like and diverse scenarios and can be used for AVs testing and validation.
+  ！[diversity](https://github.com/RoboSafe-Lab/Sim4AD/blob/Marl4IRL/images/Diversity.png)
 ### Requirements
 We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first install the Python utility to interface the data
 `pip3 install openautomatumdronedata`.

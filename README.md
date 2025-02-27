@@ -1,4 +1,25 @@
-# Sim4AD
+# HAD-Gen: Human-like and Diverse scenario generation 
+This repository is the PyTorch implementation of our paper titled "HAD-Gen: Human-like and Diverse Agent Behavior Modeling for Controllable Scenario Generation".
+## Results
+* Our method HAD-Gen can controllably generate human-like and diverse scenarios and can be used for AVs testing and validation.
+<div style="display: flex;">
+  <img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/Diversity.png" width="48%" />
+  <img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/Human-likeness.png" width="48%" />
+</div>
+* Compared with baselines, the policies we trained has the strongest generalization ability and can adapt to new real-world scenarios.
+<p align="center">
+  <img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/Generalibility.png" width="80%" />
+</p>
+
+
+## Method
+### The HAD-Gen framework
+<p align="center">
+  <img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/framework.png" width="80%" />
+</p>
+    The overall working flow of our proposed method. The driving behavior in a dataset is clustered into aggressive, normal and cautious. Each
+sub-dataset is then used to reconstruct a reward function representing human driving. The reconstructed rewards are fundamental for offline RL and MARL,
+which generate a driving policy for each cluster. The various driving policies are deployed in a simulation given a policy selection strategy.
 
 ### Requirements
 We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first install the Python utility to interface the data
@@ -8,9 +29,7 @@ We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first instal
 - Run `feature_normalization.py` for mean and standard deviation calculation of features in order to normalize features
 - Run `preprocessing.py` for data generation for BC and offline RL. `feature_normalization.pkl` and `XXXtraining_log.pkl` 
 are needed for preprocessing.
-- 
-## todo: need to preprocess all of the sriving style groups. You need to pass the --driving_style_idx argument from 0 to 2
-
+  
 ### Evaluation folders:
 - /baselines: contains the code for the baselines
 - /evaluation: contains the  code for the metrics (and their unit tests), scoring, evaluation and plotting.

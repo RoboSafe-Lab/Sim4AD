@@ -8,6 +8,8 @@ This repository is the PyTorch implementation of our paper titled "HAD-Gen: Huma
 </div>
 * Compared with baselines, the policies we trained has the strongest generalization ability and can adapt to new real-world scenarios.
 <img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/Generalibility.png" />
+## Method
+###The HAD-Gen framework
 ### Requirements
 We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first install the Python utility to interface the data
 `pip3 install openautomatumdronedata`.

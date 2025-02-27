@@ -17,6 +17,10 @@ This repository is the PyTorch implementation of our paper titled "HAD-Gen: Huma
 <p align="center">
   <img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/framework.png" width="80%" />
 </p>
+The overall working flow of our proposed method. The driving behavior in a dataset is clustered into aggressive, normal and cautious. Each
+sub-dataset is then used to reconstruct a reward function representing human driving. The reconstructed rewards are fundamental for offline RL and MARL,
+which generate a driving policy for each cluster. The various driving policies are deployed in a simulation given a policy selection strategy.
+
 ### Requirements
 We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first install the Python utility to interface the data
 `pip3 install openautomatumdronedata`.

@@ -1,4 +1,4 @@
-# Sim4AD
+# HAD-Gen: Human-like and Diverse scenario generation 
 
 ### Requirements
 We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first install the Python utility to interface the data

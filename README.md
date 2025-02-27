@@ -15,7 +15,7 @@ This repository is the PyTorch implementation of our paper titled "HAD-Gen: Huma
 ## Method
 ### The HAD-Gen framework
 <p align="center">
-  <img src="" width="80%" />
+  <img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/framework.png" width="80%" />
 </p>
 ### Requirements
 We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first install the Python utility to interface the data

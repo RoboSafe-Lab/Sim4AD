@@ -1,7 +1,7 @@
 import pickle
 import matplotlib.pyplot as plt
 import numpy as np
-
+import pandas as pd
 
 def load_training_log(category: str):
     # Open the pickle file and load the data
@@ -63,7 +63,7 @@ def plot_weight_comparison(categories):
     # plot the weights comparison for different driving styles
     weights = {}
     # features = ['speed', 'long_acc', 'lat_acc', 'long_jerk', 'thw_front', 'thw_rear', 'induced_deceleration']
-    features = ['speed', 'long_acc', 'lat_acc', 'long_jerk', 'thw_front', 'thw_rear', 'd_centerline','d_centerline_rate','left_availability','right_availability']
+    features = [r'$v_{\rm ego}$', r'$a_{\rm long}$', r'$a_{\rm lat}$', r'$J_{\rm long}$', r'$THW_{\rm f}$', r'$THW_{\rm r}$', r'$d_{\rm c}$', r'$\dot{d}_{\rm c}$', r'$avail_{\rm l}$', r'$avail_{\rm r}$']
     for category in categories:
         training_log = load_training_log(category)
         for key, value in training_log.items():
@@ -71,10 +71,21 @@ def plot_weight_comparison(categories):
                 # weights[category] = np.concatenate((value[-1][:6], [value[-1][7]]))
                 weights[category] = value[-1][:]
 
+     #Convert the weights into a pandas DataFrame
+    weight_data = pd.DataFrame(weights, index=features)
+
+    # Print the table (or save it to a CSV)
+    print("Weight Table for Different Driving Styles:")
+    print(weight_data)
+
+    # Optionally, save the table to a CSV file
+    weight_data.to_csv('weights_comparison_table.csv')
+
+
     # plot bar chart
     x = np.arange(len(features))  # the label locations
-    width = 0.2  # the width of the bars
-
+    width = 0.35  # the width of the bars
+ 
     # Create bars
     fig, ax = plt.subplots()
     rects1 = ax.bar(x - 1.5 * width, weights['Normal'], width, label='Normal', color='#E67E22',alpha=0.7)
@@ -87,10 +98,12 @@ def plot_weight_comparison(categories):
     ax.set_ylabel('Weights')
     ax.set_title('Weights for different driving styles')
     ax.set_xticks(x)
-    ax.set_xticklabels(features, rotation=15)
+    ax.set_xticklabels(features, rotation=0)
     ax.legend()
     ax.grid(True, which='both', axis='y', linestyle='--', linewidth=0.5, color='gray')
     # Show the plot
+    plt.tight_layout()
+    #plt.savefig('weights_comparison.pdf', format='pdf')
     plt.show()
 
 

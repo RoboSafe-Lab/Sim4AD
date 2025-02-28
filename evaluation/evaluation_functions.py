@@ -526,12 +526,12 @@ class EvaluationFeaturesExtractor:
 
     def plot_distogram(self, label, real_data=None, simulated_data=None):
         # Plot histograms and PDFs for real and simulated data
-        plt.figure(figsize=(6, 4))
+        plt.figure(figsize=(7, 5))
         
         # Plot real data
         if real_data is not None:
             plt.hist(real_data, bins=30, density=True, alpha=0.6, color='#2171B5', label=f'Real {label}')#blue 2171B5
-
+            
         # Plot simulated data
         if simulated_data is not None:
             plt.hist(simulated_data, bins=30, density=True, alpha=0.6, color='#FF6F61', label=f'Simulated {label}')#orange E67E22 #green 66BB6A #pink FF6F61
@@ -541,7 +541,7 @@ class EvaluationFeaturesExtractor:
             hellinger = self.compute_hellinger_distance(simulated_data, real_data)
             #plt.text(0.58, 0.77, f'JSD: {jsd:.4f}\nHellinger Distance: {hellinger:.4f}', transform=plt.gca().transAxes,
                     # verticalalignment='top', bbox=dict(facecolor='white', alpha=0.5))
-            plt.text(0.57, 0.77, f'JSD: {jsd:.4f}\nHellinger Distance: {hellinger:.4f}', 
+            plt.text(0.75, 0.77, f'JSD: {jsd:.4f}\nHD: {hellinger:.4f}', 
                     transform=plt.gca().transAxes,
                     verticalalignment='top', 
                     bbox=dict(facecolor='white', alpha=0.8, edgecolor='gray', linewidth=0.8),

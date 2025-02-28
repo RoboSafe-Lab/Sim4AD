@@ -39,7 +39,7 @@ are needed for preprocessing.
 ### Useful commands to run the code are the following:
 - `python3 evaluation/evaluation_methods.py` to evaluate the baselines 
 - `baselines/bc_baseline.py` to train the BC baseline
-- `baselines/rl.py` to train the SAC baseline
+- `baselines/model.py` to train the SAC baseline
 - `simulator/lightweight_simulator.py` to run the lightweight simulator. Useful parameters to 
 set (at the bottom of the file) are `spawn_method` = which is "dataset_one" for micro analysis 
 and "dataset_all" for macro analysis, `policy_type` = which is "bc-all-obs-5_pi" for BC, "sac_5_rl" for SAC (after training it as above),

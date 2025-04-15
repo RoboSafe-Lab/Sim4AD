@@ -25,10 +25,16 @@ which generate a driving policy for each cluster. The various driving policies a
 We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first install the Python utility to interface the data
 `pip3 install openautomatumdronedata`.
 
-### Preprocessing
+### Run
+- Run `riskclustering.py` to get the clustering results
+- Run `training_irl.py` to get MaxEnt IRL results
+
 - Run `feature_normalization.py` for mean and standard deviation calculation of features in order to normalize features
-- Run `preprocessing.py` for data generation for BC and offline RL. `feature_normalization.pkl` and `XXXtraining_log.pkl` 
+- Run `preprocessing.py` for data generation for BC and offline RL. `feature_normalization.pkl`(from feature_normalization.py) and `XXXtraining_log.pkl`(from training_irl.py) 
 are needed for preprocessing.
+
+- Run `td3bc_automatum.py` to get log-replay results
+- Run `train_multicar.py` to get self-replay results
   
 ### Evaluation folders:
 - /baselines: contains the code for the baselines

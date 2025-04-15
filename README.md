@@ -33,8 +33,9 @@ We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first instal
 - Run `preprocessing.py` for data generation for BC and offline RL. `feature_normalization.pkl`(from feature_normalization.py) and `XXXtraining_log.pkl`(from training_irl.py) 
 are needed for preprocessing.
 
-- Run `td3bc_automatum.py` to get log-replay results
-- Run `train_multicar.py` to get self-replay results
+- Run `td3bc_automatum.py` to get offline rl results
+- Run `sac/model.py` to get log-replay results
+- Run `train_multicar.py` to get online rl results (self-replay)
   
 ### Evaluation folders:
 - /baselines: contains the code for the baselines

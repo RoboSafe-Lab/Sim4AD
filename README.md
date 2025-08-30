@@ -8,14 +8,14 @@ This repository contains the PyTorch implementation of our paper titled **"HAD-G
 
 ### Key Achievements
 <div style="display: flex;">
-  <img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/Diversity.png" width="48%" />
-  <img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/Human-likeness.png" width="48%" />
+  <img src="images/Diversity.png" width="48%" />
+  <img src="images/Human-likeness.png" width="48%" />
 </div>
 
 **Superior Generalization**: Compared with baselines, our trained policies demonstrate the strongest generalization ability and can adapt to new real-world scenarios.
 
 <p align="center">
-  <img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/Generalibility.png" width="80%" />
+  <img src="images/Generalibility.png" width="80%" />
 </p>
 
 
@@ -24,7 +24,7 @@ This repository contains the PyTorch implementation of our paper titled **"HAD-G
 ### HAD-Gen Framework Overview
 
 <p align="center">
-  <img src="https://github.com/RoboSafe-Lab/Sim4AD/raw/Marl4IRL/images/framework.png" width="80%" />
+  <img src="images/framework.png" width="80%" />
 </p>
 
 **Workflow**:

@@ -130,6 +130,10 @@ dmypy.json
 
 # Pycharm project files
 .idea/
+
+# VS Code project files
+.vscode/
+
 /scenarios/data/
 scripts/experiments/data/evaluation_set/
 

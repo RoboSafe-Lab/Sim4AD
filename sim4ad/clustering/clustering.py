@@ -186,12 +186,12 @@ class Clustering:
         cluster_centers = np.array([scaled_features[hc.labels_ == i].mean(axis=0) for i in range(hc.n_clusters)])
 
         # Plotting dendrogram
-        linked = linkage(scaled_features, method='ward')
-        plt.figure(figsize=(10, 7))
-        dendrogram(linked, orientation='top', distance_sort='descending', show_leaf_counts=True)
-        plt.title('Hierarchical Clustering Dendrogram')
-        plt.xlabel('Sample index')
-        plt.ylabel('Distance')
+        # linked = linkage(scaled_features, method='ward')
+        # plt.figure(figsize=(10, 7))
+        # dendrogram(linked, orientation='top', distance_sort='descending', show_leaf_counts=True)
+        # plt.title('Hierarchical Clustering Dendrogram')
+        # plt.xlabel('Sample index')
+        # plt.ylabel('Distance')
 
         return dataframe, cluster_centers
 

@@ -33,7 +33,7 @@ class Args:
     wandb_entity: str = None
     capture_video: bool = False
 
-    num_iterations: int = 100
+    num_iterations: int = 1000
     buffer_size: int = int(1e5)
     gamma: float = 0.99
     tau: float = 0.005

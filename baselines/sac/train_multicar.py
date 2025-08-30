@@ -1,8 +1,7 @@
-import os
 import random
 import time
 from dataclasses import dataclass
-from typing import List, Dict
+from typing import List
 import sys
 import numpy as np
 import torch
@@ -12,14 +11,16 @@ import torch.optim as optim
 import tyro
 import wandb
 import gymnasium as gym
-# multi agent environment MultiCarEnv
+# Add the gym_env to the path dynamically
 import sys
-sys.path.append("D:\IRLcode\Sim4AD")
-from simulator.gym_env.gym_env.envs.multi_simulator_env import MultiCarEnv  # PettingZoo Environment
-from stable_baselines3.common.buffers import ReplayBuffer  # 重用SB3的ReplayBuffer?
+from pathlib import Path
+gym_env_path = Path(__file__).parent.parent.parent / "simulator" / "gym_env"
+sys.path.append(str(gym_env_path))
+from simulator.gym_env.gym_env.envs.multi_simulator_env import MultiCarEnv
+from stable_baselines3.common.buffers import ReplayBuffer  
 import logging
-import psutil
 logging.basicConfig(level=logging.INFO)
+
 
 @dataclass
 class Args:
@@ -32,7 +33,7 @@ class Args:
     wandb_entity: str = None
     capture_video: bool = False
 
-    total_timesteps: int = 1000000
+    num_iterations: int = 100
     buffer_size: int = int(1e5)
     gamma: float = 0.99
     tau: float = 0.005
@@ -128,7 +129,6 @@ class Actor(nn.Module):
         return action.cpu().numpy()
 
 # multi agent evaluate
-
 def evaluate_multi(env, actor, device, n_eval_episodes=1):
     actor.eval()
     returns = []
@@ -161,27 +161,25 @@ def evaluate_multi(env, actor, device, n_eval_episodes=1):
     actor.train()
     return np.mean(returns)
 
-import torch
-import logging
 
 def load_td3bc_to_sac(checkpoint_path, sac_actor, qf1, qf2):
     """
-     TD3+BC load Actor and Critic to SAC Actor and Soft Q Networks。
+    Load TD3+BC checkpoint weights into SAC networks.
 
     Args:
-        checkpoint_path (str): TD3+BC 
-        sac_actor (SACActor): SAC 的 Actor
-        qf1 (SoftQNetwork): SAC Soft Q Network 1
-        qf2 (SoftQNetwork): SAC Soft Q Network 2
+        checkpoint_path (str): Path to TD3+BC checkpoint
+        sac_actor (Actor): SAC actor network
+        qf1 (SoftQNetwork): SAC Q-network 1
+        qf2 (SoftQNetwork): SAC Q-network 2
     """
-    # load
-    td3bc_checkpoint = torch.load(checkpoint_path, map_location='cpu') 
+    # Load checkpoint
+    td3bc_checkpoint = torch.load(checkpoint_path, map_location='cpu')
 
     if 'actor' in td3bc_checkpoint:
         td3bc_actor_state_dict = td3bc_checkpoint['actor']
         sac_actor_state_dict = sac_actor.state_dict()
 
-        # TD3+BC net.0 net.2  SAC  fc1 fc2
+        # Map TD3+BC layer names to SAC layer names
         mapping_actor = {
             'net.0.weight': 'fc1.weight',
             'net.0.bias': 'fc1.bias',
@@ -200,9 +198,9 @@ def load_td3bc_to_sac(checkpoint_path, sac_actor, qf1, qf2):
     else:
         raise KeyError("Checkpoint does not contain 'actor' key.")
 
-    #  Critic
+    # Load critics
     if 'critic_1' in td3bc_checkpoint and 'critic_2' in td3bc_checkpoint:
-        # TD3+BC net.0, net.2, net.4  SAC  fc1, fc2, fc3
+        # Map TD3+BC critic layer names to SAC Q-network layer names
         mapping_critic = {
             'net.0.weight': 'fc1.weight',
             'net.0.bias': 'fc1.bias',
@@ -212,7 +210,7 @@ def load_td3bc_to_sac(checkpoint_path, sac_actor, qf1, qf2):
             'net.4.bias': 'fc3.bias',
         }
 
-        #  critic_1 to qf1
+        # Load critic_1 to qf1
         td3bc_critic1_state_dict = td3bc_checkpoint['critic_1']
         sac_qf1_state_dict = qf1.state_dict()
 
@@ -223,10 +221,9 @@ def load_td3bc_to_sac(checkpoint_path, sac_actor, qf1, qf2):
             else:
                 logging.warning(f"Key '{td3_key}' or 'qf1.{sac_key}' not found in state_dict.")
 
-        # state_dict  qf1
         qf1.load_state_dict(sac_qf1_state_dict)
 
-        # critic_2  qf2
+        # Load critic_2 to qf2
         td3bc_critic2_state_dict = td3bc_checkpoint['critic_2']
         sac_qf2_state_dict = qf2.state_dict()
 
@@ -237,7 +234,6 @@ def load_td3bc_to_sac(checkpoint_path, sac_actor, qf1, qf2):
             else:
                 logging.warning(f"Key '{td3_key}' or 'qf2.{sac_key}' not found in state_dict.")
 
-        #  state_dict qf2
         qf2.load_state_dict(sac_qf2_state_dict)
     else:
         raise KeyError("Checkpoint does not contain both 'critic_1' and 'critic_2' keys.")
@@ -259,30 +255,20 @@ def print_checkpoint_keys(checkpoint_path):
                 print(f"  - {sub_key}")
         else:
             print(f"\nWarning: '{key}' not found in the checkpoint.")
-"""
-def log_memory_usage(global_step, tag=""):
-    import psutil
-
-    process = psutil.Process()
-    mem_info = process.memory_info()
-    rss = mem_info.rss / (1024*1024*1024)  # 物理内存占用，单位GB
-    vms = mem_info.vms / (1024*1024*1024)  # 虚拟内存占用，单位GB
-
-    # GPU内存（如果有可用GPU）
-    if torch.cuda.is_available():
-        allocated = torch.cuda.memory_allocated() / (1024*1024*1024)  # 分配显存，单位GB
-        reserved = torch.cuda.memory_reserved() / (1024*1024*1024)    # 预留显存，单位GB
-    else:
-        allocated = 0
-        reserved = 0
-"""
+            
+            
 def main():
-    CHECKPOINT_PATH = "/users/yx3006/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt" # load td3+bc checkpoint
-    #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt"
+    """
+    Main training function for Multi-Agent SAC with TD3+BC initialization.
+    
+    This function implements the training loop for a multi-agent Soft Actor-Critic
+    algorithm, initialized with weights from a TD3+BC offline RL model.
+    """
+    # Configuration - use dynamic paths
+    CHECKPOINT_PATH = str(Path(__file__).parent.parent.parent / "results" / "offlineRL" / "Aggressive_checkpoint.pt")
     args = tyro.cli(Args)
     run_name = f"MultiAgentSAC__{args.seed}__{int(time.time())}"
     
-    import wandb
     wandb.init(
         project=args.wandb_project_name,
         entity=args.wandb_entity,
@@ -334,12 +320,11 @@ def main():
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
 
-    try:
-        load_td3bc_to_sac(CHECKPOINT_PATH, actor, qf1, qf2)
-    except KeyError as e:
-        logging.error(f"defeat: {e}")
-        
-        # 使用 DataParallel 封装模型
+
+    load_td3bc_to_sac(CHECKPOINT_PATH, actor, qf1, qf2)
+    logging.info("Successfully loaded TD3+BC checkpoint")
+
+    # Wrap models with DataParallel if using multiple GPUs
     if torch.cuda.device_count() > 1:
         logging.info(f"use {torch.cuda.device_count()}  GPU for training")
         actor = nn.DataParallel(actor)
@@ -360,7 +345,6 @@ def main():
         alpha = args.alpha
 
     # ReplayBuffer
-    from stable_baselines3.common.buffers import ReplayBuffer
     rb = ReplayBuffer(
         args.buffer_size,
         gym.spaces.Box(low=-np.inf, high=np.inf, shape=(obs_dim,)), 
@@ -377,31 +361,24 @@ def main():
     start_time = time.time()
     best_eval = -1e9
     episodic_returns = {agent_id:0.0 for agent_id in env.agents}
-    episodic_length = 0
+    episodic_length = 0  
 
-    env_step_time = 0.0
-    sac_update_time = 0.0
-    #while global_step < args.total_timesteps:
-    #before iteration log neicun
-   
-
-    for iteration in range(100):
+    for iteration in range(args.num_iterations):
         logging.info(f"==== Start iteration {iteration} ====")
         obs_dict = env.reset()
         is_episodes_done = False
         env.simulation.reset_done_full_cycle()
         while not is_episodes_done:
             actions_dict = {}
-            # all agents 
             for agent_id, obs in obs_dict.items():
                 if global_step < args.learning_starts:
-                    # random
-                    action = env.action_space.sample() #here is a problem no sample function
+                    # Use random action during warmup
+                    action = np.random.uniform(action_low, action_high, size=act_dim)
                 else:
-                    #action = actor.act(obs, deterministic=False)
+                    # Get action from actor
                     with torch.no_grad():
                         if torch.cuda.device_count() > 1:
-                            action = actor.module.act(obs, deterministic=False)  # 使用 DataParallel 封装后的模块
+                            action = actor.module.act(obs, deterministic=False)
                         else:
                             action = actor.act(obs, deterministic=False)
                 actions_dict[agent_id] = action     
@@ -438,8 +415,6 @@ def main():
             # remove done的agent
             obs_dict = {agent_id: next_obs_dict[agent_id] for agent_id in next_obs_dict if not dones_dict[agent_id]}
 
-
-
             # if__all__ done，reset
             if dones_dict["__any__"] :
                 mean_return = np.mean(list(episodic_returns.values()))
@@ -449,7 +424,6 @@ def main():
                 episodic_returns = {agent_id:0.0 for agent_id in env.agents}
                 episodic_length = 0
                 obs_dict = env.reset()
-                #log_memory_usage(global_step, tag="After env.reset()")
 
             if abs(env.current_time() - env.end_time()) <= env.step_time() :
                 mean_return = np.mean(list(episodic_returns.values()))
@@ -463,7 +437,6 @@ def main():
                     is_episodes_done = True
                 if not env.is_done_full_cycle() :
                     obs_dict = env.reset()
-                    #log_memory_usage(global_step, tag="After env.reset()")
             # SAC update
             if global_step >= args.learning_starts:
                 if rb.size() >= args.batch_size:
@@ -527,7 +500,7 @@ def main():
         }, step=global_step)
 
         # eval
-        if iteration % 1 == 0 :
+        if iteration % 10 == 0 :
             eval_return = evaluate_multi(eval_env, actor, device, n_eval_episodes=1)
             wandb.log({"charts/eval_return": eval_return}, step=global_step)
             if eval_return > best_eval:

@@ -4,8 +4,6 @@ import random
 import time
 from dataclasses import dataclass
 from typing import List
-import sys
-sys.path.append('/users/yx3006/Sim4AD/simulator/gym_env')
 import gymnasium as gym
 import numpy as np
 import torch
@@ -17,11 +15,15 @@ from stable_baselines3.common.buffers import ReplayBuffer
 import stable_baselines3 as sb3
 import wandb
 
+# Add the gym_env to the path dynamically
+import sys
+from pathlib import Path
+gym_env_path = Path(__file__).parent.parent.parent / "simulator" / "gym_env"
+sys.path.append(str(gym_env_path))
 import gym_env  # If this fails, install it with `pip install -e .` from \simulator\gym_env
 
 import logging
 import sys
-sys.path.append("D:\\IRLcode\\Sim4AD")
 from sim4ad.offlinerlenv.td3bc_automatum import wrap_env, TD3_BC_Loader, get_normalisation_parameters
 
 logging.basicConfig(level=logging.INFO)
@@ -49,8 +51,8 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "SimulatorEnv-v0"  # "Hopper-v4"
     """the environment id of the task"""
-    total_timesteps: int = 1000000
-    """total timesteps of the experiments"""
+    num_iterations: int = 1000
+    """number of iterations (each iteration traverses all episodes in the dataset)"""
     buffer_size: int = int(1e6)
     """the replay memory buffer size"""
     gamma: float = 0.99
@@ -84,8 +86,18 @@ class Args:
 
     use_irl_reward: bool = False
     """whether to use the IRL reward or the basic default reward"""
+    
+    use_offline_as_basis: bool = False
+    """whether to use the offline dataset as the basis for training"""
 
     evaluation_seeds: List[int] = (0, 1, 2, 3, 4)  # TODO: change this to 5 different seeds -- currently not used
+
+    # Model loading
+    load_td3bc_checkpoint: bool = False
+    """whether to load TD3+BC checkpoint for initialization"""
+    
+    checkpoint_path: str = ""
+    """path to TD3+BC checkpoint file"""
 
 
 def make_env(env_id, seed, run_name, args, evaluation=False, normalisation: bool = False):
@@ -113,11 +125,11 @@ def make_env(env_id, seed, run_name, args, evaluation=False, normalisation: bool
 # ALGO LOGIC: initialize agent here:
 class SoftQNetwork(nn.Module):
     ### TODO: this predicts the soft Q value function given a state and action
-    def __init__(self, env):
+    def __init__(self, env, hidden_dim=256):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.observation_space.shape).prod() + np.prod(env.action_space.shape), 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 1)
+        self.fc1 = nn.Linear(np.array(env.observation_space.shape).prod() + np.prod(env.action_space.shape), hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, 1)
 
     def forward(self, x, a):
         x = torch.cat([x, a], 1)
@@ -132,13 +144,13 @@ LOG_STD_MIN = -5
 
 
 class Actor(nn.Module):
-    def __init__(self, env, device):
+    def __init__(self, env, device, hidden_dim=256):
         super().__init__()
         self.device = device
-        self.fc1 = nn.Linear(np.array(env.observation_space.shape).prod(), 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc_mean = nn.Linear(256, np.prod(env.action_space.shape))
-        self.fc_logstd = nn.Linear(256, np.prod(env.action_space.shape))
+        self.fc1 = nn.Linear(np.array(env.observation_space.shape).prod(), hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc_mean = nn.Linear(hidden_dim, np.prod(env.action_space.shape))
+        self.fc_logstd = nn.Linear(hidden_dim, np.prod(env.action_space.shape))
         # action rescaling
         self.register_buffer(
             "action_scale", torch.tensor((env.action_space.high - env.action_space.low) / 2.0, dtype=torch.float32)
@@ -215,50 +227,27 @@ def evaluate(evaluation_seeds, actor, eval_env, device):
     wandb.log({"charts/eval_return": np.mean(all_test_rets)})
     actor.train()
     return np.mean(all_test_rets)
-"""
-def load_td3bc_checkpoint(checkpoint_path, actor, qf1, qf2, qf1_target, qf2_target, device):
-    # load checkpoint.pt
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    
-    #  'actor', 'critic1', 'critic2'
-    if 'actor' in checkpoint:
-        actor.load_state_dict(checkpoint['actor'])
-        logging.info("Loaded actor weights from TD3+BC checkpoint.")
-    else:
-        raise KeyError("Checkpoint does not contain 'actor' key.")
-    
-    if 'critic1' in checkpoint and 'critic2' in checkpoint:
-        qf1.load_state_dict(checkpoint['critic1'])
-        qf2.load_state_dict(checkpoint['critic2'])
-        logging.info("Loaded critic weights from TD3+BC checkpoint.")
-    else:
-        raise KeyError("Checkpoint does not contain 'critic1' and 'critic2' keys.")
-    qf1_target.load_state_dict(qf1.state_dict())
-    qf2_target.load_state_dict(qf2.state_dict())
-    logging.info("target network follow")
-"""
 
-import torch
-import logging
 
 def load_td3bc_to_sac(checkpoint_path, sac_actor, qf1, qf2):
     """
-     TD3+BC load Actor and Critic to SAC Actor and Soft Q Networks。
+    Load TD3+BC Actor and Critic weights into SAC Actor and Soft Q Networks.
 
     Args:
-        checkpoint_path (str): TD3+BC 
-        sac_actor (SACActor): SAC 的 Actor
+        checkpoint_path (str): Path to TD3+BC checkpoint file
+        sac_actor (Actor): SAC Actor network
         qf1 (SoftQNetwork): SAC Soft Q Network 1
         qf2 (SoftQNetwork): SAC Soft Q Network 2
     """
-    # load
+    # Load checkpoint
     td3bc_checkpoint = torch.load(checkpoint_path, map_location='cpu') 
 
     if 'actor' in td3bc_checkpoint:
         td3bc_actor_state_dict = td3bc_checkpoint['actor']
         sac_actor_state_dict = sac_actor.state_dict()
 
-        # TD3+BC net.0 net.2  SAC  fc1 fc2
+        # Map TD3+BC layer names to SAC layer names
+        # TD3+BC uses net.0, net.2 for hidden layers; SAC uses fc1, fc2
         mapping_actor = {
             'net.0.weight': 'fc1.weight',
             'net.0.bias': 'fc1.bias',
@@ -338,13 +327,13 @@ def print_checkpoint_keys(checkpoint_path):
             print(f"\nWarning: '{key}' not found in the checkpoint.")
 
 def main():
-    
-    #CHECKPOINT_PATH = "D:/IRLcode/Sim4AD/results/offlineRL/Normal_checkpoint.pt" # load td3+bc checkpoint
-    CHECKPOINT_PATH = "/users/cw3005/Sim4AD/results/offlineRL/Aggressive_checkpoint.pt"
-    #print_checkpoint_keys(CHECKPOINT_PATH)
     args = tyro.cli(Args)
+    
+    # Set default checkpoint path if loading is enabled but no path provided
+    if args.load_td3bc_checkpoint and not args.checkpoint_path:
+        args.checkpoint_path = f"results/offlineRL/{args.cluster}_checkpoint.pt"
+
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
-    import wandb
 
     wandb.init(
         project=args.wandb_project_name,
@@ -371,13 +360,12 @@ def main():
     eval_env = make_env(args.env_id, seed=args.seed, args=args, run_name=run_name, evaluation=True,
                         normalisation=args.normalize_state)
 
-    max_action = float(env.action_space.high[0])
 
-    actor = Actor(env, device=device).to(device)
-    qf1 = SoftQNetwork(env).to(device)
-    qf2 = SoftQNetwork(env).to(device)
-    qf1_target = SoftQNetwork(env).to(device)
-    qf2_target = SoftQNetwork(env).to(device)
+    actor = Actor(env, device=device, hidden_dim=args.hidden_layer_dim).to(device)
+    qf1 = SoftQNetwork(env, hidden_dim=args.hidden_layer_dim).to(device)
+    qf2 = SoftQNetwork(env, hidden_dim=args.hidden_layer_dim).to(device)
+    qf1_target = SoftQNetwork(env, hidden_dim=args.hidden_layer_dim).to(device)
+    qf2_target = SoftQNetwork(env, hidden_dim=args.hidden_layer_dim).to(device)
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
     q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.q_lr)
@@ -401,12 +389,18 @@ def main():
         handle_timeout_termination=False,
     )
     start_time = time.time()
-    """
-    try:
-        load_td3bc_to_sac(CHECKPOINT_PATH, actor, qf1, qf2)
-    except KeyError as e:
-        logging.error(f"defeat: {e}")
-    """
+
+    # Load TD3+BC checkpoint if specified
+    if args.load_td3bc_checkpoint:
+        if not os.path.exists(args.checkpoint_path):
+            logging.warning(f"Checkpoint path {args.checkpoint_path} does not exist. Skipping checkpoint loading.")
+        else:
+            try:
+                load_td3bc_to_sac(args.checkpoint_path, actor, qf1, qf2)
+                logging.info(f"Loaded TD3+BC checkpoint from {args.checkpoint_path}")
+            except Exception as e:
+                logging.error(f"Failed to load checkpoint: {e}")
+        
     # update target network
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
@@ -417,7 +411,16 @@ def main():
     episodic_length = 0
     best_eval = -1e6
     global_step = 0
-    for iteration in range(111085):
+    
+    # Initialize logging variables
+    qf1_a_values = torch.tensor(0.0)
+    qf2_a_values = torch.tensor(0.0)
+    qf1_loss = torch.tensor(0.0)
+    qf2_loss = torch.tensor(0.0)
+    actor_loss = torch.tensor(0.0)
+    alpha_loss = torch.tensor(0.0)
+    
+    for iteration in range(args.num_iterations):
         logging.info(f"==== Start iteration {iteration} ====")
         obs, _ = env.reset(seed=args.seed)
         is_episodes_done = False
@@ -433,8 +436,13 @@ def main():
             next_obs, reward, termination, truncation, info = env.step(action)
             episodic_return += reward
             global_step += 1
+            
+            # Periodic logging
+            if global_step % 10000 == 0:
+                logging.info(f"global_step={global_step}, episodic_length={episodic_length}, "
+                           f"simulation_time={env.current_time():.2f}, replay_buffer_size={rb.size()}")
+            
             # TRY NOT TO MODIFY: record rewards for plotting purposes
-            # TODO!
             if termination or truncation:
                 logging.info(f"global_step={global_step}, episodic_return={episodic_return}")
                 wandb.log({"charts/episodic_return": episodic_return,
@@ -444,33 +452,37 @@ def main():
             else:
                 episodic_length += 1
 
-            if termination:
-                # if the environment is done, the next_obs is nan; make it a goal state
-                next_obs = np.ones_like(next_obs) * 2  # TODO: Does it make sense?
-            elif truncation:
-                next_obs = np.ones_like(next_obs) * 3
-
+            # Store transition in replay buffer (don't modify next_obs)
             rb.add(np.array([obs]), np.array([next_obs]), np.array([action]), np.array([reward]), np.array([termination]),
                 [info])
 
-
-            # TODO: need to reset env!!!
-            
-            # TODO: need to reset env!!!
+            # Handle episode termination and environment reset
             if termination or truncation:
+                # Check if all episodes in the dataset have been traversed
                 if env.is_done_full_cycle() and not env.agents_to_add:
                     is_episodes_done = True
-                else :
+                else:
                     obs, _ = env.reset(seed=args.seed)
-            # TODO: need to reset env!!!
-            #if termination or truncation:
-               # obs, _ = env.reset(seed=args.seed)
             else:
-                # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
+                # Update observation for next step
                 obs = next_obs
+            
+            # Check if simulation time has reached the end 
+            if abs(env.current_time() - env.end_time()) <= env.step_time():
+                logging.info(f"global_step={global_step}, episodic_return={episodic_return}, episodic_length={episodic_length}")
+                wandb.log({"charts/episodic_return": episodic_return,
+                        "charts/episodic_length": episodic_length}, step=global_step)
+                episodic_return = 0
+                episodic_length = 0
+                
+                # Check if all episodes are traversed
+                if env.is_done_full_cycle():
+                    is_episodes_done = True
+                else:
+                    obs, _ = env.reset(seed=args.seed)
                 
             # ALGO LOGIC: training.
-            if global_step > 500:
+            if global_step > args.learning_starts and rb.size() >= args.batch_size:
                 data = rb.sample(args.batch_size)
 
                 with torch.no_grad():
@@ -524,22 +536,30 @@ def main():
                     for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                         target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
 
-        if iteration % 1 == 0:
-            wandb.log({"losses/qf1_values": qf1_a_values.mean().item(),
-                    "losses/qf2_values": qf2_a_values.mean().item(),
-                    "losses/qf1_loss": qf1_loss.item(),
-                    "losses/qf2_loss": qf2_loss.item(),
-                    "losses/qf_loss": qf_loss.item() / 2.0,
-                    "losses/actor_loss": actor_loss.item(),
-                    "losses/alpha": alpha,
-                    "charts/SPS": int(global_step / (time.time() - start_time))})
-
-            logging.info("SPS:", int(global_step / (time.time() - start_time)))
+        # Log losses only if training occurred
+        if global_step > args.learning_starts:
+            log_dict = {
+                "losses/qf1_values": qf1_a_values.mean().item(),
+                "losses/qf2_values": qf2_a_values.mean().item(),
+                "losses/qf1_loss": qf1_loss.item(),
+                "losses/qf2_loss": qf2_loss.item(),
+                "losses/qf_loss": qf1_loss.item() + qf2_loss.item(),
+                "losses/actor_loss": actor_loss.item(),
+                "losses/alpha": alpha,
+                "charts/SPS": int(global_step / (time.time() - start_time))
+            }
+            
             if args.autotune:
-                wandb.log({"losses/alpha_loss": alpha_loss.item()})
+                log_dict["losses/alpha_loss"] = alpha_loss.item()
+                
+            wandb.log(log_dict, step=global_step)
+
+            logging.info(f"Iteration {iteration}, SPS: {int(global_step / (time.time() - start_time))}")
+            logging.info(f"  Q1 Loss: {qf1_loss.item():.4f}, Q2 Loss: {qf2_loss.item():.4f}")
+            logging.info(f"  Actor Loss: {actor_loss.item():.4f}, Alpha: {alpha:.4f}")
 
         # Evaluate the agent on 5 different seeds
-        if iteration % 1 == 0:
+        if iteration % 10 == 0:
             eval_return = evaluate(args.evaluation_seeds, actor, eval_env, device)
             if eval_return > best_eval:
                 best_eval = eval_return

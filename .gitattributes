@@ -1,0 +1,28 @@
+# Set default behavior to automatically normalize line endings
+* text=auto
+
+# Shell scripts should always use LF line endings
+*.sh text eol=lf
+
+# Python files should use LF line endings
+*.py text eol=lf
+
+# Markdown files should use LF line endings
+*.md text eol=lf
+
+# YAML files should use LF line endings
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# JSON files should use LF line endings
+*.json text eol=lf
+
+# Binary files should not be modified
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary

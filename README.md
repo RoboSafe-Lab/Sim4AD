@@ -26,8 +26,9 @@ We use the [AUTOMATUM](https://automatum-data.com/) dataset. Please first instal
 `pip3 install openautomatumdronedata`.
 
 ### Run
-- Run `riskclustering.py` to get the clustering results
-- Run `training_irl.py` to get MaxEnt IRL results
+- Run `riskclustering.py` to get the clustering results. This will save clustering results in a json file under scenarios/configs.
+- Run `feature_extraction_irl.py` to extract feature values from the dataset, which will be subsequently used for irl. 
+- Run `training_irl.py` to get MaxEnt IRL weights, which will be saved as xxxtraining_log.pkl.
 
 - Run `feature_normalization.py` for mean and standard deviation calculation of features in order to normalize features
 - Run `preprocessing.py` for data generation for BC and offline RL. `feature_normalization.pkl`(from feature_normalization.py) and `XXXtraining_log.pkl`(from training_irl.py) 
@@ -58,3 +59,12 @@ t
 - `pip install -r requirements.txt` in the root folder of sim4ad
 
 - maps: change line `<OpenDRIVE xmlns="http://www.opendrive.org">` to `<OpenDRIVE>` in each of the map if there is an error about a None header not having attribute `name`
+
+### Reference
+
+@article{wang2025had,
+  title={HAD-Gen: Human-like and Diverse Driving Behavior Modeling for Controllable Scenario Generation},
+  author={Wang, Cheng and Kong, Lingxin and Tamborski, Massimiliano and Albrecht, Stefano V},
+  journal={arXiv preprint arXiv:2503.15049},
+  year={2025}
+}
